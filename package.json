@@ -1,0 +1,21 @@
+{
+  "name": "launchpad-call-center",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev:frontend\" \"npm run dev:backend\"",
+    "dev:frontend": "python3 -m http.server 5500 --directory apps/frontendall",
+    "dev:backend": "PYTHONPATH=apps/backend-api apps/backend-api/venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload",
+    "build": "npm run validate:frontend && npm run validate:backend",
+    "lint": "npm run validate:frontend && npm run validate:backend",
+    "test": "apps/backend-api/venv/bin/python -m pytest apps/backend-api/tests/unit apps/backend-api/tests/integration -q",
+    "validate:frontend": "node scripts/validate-frontend.mjs",
+    "validate:backend": "apps/backend-api/venv/bin/python -m compileall -q apps/backend-api/app apps/backend-api/alembic"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0"
+  }
+}

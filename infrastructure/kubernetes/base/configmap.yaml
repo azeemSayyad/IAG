@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: launchpad-config
+  namespace: launchpad
+data:
+  APP_ENV: "production"
+  APP_PORT: "8000"
+  FRONTEND_URL: "https://app.launchpad.com"
+  OLLAMA_BASE_URL: "http://ollama:11434"
+  OLLAMA_MODEL: "llama3"
+  REDIS_URL: "redis://redis:6379/0"
+  CLICKHOUSE_URL: "http://clickhouse:8123"
+  QDRANT_URL: "http://qdrant:6333"

@@ -1,0 +1,1593 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Ask the Brain — Endeavor</title>
+<script>
+(function(){try{
+const FM={sm:'14px',md:'16px',lg:'18px',xl:'20px'};
+const TM={
+warm:{a:'#C97B3A',a2:'#E0995E',ah:'#B26A2D',b1:'rgba(224,153,94,.40)',b2:'rgba(201,123,58,.32)',b3:'rgba(255,200,150,.22)',g:'linear-gradient(135deg,#FFFBF5 0%,#FFEFDC 50%,#FFF6E9 100%)',gl:'rgba(178,106,45,.08)'},
+forest:{a:'#4F8268',a2:'#6B9F86',ah:'#3D6651',b1:'rgba(107,159,134,.40)',b2:'rgba(79,130,104,.32)',b3:'rgba(180,220,200,.22)',g:'linear-gradient(135deg,#F5FBF7 0%,#E0F1E6 50%,#E8F4ED 100%)',gl:'rgba(63,109,84,.08)'},
+indigo:{a:'#5E7BA8',a2:'#7B96BD',ah:'#4A6488',b1:'rgba(123,150,189,.40)',b2:'rgba(94,123,168,.32)',b3:'rgba(180,200,230,.22)',g:'linear-gradient(135deg,#F5F7FB 0%,#DCE4F1 50%,#E5EBF4 100%)',gl:'rgba(74,100,136,.08)'},
+rose:{a:'#A3525C',a2:'#B97077',ah:'#82414B',b1:'rgba(185,112,119,.40)',b2:'rgba(163,82,92,.32)',b3:'rgba(230,180,190,.22)',g:'linear-gradient(135deg,#FBF5F6 0%,#F1DCDF 50%,#F4E5E8 100%)',gl:'rgba(130,65,75,.08)'},
+slate:{a:'#2D3340',a2:'#5A6275',ah:'#1A1F2A',b1:'rgba(90,98,117,.45)',b2:'rgba(45,51,64,.38)',b3:'rgba(150,156,170,.28)',g:'linear-gradient(135deg,#B8BCC5 0%,#9DA3AD 50%,#ABB0BA 100%)',gl:'rgba(26,31,42,.14)'},
+amber:{a:'#9C7842',a2:'#B89058',ah:'#7C5E2F',b1:'rgba(184,144,88,.40)',b2:'rgba(156,120,66,.32)',b3:'rgba(245,220,180,.22)',g:'linear-gradient(135deg,#FBF7F0 0%,#F0E5D0 50%,#F4EBDB 100%)',gl:'rgba(124,94,47,.08)'}
+};
+window.__ebApplyFont=function(v){document.documentElement.style.fontSize=FM[v]||'16px';};
+window.__ebApplyTheme=function(v){
+var t=TM[v]||TM.warm,D=document.documentElement;
+D.style.setProperty('--accent',t.a);
+D.style.setProperty('--accent-2',t.a2);
+D.style.setProperty('--accent-hover',t.ah);
+var st=document.getElementById('ebPrefsTheme');
+if(!st){st=document.createElement('style');st.id='ebPrefsTheme';document.head.appendChild(st);}
+st.textContent='body::before{background:'+t.g+' !important}body::after{background:radial-gradient(ellipse 95% 85% at 50% 50%,transparent 55%,'+t.gl+' 100%) !important}.sb-brand-dot{background:linear-gradient(135deg,'+t.a+','+t.a2+') !important}.usage-fill{background:linear-gradient(90deg,'+t.a+','+t.a2+') !important}.av-circle{background:linear-gradient(135deg,'+t.a+','+t.a2+') !important}';
+};
+window.__ebApplyFont(localStorage.getItem('ebFontSize')||'md');
+window.__ebApplyTheme(localStorage.getItem('ebTheme')||'warm');
+}catch(e){}})();
+</script>
+<script src="i18n-dict.js?v=2"></script>
+<script src="prefs-extras.js?v=28"></script>
+<script src="coach.js" defer></script>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#DDD8CE;--bg-grad-1:#E2DCD0;--bg-grad-2:#D2CDC2;
+  --border:rgba(26,31,42,0.07);--border-hover:rgba(26,31,42,0.14);--border-soft:rgba(26,31,42,0.06);
+  --text-strong:#1A1F2A;--text:#2D3340;--text-muted:rgba(26,31,42,0.60);--text-faint:rgba(26,31,42,0.42);
+  --accent:#C97B3A;--accent-2:#E0995E;--accent-hover:#B26A2D;
+  --up:#4F8268;--down:#A3525C;--pending:#9C7842;
+  --sidebar-w:220px;--topbar-h:64px;
+  --ease:cubic-bezier(0.4,0,0.2,1);
+}
+html,body{height:100%}
+body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#FFF8EE;color:var(--text);min-height:100vh;position:relative;overflow-x:hidden;-webkit-font-smoothing:antialiased}
+body::before{
+  content:'';position:fixed;inset:-15%;z-index:-3;
+  background:linear-gradient(135deg, #FFFBF5 0%, #FFEFDC 50%, #FFF6E9 100%);
+  animation:bgDrift 22s ease-in-out infinite;transform-origin:center;will-change:transform;
+}
+body::after{
+  content:'';position:fixed;inset:-10%;z-index:-2;pointer-events:none;
+  background:radial-gradient(ellipse 95% 85% at 50% 50%, transparent 55%, rgba(178,106,45,0.08) 100%);
+  animation:bgFloat 28s ease-in-out infinite reverse;transform-origin:center;will-change:transform;
+}
+@keyframes bgDrift{0%{transform:scale(1) translate(0,0) rotate(0deg)}20%{transform:scale(1.10) translate(-3.5%,2.5%) rotate(0.6deg)}40%{transform:scale(1.06) translate(3%,-3%) rotate(-0.5deg)}60%{transform:scale(1.12) translate(-2.5%,-3.5%) rotate(0.7deg)}80%{transform:scale(1.08) translate(3%,2%) rotate(-0.4deg)}100%{transform:scale(1) translate(0,0) rotate(0deg)}}
+@keyframes bgFloat{0%,100%{transform:scale(1) translate(0,0)}50%{transform:scale(1.08) translate(2%,-2%)}}
+@media (prefers-reduced-motion:reduce){body::before,body::after{animation:none}}
+
+/* Sidebar (app nav) */
+.sidebar{position:fixed;top:0;left:0;width:var(--sidebar-w);height:100vh;background:rgba(255,255,255,0.55);backdrop-filter:blur(22px) saturate(160%);-webkit-backdrop-filter:blur(22px) saturate(160%);border-right:1px solid var(--border);display:flex;flex-direction:column;padding:0 12px 12px;z-index:40}
+.sb-brand{height:var(--topbar-h);display:flex;align-items:center;gap:10px;padding:0 10px;font-weight:600;font-size:1.0625rem;letter-spacing:-0.015em;color:var(--text);border-bottom:1px solid var(--border-soft);margin:0 -12px 12px}
+.sb-brand-dot{width:26px;height:26px;border-radius:8px;background:linear-gradient(135deg,#C97B3A,#E0995E);box-shadow:0 1px 2px rgba(178,106,45,0.30),inset 0 1px 0 rgba(255,255,255,0.22);flex-shrink:0;display:flex;align-items:center;justify-content:center}
+.sb-brand-dot svg{width:14px;height:14px;color:#fff;stroke-width:1.8}
+.sb-nav{display:flex;flex-direction:column;gap:2px;flex:1;width:100%}
+.sb-item{width:100%;height:38px;border-radius:8px;padding:0 10px;display:flex;align-items:center;gap:10px;color:var(--text-muted);font-family:inherit;font-size:.875rem;font-weight:500;cursor:pointer;text-decoration:none;transition:color 160ms var(--ease),background 160ms var(--ease);position:relative}
+.sb-item:hover{color:var(--text);background:rgba(26,31,42,0.05)}
+.sb-item.active{background:rgba(201,123,58,0.10);color:var(--text)}
+.sb-item.active svg{color:var(--accent)}
+.sb-item svg{width:17px;height:17px;stroke-width:1.7;flex-shrink:0}
+.sb-lock{margin-left:auto;font-size:.625rem;font-weight:700;color:var(--text-faint);letter-spacing:.06em;text-transform:uppercase}
+.sb-tip{font-size:.875rem;font-weight:500}
+.sb-badge{margin-left:auto;min-width:20px;height:18px;padding:0 6px;border-radius:9px;background:var(--accent);color:#fff;font-size:.6875rem;font-weight:600;display:inline-flex;align-items:center;justify-content:center;font-variant-numeric:tabular-nums}
+.sb-featured{background:linear-gradient(135deg,rgba(201,123,58,0.10),rgba(224,153,94,0.04));border:1px solid rgba(201,123,58,0.20);margin-bottom:6px}
+.sb-featured:hover{background:linear-gradient(135deg,rgba(201,123,58,0.16),rgba(224,153,94,0.08))}
+.sb-featured svg{color:var(--accent)}
+.sb-featured .sb-tip{font-weight:600;color:var(--text)}
+.sb-group{display:flex;flex-direction:column;width:100%;margin-top:6px}
+.sb-group-head{width:100%;height:32px;display:flex;align-items:center;gap:8px;padding:0 10px;background:transparent;border:none;font-family:inherit;font-size:.6875rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-faint);cursor:pointer;border-radius:6px;transition:color 120ms var(--ease)}
+.sb-group-head:hover{color:var(--text-muted)}
+.sb-group-head .sb-chev{margin-left:auto;width:11px;height:11px;transition:transform 220ms var(--ease);stroke-width:2}
+.sb-group.open .sb-group-head .sb-chev{transform:rotate(90deg)}
+.sb-group-body{display:flex;flex-direction:column;gap:2px;max-height:0;overflow:hidden;transition:max-height 280ms var(--ease)}
+.sb-group.open .sb-group-body{max-height:600px}
+.sb-bottom{display:flex;flex-direction:column;gap:2px;padding-top:10px;margin-top:8px;border-top:1px solid var(--border);width:100%}
+
+/* Topbar */
+.topbar{position:fixed;top:0;left:var(--sidebar-w);right:0;height:var(--topbar-h);background:rgba(255,255,255,0.55);backdrop-filter:blur(22px) saturate(160%);-webkit-backdrop-filter:blur(22px) saturate(160%);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 22px;gap:18px;z-index:30}
+.menu-toggle{display:none;width:36px;height:36px;border-radius:9px;background:transparent;border:1px solid var(--border);color:var(--text);cursor:pointer;align-items:center;justify-content:center;margin-right:4px}
+.menu-toggle svg{width:18px;height:18px}
+.sb-overlay{display:none;position:fixed;inset:0;background:rgba(26,31,42,0.35);z-index:35}
+.sb-overlay.open{display:block}
+.search{flex:1;max-width:520px;display:flex;align-items:center;gap:10px;height:38px;padding:0 14px;background:rgba(255,255,255,0.65);border:none;border-radius:10px;color:var(--text-muted);transition:background 150ms var(--ease),box-shadow 200ms var(--ease);cursor:text}
+.search:hover{background:rgba(255,255,255,0.8)}
+.search:focus-within{background:rgba(255,255,255,0.92);box-shadow:0 0 0 3px rgba(26,31,42,0.08)}
+.search svg{width:16px;height:16px;flex-shrink:0;stroke-width:1.6}
+.search input{flex:1;background:transparent;border:none;outline:none;color:var(--text);font-family:inherit;font-size:.8125rem}
+.search input::placeholder{color:var(--text-faint)}
+.search kbd{font-family:inherit;font-size:.6875rem;color:var(--text-muted);background:rgba(255,255,255,0.85);border:none;border-radius:4px;padding:2px 6px}
+.tb-right{display:flex;align-items:center;gap:10px;margin-left:auto}
+.icon-btn{width:36px;height:36px;border-radius:9px;background:rgba(255,255,255,0.6);border:none;color:var(--text-muted);display:inline-flex;align-items:center;justify-content:center;cursor:pointer;position:relative;transition:color 150ms var(--ease),background 150ms var(--ease)}
+.icon-btn:hover{color:var(--text);background:rgba(255,255,255,0.85)}
+.icon-btn svg{width:16px;height:16px;stroke-width:1.6}
+.icon-btn .dot{position:absolute;top:8px;right:8px;width:7px;height:7px;border-radius:50%;background:#1A1F2A;border:2px solid #E7E9EE}
+.avatar{width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#2A2F3A,#1A1F2A);display:inline-flex;align-items:center;justify-content:center;font-weight:600;font-size:.75rem;color:#fff;border:1px solid rgba(0,0,0,0.18);cursor:pointer;box-shadow:0 4px 12px rgba(26,31,42,0.22)}
+
+/* Main shell — single column by default, splits into two hemispheres on first question */
+.main{margin-left:var(--sidebar-w);padding-top:var(--topbar-h);height:100vh;display:grid;grid-template-columns:1fr;position:relative;transition:grid-template-columns 420ms var(--ease)}
+.main.split{grid-template-columns:1.05fr 1fr}
+/* Collapse states — one hemisphere tucks to a 52px strip, the other gets a 3D-feel overlap */
+.main.split.r-collapsed{grid-template-columns:1fr 52px}
+.main.split.l-collapsed{grid-template-columns:52px 1fr}
+
+/* Collapse toggle button (icon-only utility) */
+.hemi-collapse{display:none;width:28px;height:28px;border-radius:7px;background:transparent;border:1px solid var(--border-soft);color:var(--text-muted);align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;transition:color 130ms var(--ease),background 130ms var(--ease),border-color 130ms var(--ease)}
+.main.split .hemi-collapse{display:inline-flex}
+.hemi-collapse:hover{color:var(--text);background:rgba(26,31,42,0.05);border-color:var(--border-hover)}
+.hemi-collapse svg{width:13px;height:13px;stroke-width:2.2}
+
+/* When a hemi is collapsed, its full content fades out */
+.main.split.r-collapsed .right-hemi > .hemi-head,
+.main.split.r-collapsed .right-hemi > .viz-wrap{opacity:0;pointer-events:none;transition:opacity 200ms var(--ease)}
+.main.split.l-collapsed .left-hemi > .hemi-head,
+.main.split.l-collapsed .left-hemi > .thread-wrap,
+.main.split.l-collapsed .left-hemi > .composer-wrap,
+.main.split.l-collapsed .left-hemi > .pinned{opacity:0;pointer-events:none;transition:opacity 200ms var(--ease)}
+
+/* The collapsed rail (vertical handle inside the 52px strip) */
+.hemi-rail{display:none;position:absolute;inset:0;flex-direction:column;align-items:center;padding:14px 0;gap:14px;cursor:pointer;background:rgba(255,255,255,0.55);backdrop-filter:blur(16px) saturate(160%);-webkit-backdrop-filter:blur(16px) saturate(160%)}
+.main.split.r-collapsed .right-hemi .hemi-rail,
+.main.split.l-collapsed .left-hemi .hemi-rail{display:flex;animation:railIn 320ms var(--ease) 100ms backwards}
+@keyframes railIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+.hemi-rail .hr-glyph{width:30px;height:30px;border-radius:8px;background:linear-gradient(135deg,#C97B3A,#E0995E);box-shadow:0 1px 2px rgba(178,106,45,0.28),inset 0 1px 0 rgba(255,255,255,0.22);display:flex;align-items:center;justify-content:center;color:#fff;flex-shrink:0}
+.hemi-rail .hr-glyph svg{width:14px;height:14px;stroke-width:1.8}
+.hemi-rail .hr-label{writing-mode:vertical-rl;transform:rotate(180deg);font-size:.6875rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);white-space:nowrap;user-select:none}
+.hemi-rail .hr-expand{margin-top:auto;width:28px;height:28px;border-radius:7px;background:#FFFFFF;border:1px solid var(--border);color:var(--text);display:inline-flex;align-items:center;justify-content:center;cursor:pointer}
+.hemi-rail .hr-expand svg{width:13px;height:13px;stroke-width:2.2}
+
+/* 3D-feel — collapsed strip recessed, expanded side raised with a soft seam shadow */
+.main.split.r-collapsed .right-hemi,
+.main.split.l-collapsed .left-hemi{position:relative;z-index:1}
+.main.split.r-collapsed .right-hemi{box-shadow:inset 10px 0 18px -8px rgba(26,31,42,0.18),inset -2px 0 6px rgba(26,31,42,0.05)}
+.main.split.l-collapsed .left-hemi{box-shadow:inset -10px 0 18px -8px rgba(26,31,42,0.18),inset 2px 0 6px rgba(26,31,42,0.05)}
+.main.split.r-collapsed .left-hemi,
+.main.split.l-collapsed .right-hemi{position:relative;z-index:2}
+.main.split.r-collapsed .left-hemi::after{content:'';position:absolute;top:0;right:-14px;width:14px;height:100%;background:linear-gradient(90deg,rgba(26,31,42,0.12),transparent);pointer-events:none;z-index:3}
+.main.split.l-collapsed .right-hemi::before{content:'';position:absolute;top:0;left:-14px;width:14px;height:100%;background:linear-gradient(270deg,rgba(26,31,42,0.12),transparent);pointer-events:none;z-index:3}
+
+/* Hide divider during collapse */
+.main.split.r-collapsed::before,
+.main.split.l-collapsed::before{opacity:0}
+.main::before{
+  content:'';position:absolute;top:var(--topbar-h);bottom:0;left:51.21%;width:1px;
+  background:linear-gradient(180deg,transparent 0%, rgba(26,31,42,0.10) 18%, rgba(26,31,42,0.10) 82%, transparent 100%);
+  pointer-events:none;z-index:2;opacity:0;transition:opacity 320ms var(--ease) 120ms;
+}
+.main.split::before{opacity:1}
+/* Right hemisphere hidden until split */
+.right-hemi{display:none}
+.main.split .right-hemi{display:flex;animation:hemiSlide 460ms var(--ease)}
+@keyframes hemiSlide{from{opacity:0;transform:translateX(28px)}to{opacity:1;transform:translateX(0)}}
+/* Left hemisphere caption switches from intro mode to reasoning mode */
+.main:not(.split) .hemi-cap-intro{display:inline}
+.main:not(.split) .hemi-cap-split{display:none}
+.main.split .hemi-cap-intro{display:none}
+.main.split .hemi-cap-split{display:inline}
+
+/* Hemisphere shared */
+.hemi{display:flex;flex-direction:column;min-width:0;height:calc(100vh - var(--topbar-h));position:relative}
+.hemi-head{height:54px;flex-shrink:0;display:flex;align-items:center;gap:12px;padding:0 22px;border-bottom:1px solid var(--border-soft);background:rgba(255,255,255,0.32);backdrop-filter:blur(14px) saturate(160%);-webkit-backdrop-filter:blur(14px) saturate(160%)}
+.hemi-glyph{display:none}
+.hemi-title{display:flex;flex-direction:column;gap:1px;min-width:0}
+.hemi-cap{font-size:.625rem;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--accent)}
+.hemi-name{font-size:.9375rem;font-weight:600;letter-spacing:-0.005em;color:var(--text-strong)}
+.hemi-status{display:inline-flex;align-items:center;gap:6px;font-size:.6875rem;color:var(--up);font-weight:500;margin-left:auto}
+.hemi-status .dot{width:6px;height:6px;border-radius:50%;background:var(--up)}
+.hemi-actions{display:flex;gap:8px;margin-left:auto}
+.top-btn{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 11px;background:#FFFFFF;border:1px solid var(--border);border-radius:8px;font-family:inherit;font-size:.75rem;font-weight:500;color:var(--text);cursor:pointer;transition:background 130ms var(--ease),border-color 130ms var(--ease)}
+.top-btn:hover{background:#F6F4EF;border-color:var(--border-hover)}
+.top-btn svg{width:12px;height:12px;color:var(--text-muted);stroke-width:1.8}
+.top-btn.primary{background:var(--accent);color:#fff;border-color:var(--accent);box-shadow:0 1px 2px rgba(178,106,45,0.18)}
+.top-btn.primary:hover{background:var(--accent-hover);border-color:var(--accent-hover)}
+.top-btn.primary svg{color:#fff}
+.top-btn.ghost{background:transparent;border:1px solid var(--border-soft);color:var(--text-muted)}
+.top-btn.ghost:hover{color:var(--text);background:rgba(26,31,42,0.04)}
+.top-btn.ghost svg{color:var(--text-muted)}
+
+/* === LEFT HEMISPHERE — CHAT === */
+.left-hemi{}
+/* Pinned strip */
+.pinned{padding:10px 22px;background:rgba(255,224,178,0.18);border-bottom:1px solid var(--border-soft);display:none;flex-direction:column;gap:8px}
+.pinned.show{display:flex}
+.pinned-head{font-size:.625rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#7C5E2F;display:flex;align-items:center;gap:6px}
+.pinned-head svg{width:11px;height:11px;color:var(--accent)}
+.pinned-list{display:flex;flex-direction:column;gap:6px}
+.pinned-item{display:flex;gap:10px;align-items:flex-start;background:rgba(255,255,255,0.7);border:1px solid var(--border-soft);border-radius:9px;padding:8px 10px;font-size:.8125rem;line-height:1.5;color:rgba(26,31,42,0.80);letter-spacing:-0.005em;font-weight:400}
+.pinned-item .pin-unpin{margin-left:auto;width:22px;height:22px;border:none;background:transparent;color:var(--text-muted);cursor:pointer;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;border-radius:5px}
+.pinned-item .pin-unpin:hover{background:rgba(26,31,42,0.06);color:var(--text)}
+.pinned-item .pin-unpin svg{width:11px;height:11px}
+
+/* Thread */
+.thread-wrap{flex:1;overflow-y:auto;padding:0;position:relative}
+.thread{padding:24px 22px 180px;display:flex;flex-direction:column;gap:18px}
+
+/* Welcome (full-width intro) — vertical rhythm tuned for hierarchy */
+.welcome{flex:1;display:flex;align-items:center;justify-content:center;padding:44px 24px 56px}
+.welcome-inner{max-width:620px;width:100%;text-align:center;display:flex;flex-direction:column;align-items:center;gap:0}
+.welcome-orb{width:96px;height:96px;border-radius:50%;background:linear-gradient(135deg,#C97B3A,#E0995E);box-shadow:0 1px 2px rgba(178,106,45,0.30),0 16px 48px rgba(201,123,58,0.34),inset 0 2px 0 rgba(255,255,255,0.24);display:flex;align-items:center;justify-content:center;color:#fff;position:relative;animation:float 4s ease-in-out infinite;margin-bottom:18px}
+@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+.welcome-orb::after{content:'';position:absolute;inset:-14px;border-radius:50%;border:1px solid rgba(201,123,58,0.22);animation:pulse-ring 3.4s ease-out infinite}
+@keyframes pulse-ring{0%{transform:scale(.9);opacity:.6}100%{transform:scale(1.28);opacity:0}}
+.welcome-orb svg{width:42px;height:42px;stroke-width:1.6}
+.welcome-greet{font-size:.6875rem;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--accent);margin-bottom:8px}
+.welcome h2{font-size:1.75rem;font-weight:500;letter-spacing:-0.02em;line-height:1.2;color:var(--text-strong);margin-bottom:64px}
+.welcome .sub{font-size:.9375rem;color:var(--text-muted);line-height:1.55;max-width:52ch}
+/* Inline composer in the welcome state (relocated search bar) */
+.welcome-composer{width:100%;margin:0;display:flex;align-items:center;gap:8px;background:#FFFFFF;border:1px solid var(--border);border-radius:14px;padding:5px 5px 5px 14px;box-shadow:0 1px 2px rgba(26,31,42,0.04),0 12px 30px rgba(26,31,42,0.10);transition:border-color 150ms var(--ease),box-shadow 150ms var(--ease)}
+.welcome-composer:focus-within{border-color:var(--border-hover);box-shadow:0 1px 2px rgba(26,31,42,0.05),0 14px 36px rgba(26,31,42,0.14)}
+.welcome-composer input{flex:1;background:transparent;border:none;outline:none;font-family:inherit;font-size:.9375rem;color:var(--text);padding:9px 4px}
+.welcome-composer input::placeholder{color:var(--text-faint)}
+.welcome-composer .run-btn{height:36px}
+
+/* Carousel — vertical auto-rotate, low-hierarchy */
+.carousel{margin-top:28px;width:100%;display:flex;flex-direction:column;align-items:stretch;gap:6px}
+
+/* Agent-only: 2x2 grid of Coach priority cards (notification-style) under the welcome zone */
+.ag-suggestions{display:none;grid-template-columns:1fr 1fr;gap:12px;width:100%;margin-top:24px}
+.ag-suggestions.show{display:grid}
+.main.split .ag-suggestions{display:none !important}
+@media (max-width:680px){.ag-suggestions{grid-template-columns:1fr}}
+
+.agc-card{position:relative;display:flex;flex-direction:column;gap:6px;padding:14px 16px 13px;background:#FFFFFF;border:1px solid var(--border);border-radius:13px;text-decoration:none;color:var(--text);cursor:pointer;transition:border-color 150ms var(--ease),transform 150ms var(--ease),box-shadow 150ms var(--ease);overflow:hidden;text-align:left}
+.agc-card::before{content:"";position:absolute;left:0;top:14px;bottom:14px;width:3px;border-radius:0 3px 3px 0;background:var(--accent)}
+.agc-card.crit::before{background:#A3525C}
+.agc-card.high::before{background:#C97B3A}
+.agc-card.med::before{background:#9C7842}
+.agc-card.low::before{background:#4F8268}
+.agc-card.crit{background:#FFFCF6;border-color:rgba(163,82,92,0.22)}
+.agc-card.high{background:#FFFCF6;border-color:rgba(201,123,58,0.22)}
+.agc-card:hover{transform:translateY(-1px);box-shadow:0 6px 18px rgba(26,31,42,0.08);border-color:var(--accent)}
+
+.agc-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:2px}
+.agc-pill{display:inline-flex;align-items:center;gap:5px;height:20px;padding:0 9px;border-radius:10px;font-size:.625rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap}
+.agc-pill .pd{width:5px;height:5px;border-radius:50%}
+.agc-pill.crit{background:rgba(163,82,92,0.14);color:#7B3A45}
+.agc-pill.crit .pd{background:#A3525C}
+.agc-pill.high{background:rgba(201,123,58,0.14);color:#A35E26}
+.agc-pill.high .pd{background:#C97B3A}
+.agc-pill.med{background:rgba(156,120,66,0.14);color:#7C5E2F}
+.agc-pill.med .pd{background:#9C7842}
+.agc-pill.low{background:rgba(79,130,104,0.12);color:#3D6651}
+.agc-pill.low .pd{background:#4F8268}
+.agc-age{font-size:.6875rem;color:var(--text-faint);font-weight:600;font-variant-numeric:tabular-nums;margin-left:auto}
+
+.agc-title{font-size:.9375rem;font-weight:600;color:var(--text-strong);letter-spacing:-0.005em;line-height:1.3}
+.agc-desc{font-size:.75rem;color:var(--text-muted);line-height:1.45}
+.agc-desc strong{color:var(--text);font-weight:600}
+.agc-stake{font-size:.6875rem;color:#7B3A45;font-weight:500;display:flex;align-items:center;gap:5px;margin-top:1px}
+.agc-stake svg{width:11px;height:11px;stroke-width:2;flex-shrink:0}
+.agc-stake strong{color:#7B3A45;font-weight:700}
+
+.agc-foot{display:flex;align-items:center;justify-content:space-between;margin-top:8px;padding-top:8px;border-top:1px dashed var(--border-soft)}
+.agc-cta{font-size:.75rem;font-weight:600;color:var(--accent);display:flex;align-items:center;gap:5px}
+.agc-cta svg{width:13px;height:13px;stroke-width:2;transition:transform 150ms var(--ease)}
+.agc-card:hover .agc-cta svg{transform:translateX(2px)}
+.agc-done-btn{height:26px;padding:0 10px;background:transparent;border:1px solid var(--border);border-radius:7px;font-family:inherit;font-size:.6875rem;font-weight:600;color:var(--text-muted);cursor:pointer;transition:background 130ms,color 130ms}
+.agc-done-btn:hover{background:#F6F4EF;color:var(--text)}
+
+@media (max-width:520px){.agc-card{padding:12px 14px}.agc-title{font-size:.875rem}.agc-desc{font-size:.6875rem}}
+.car-viewport{width:100%;height:36px;overflow:hidden;position:relative}
+.car-track{display:flex;flex-direction:column;transition:transform 520ms var(--ease)}
+.car-slide{flex:0 0 36px;display:flex;align-items:center;justify-content:center;padding:0 8px;box-sizing:border-box}
+.car-card{display:inline-block;background:transparent;border:none;padding:0;font-family:inherit;cursor:pointer;color:var(--text-muted);font-size:.8125rem;font-weight:500;letter-spacing:-0.005em;line-height:1.4;text-align:center;transition:color 160ms var(--ease)}
+.car-card:hover{color:var(--text)}
+.car-dots{display:flex;justify-content:center;gap:5px;margin-top:2px}
+.car-dot{width:4px;height:4px;border-radius:2px;background:rgba(26,31,42,0.16);cursor:pointer;border:none;padding:0;transition:background 220ms var(--ease),width 220ms var(--ease)}
+.car-dot.active{background:var(--accent);width:14px}
+
+/* Business-improvement suggestions — 2x2 grid below the carousel */
+.biz-grid{margin-top:22px;width:100%;display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.biz-card{display:flex;flex-direction:column;align-items:flex-start;gap:6px;text-align:left;padding:14px 14px 13px;background:rgba(255,255,255,0.62);backdrop-filter:blur(18px) saturate(160%);-webkit-backdrop-filter:blur(18px) saturate(160%);border:1px solid rgba(255,255,255,0.78);border-radius:13px;cursor:pointer;font-family:inherit;color:var(--text);box-shadow:0 1px 2px rgba(26,31,42,0.04),0 6px 16px rgba(178,106,45,0.06);transition:transform 160ms var(--ease),box-shadow 160ms var(--ease),border-color 160ms var(--ease),background 160ms var(--ease)}
+.biz-card:hover{transform:translateY(-1px);background:rgba(255,255,255,0.82);border-color:rgba(201,123,58,0.32);box-shadow:0 1px 2px rgba(26,31,42,0.05),0 10px 22px rgba(201,123,58,0.14)}
+.biz-card-eyebrow{display:inline-flex;align-items:center;gap:6px;font-size:.625rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--accent)}
+.biz-card-eyebrow svg{width:11px;height:11px;stroke-width:2}
+.biz-card-q{font-size:.8125rem;font-weight:600;letter-spacing:-0.005em;line-height:1.35;color:var(--text-strong)}
+@media (max-width:480px){
+  .biz-grid{gap:8px;margin-top:18px}
+  .biz-card{padding:11px 12px 10px;border-radius:11px}
+  .biz-card-q{font-size:.75rem}
+}
+
+/* Message */
+.msg{display:flex;gap:10px;max-width:100%}
+.msg.user{align-self:flex-end;flex-direction:row-reverse;max-width:90%}
+.msg.user .msg-bubble{background:var(--accent);color:#fff;border:1px solid var(--accent);border-bottom-right-radius:5px;box-shadow:0 1px 2px rgba(178,106,45,0.20),0 4px 14px rgba(201,123,58,0.22);font-weight:500}
+
+/* No icons inside text CTA buttons (Endeavor design rule) */
+.top-btn svg,.run-btn svg,.ai-act:not(.icon-only) svg,.rec-list .ra svg,.viz-ref svg{display:none}
+.top-btn{padding:0 14px}
+.ai-act{padding:0 14px}
+.rec-list .ra{padding:0 12px}
+.run-btn{padding:0 16px}
+.viz-ref{padding:0 12px}
+.suggest-icon{display:none}
+.suggest-card{padding:14px 18px}
+.suggest-text{gap:5px}
+.msg.ai{align-self:stretch;width:100%}
+.msg.ai .msg-bubble{background:rgba(255,255,255,0.78);backdrop-filter:blur(18px) saturate(160%);-webkit-backdrop-filter:blur(18px) saturate(160%);border:1px solid rgba(255,255,255,0.7);border-bottom-left-radius:5px;color:rgba(26,31,42,0.78);box-shadow:0 1px 2px rgba(26,31,42,0.04),0 6px 20px rgba(26,31,42,0.06);flex:1;min-width:0;font-weight:400}
+.msg-bubble{padding:13px 15px;border-radius:14px;font-size:.875rem;line-height:1.6;letter-spacing:-0.005em}
+.msg-bubble strong{font-weight:600;color:var(--text-strong)}
+.msg-meta{font-size:.6875rem;color:var(--text-faint);margin-top:6px;padding:0 4px;display:flex;align-items:center;gap:8px}
+.ai-avatar{width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#C97B3A,#E0995E);box-shadow:0 1px 2px rgba(178,106,45,0.22),inset 0 1px 0 rgba(255,255,255,0.22);flex-shrink:0;display:flex;align-items:center;justify-content:center;color:#fff}
+.ai-avatar svg{width:15px;height:15px;stroke-width:1.8}
+
+/* Visual reference chip — shows which viz was generated */
+.viz-ref{margin-top:10px;display:inline-flex;align-items:center;gap:8px;height:28px;padding:0 11px;background:rgba(201,123,58,0.08);border:1px dashed rgba(201,123,58,0.40);border-radius:8px;color:#A35E26;font-size:.6875rem;font-weight:600;letter-spacing:.02em;cursor:pointer;transition:background 130ms var(--ease)}
+.viz-ref:hover{background:rgba(201,123,58,0.14)}
+.viz-ref svg{width:11px;height:11px;stroke-width:2}
+
+/* Recommendation list */
+.rec-list{display:flex;flex-direction:column;gap:8px;margin-top:12px;padding:12px 14px;background:#FBFAF7;border:1px solid var(--border-soft);border-radius:11px;list-style:none}
+.rec-list-title{font-size:.625rem;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--accent);margin-bottom:4px;opacity:.8}
+.rec-list li{display:grid;grid-template-columns:22px 1fr auto;gap:10px;align-items:flex-start;font-size:.8125rem;color:rgba(26,31,42,0.80);line-height:1.55;font-weight:400}
+.rec-list .rn{width:22px;height:22px;border-radius:50%;background:rgba(201,123,58,0.14);color:var(--accent);font-weight:700;display:inline-flex;align-items:center;justify-content:center;font-size:.6875rem;flex-shrink:0;margin-top:1px}
+.rec-list .rt{min-width:0}
+.rec-list .ra{display:inline-flex;align-items:center;gap:5px;height:26px;padding:0 10px;font-size:.6875rem;font-weight:500;background:transparent;border:1px solid var(--border-soft);border-radius:7px;color:var(--text-muted);cursor:pointer;transition:color 130ms var(--ease),background 130ms var(--ease),border-color 130ms var(--ease);white-space:nowrap;flex-shrink:0}
+.rec-list .ra:hover{background:rgba(26,31,42,0.04);border-color:var(--border-hover);color:var(--text)}
+.rec-list .ra svg{width:10px;height:10px;color:var(--accent);stroke-width:2.2}
+
+/* AI actions row — visual hierarchy: muted secondaries, bold primary */
+.ai-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.ai-act{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 12px;background:transparent;border:1px solid var(--border-soft);border-radius:8px;font-family:inherit;font-size:.75rem;font-weight:500;color:var(--text-muted);cursor:pointer;transition:color 130ms var(--ease),background 130ms var(--ease),border-color 130ms var(--ease)}
+.ai-act:hover{background:rgba(26,31,42,0.04);border-color:var(--border-hover);color:var(--text)}
+.ai-act svg{width:12px;height:12px;color:var(--text-faint);stroke-width:1.8}
+.ai-act.primary{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:600;box-shadow:0 1px 2px rgba(178,106,45,0.18),0 4px 12px rgba(201,123,58,0.18)}
+.ai-act.primary:hover{background:var(--accent-hover);border-color:var(--accent-hover);color:#fff}
+.ai-act.primary svg{color:#fff}
+.ai-act.icon-only{width:30px;padding:0;justify-content:center;color:var(--text-faint)}
+.ai-act.icon-only:hover{color:var(--text-muted)}
+
+/* Typing indicator */
+.typing{display:inline-flex;align-items:center;gap:5px;padding:12px 15px;background:rgba(255,255,255,0.78);backdrop-filter:blur(18px) saturate(160%);-webkit-backdrop-filter:blur(18px) saturate(160%);border:1px solid rgba(255,255,255,0.7);border-radius:14px;border-bottom-left-radius:5px;box-shadow:0 1px 2px rgba(26,31,42,0.04),0 6px 20px rgba(26,31,42,0.06)}
+.typing-dot{width:6px;height:6px;border-radius:50%;background:var(--accent);animation:typingDot 1.2s ease-in-out infinite}
+.typing-dot:nth-child(2){animation-delay:.18s}
+.typing-dot:nth-child(3){animation-delay:.36s}
+@keyframes typingDot{0%,80%,100%{opacity:.35;transform:translateY(0)}40%{opacity:1;transform:translateY(-3px)}}
+
+/* Streaming caret */
+.caret{display:inline-block;width:2px;background:var(--accent);margin-left:2px;animation:caretBlink 1s infinite}
+@keyframes caretBlink{0%,49%{opacity:1}50%,100%{opacity:0}}
+
+/* Composer — fixed at bottom only in chat (split) mode */
+.composer-wrap{position:absolute;left:0;right:0;bottom:0;padding:14px 18px 18px;background:linear-gradient(180deg,rgba(255,248,238,0) 0%, rgba(255,248,238,0.88) 38%, rgba(255,248,238,0.98) 100%);pointer-events:none;z-index:3}
+.main:not(.split) .composer-wrap{display:none}
+.composer{pointer-events:auto}
+.pills{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-bottom:10px}
+.pill{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 11px;background:rgba(255,255,255,0.82);backdrop-filter:blur(14px) saturate(160%);-webkit-backdrop-filter:blur(14px) saturate(160%);border:1px solid var(--border);border-radius:999px;font-family:inherit;font-size:.6875rem;font-weight:500;color:var(--text);cursor:pointer;transition:background 130ms var(--ease),border-color 130ms var(--ease)}
+.pill:hover{background:#FFFFFF;border-color:var(--border-hover)}
+.pill svg{width:10px;height:10px;color:var(--accent);stroke-width:2}
+.composer-row{display:flex;align-items:center;gap:8px;background:#FFFFFF;border:1px solid var(--border);border-radius:13px;padding:5px 5px 5px 7px;box-shadow:0 1px 2px rgba(26,31,42,0.04),0 12px 30px rgba(26,31,42,0.10);transition:border-color 150ms var(--ease),box-shadow 150ms var(--ease)}
+.composer-row:focus-within{border-color:var(--border-hover);box-shadow:0 1px 2px rgba(26,31,42,0.05),0 14px 36px rgba(26,31,42,0.14)}
+.voice-btn{width:36px;height:36px;border-radius:9px;background:transparent;border:none;color:var(--text-muted);display:inline-flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;transition:color 130ms var(--ease),background 130ms var(--ease)}
+.voice-btn:hover{color:var(--text);background:rgba(26,31,42,0.05)}
+.voice-btn.rec{color:var(--down);animation:micPulse 1.2s ease-in-out infinite}
+@keyframes micPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.08)}}
+.voice-btn svg{width:15px;height:15px;stroke-width:1.7}
+.composer-row input{flex:1;background:transparent;border:none;outline:none;font-family:inherit;font-size:.875rem;color:var(--text);padding:8px 6px}
+.composer-row input::placeholder{color:var(--text-faint)}
+.run-btn{display:inline-flex;align-items:center;gap:6px;height:36px;padding:0 13px;background:var(--accent);color:#fff;border:none;border-radius:9px;font-family:inherit;font-size:.8125rem;font-weight:600;cursor:pointer;box-shadow:0 1px 2px rgba(178,106,45,0.20),0 4px 12px rgba(201,123,58,0.22);transition:background 200ms var(--ease),transform 150ms var(--ease)}
+.run-btn:hover{background:var(--accent-hover);transform:translateY(-1px)}
+.run-btn:disabled{background:#C8CCD2;color:#FFFFFF;cursor:default;box-shadow:none;transform:none}
+.run-btn svg{width:12px;height:12px;stroke-width:2.2}
+
+/* === RIGHT HEMISPHERE — VISUAL === */
+/* Right hemisphere matches the AI bubble's frosted-cream surface */
+.right-hemi{background:rgba(255,255,255,0.78);backdrop-filter:blur(18px) saturate(160%);-webkit-backdrop-filter:blur(18px) saturate(160%)}
+.right-hemi .hemi-head{background:transparent;backdrop-filter:none;-webkit-backdrop-filter:none;border-bottom:1px solid var(--border-soft)}
+/* Cards: solid white so they read against the cream-tinted hemisphere */
+.right-hemi .viz-card{background:#FFFFFF;border:1px solid rgba(26,31,42,0.08);box-shadow:0 1px 2px rgba(26,31,42,0.04),0 8px 22px rgba(26,31,42,0.08)}
+.right-hemi .viz-card-head{border-bottom-color:rgba(26,31,42,0.06)}
+/* Inner tiles get a subtle warm tint, giving a layered cream → white → tint feel */
+.right-hemi .kpi-tile,
+.right-hemi .det-row,
+.right-hemi .ai-block{background:#FBFAF7;border-color:rgba(26,31,42,0.06)}
+.right-hemi .stat-bar,.right-hemi .conf-bar,.right-hemi .cb-track,.right-hemi .ai-bar{background:#F0EDE5}
+.right-hemi .viz-table th{background:#FBFAF7}
+.right-hemi .minibars{background-image:repeating-linear-gradient(to top,rgba(26,31,42,0.06) 0,rgba(26,31,42,0.06) 1px,transparent 1px,transparent calc((100% - 30px)/4));border-bottom-color:rgba(26,31,42,0.08)}
+.right-hemi .viz-empty,.right-hemi .viz-empty p{color:var(--text-muted)}
+
+.viz-wrap{flex:1;overflow-y:auto;padding:22px 22px 28px;display:flex;flex-direction:column;gap:14px}
+
+/* Empty state (right) */
+.viz-empty{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;text-align:center;gap:12px;padding:28px 22px 22px;color:var(--text-muted)}
+.viz-empty-orb{width:72px;height:72px;border-radius:50%;background:radial-gradient(circle at 30% 30%, rgba(201,123,58,0.18), rgba(201,123,58,0.05) 60%, transparent 75%);display:flex;align-items:center;justify-content:center;position:relative}
+.viz-empty-orb::after{content:'';position:absolute;inset:8px;border-radius:50%;border:1px dashed rgba(201,123,58,0.36)}
+.viz-empty-orb svg{width:32px;height:32px;color:var(--accent);stroke-width:1.6}
+.viz-empty h3{font-size:1.125rem;font-weight:600;letter-spacing:-0.01em;color:var(--text-strong);margin-top:2px}
+.viz-empty p{font-size:.8125rem;line-height:1.55;max-width:42ch}
+.sugg-cap{font-size:.6875rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--text-faint);margin-top:12px;align-self:stretch;text-align:left;padding-left:4px}
+.sugg-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;width:100%;max-width:520px;margin-top:2px}
+.sugg-card{display:flex;flex-direction:column;gap:8px;padding:13px 14px;background:#FFFFFF;border:1px solid var(--border);border-radius:12px;text-align:left;text-decoration:none;color:var(--text);cursor:pointer;transition:border-color 150ms var(--ease),transform 150ms var(--ease),box-shadow 150ms var(--ease)}
+.sugg-card:hover{border-color:var(--accent);transform:translateY(-1px);box-shadow:0 6px 18px rgba(26,31,42,0.10)}
+.sugg-card .sc-row{display:flex;align-items:center;gap:9px}
+.sugg-card .sc-ic{width:28px;height:28px;border-radius:8px;background:linear-gradient(135deg,var(--accent),var(--accent-2));color:#fff;display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 1px 2px rgba(178,106,45,0.20)}
+.sugg-card .sc-ic svg{width:14px;height:14px;stroke-width:1.8}
+.sugg-card .sc-name{font-size:.875rem;font-weight:600;color:var(--text-strong);letter-spacing:-0.005em;line-height:1.2}
+.sugg-card .sc-desc{font-size:.75rem;color:var(--text-muted);line-height:1.4}
+.sugg-hint{font-size:.75rem;color:var(--text-faint);margin-top:6px;display:flex;align-items:center;gap:6px}
+.sugg-hint svg{width:13px;height:13px;stroke-width:1.8}
+@media (max-width:520px){.sugg-grid{grid-template-columns:1fr;max-width:none}}
+
+/* Visual card */
+.viz-card{background:#FFFFFF;border:1px solid var(--border);border-radius:14px;box-shadow:0 1px 2px rgba(26,31,42,0.04),0 6px 18px rgba(26,31,42,0.06);overflow:hidden;animation:vizIn 360ms var(--ease)}
+@keyframes vizIn{from{opacity:0;transform:translateY(8px) scale(.99)}to{opacity:1;transform:translateY(0) scale(1)}}
+.viz-card-head{padding:13px 16px 8px;display:flex;align-items:flex-start;justify-content:space-between;gap:10px;border-bottom:1px solid var(--border-soft)}
+.viz-card-l{display:flex;flex-direction:column;gap:2px;min-width:0}
+.viz-card-cap{font-size:.625rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--accent)}
+.viz-card-title{font-size:.9375rem;font-weight:600;letter-spacing:-0.005em;color:var(--text-strong)}
+.viz-card-sub{font-size:.6875rem;color:var(--text-muted);margin-top:1px}
+.viz-card-body{padding:14px 16px}
+.viz-card-actions{display:flex;gap:6px}
+/* Generic scaffold — used when the question doesn't match a stock answer */
+.generic-scaffold{display:flex;flex-direction:column;gap:10px}
+.gs-row{display:flex;gap:11px;align-items:flex-start;padding:10px 12px;background:rgba(201,123,58,0.04);border:1px solid rgba(201,123,58,0.14);border-radius:10px}
+.gs-row strong{font-size:.8125rem;font-weight:600;color:var(--text-strong);letter-spacing:-0.005em}
+.gs-sub{font-size:.75rem;color:var(--text-muted);margin-top:2px;line-height:1.45}
+.gs-step{flex-shrink:0;width:22px;height:22px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--accent-2));color:#fff;font-size:.6875rem;font-weight:700;display:inline-flex;align-items:center;justify-content:center;box-shadow:0 1px 2px rgba(178,106,45,0.22)}
+
+/* Generic-answer callout (in the chat bubble) */
+.ai-callout{background:rgba(201,123,58,0.05);border:1px solid rgba(201,123,58,0.18);border-radius:10px;padding:11px 13px;margin:10px 0;display:flex;flex-direction:column;gap:6px}
+.ai-callout-title{font-size:.6875rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--accent)}
+.ai-callout-list{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px;font-size:.8125rem;line-height:1.45;color:rgba(26,31,42,0.80)}
+.ai-callout-list li{padding-left:2px}
+.ai-callout-list li strong{color:var(--text-strong);font-weight:600}
+
+/* Mini quick-action chips below a generic answer */
+.ai-mini-recs{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.mini-rec{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 11px;background:#FFFFFF;border:1px solid var(--border);border-radius:999px;font-family:inherit;font-size:.75rem;font-weight:500;color:var(--text);cursor:pointer;transition:background 140ms var(--ease),border-color 140ms var(--ease),color 140ms var(--ease);letter-spacing:-0.005em}
+.mini-rec:hover{background:rgba(201,123,58,0.06);border-color:rgba(201,123,58,0.32);color:var(--accent)}
+.mini-rec .mr-l{font-size:.625rem;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--text-muted);background:rgba(26,31,42,0.05);padding:2px 6px;border-radius:5px}
+.mini-rec:hover .mr-l{color:var(--accent);background:rgba(201,123,58,0.10)}
+.viz-icon-btn{width:28px;height:28px;border-radius:7px;background:transparent;border:1px solid var(--border-soft);color:var(--text-muted);display:inline-flex;align-items:center;justify-content:center;cursor:pointer;transition:color 130ms var(--ease),background 130ms var(--ease)}
+.viz-icon-btn:hover{color:var(--text);background:rgba(26,31,42,0.05)}
+.viz-icon-btn svg{width:12px;height:12px;stroke-width:2}
+
+/* Stat list (right) */
+.stats-list{display:flex;flex-direction:column;gap:9px}
+.stat-row{display:grid;grid-template-columns:1fr auto 110px;gap:10px;align-items:center}
+.stat-k{font-size:.8125rem;color:rgba(26,31,42,0.78);font-weight:400}
+.stat-v{font-size:.8125rem;font-weight:600;font-variant-numeric:tabular-nums;color:var(--text-strong)}
+.stat-bar{height:6px;border-radius:3px;background:#EFEDE7;overflow:hidden}
+.stat-bar > div{height:100%;background:linear-gradient(90deg,#C97B3A,#E0995E);border-radius:3px;animation:barGrow 700ms var(--ease)}
+.stat-bar.muted > div{background:linear-gradient(90deg,#A3525C,#B97077)}
+@keyframes barGrow{from{transform:scaleX(0);transform-origin:left}to{transform:scaleX(1)}}
+
+/* Mini bar chart — gridlines, value labels, slim bars */
+.minibars{
+  position:relative;display:flex;align-items:flex-end;gap:14px;height:180px;
+  padding:24px 8px 6px;border-bottom:1px solid var(--border-soft);
+  background-image:repeating-linear-gradient(to top,rgba(26,31,42,0.05) 0,rgba(26,31,42,0.05) 1px,transparent 1px,transparent calc((100% - 30px)/4));
+  background-position:0 calc(100% - 6px);background-size:100% calc(100% - 30px);background-repeat:no-repeat;
+}
+.minibars .mb{flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;position:relative;height:100%;justify-content:flex-end}
+.mb-val{font-size:.75rem;font-weight:600;color:var(--text-strong);font-variant-numeric:tabular-nums;letter-spacing:.01em;margin-bottom:4px}
+.mb-fill{width:62%;max-width:32px;background:linear-gradient(180deg,#E0995E,#C97B3A);border-radius:4px 4px 2px 2px;min-height:6px;transform-origin:bottom;animation:barRise 700ms var(--ease);box-shadow:0 1px 2px rgba(178,106,45,0.18)}
+.mb-fill.muted{background:linear-gradient(180deg,#C97B3A,#A35E26);opacity:1}
+.mb-lab{font-size:.6875rem;color:var(--text-muted);font-weight:500;letter-spacing:.01em}
+@keyframes barRise{from{transform:scaleY(0)}to{transform:scaleY(1)}}
+
+/* Inline table */
+.viz-table{width:100%;font-size:.8125rem;border-collapse:collapse}
+.viz-table th{text-align:left;font-weight:600;color:var(--text-faint);font-size:.625rem;letter-spacing:.06em;text-transform:uppercase;padding:6px 8px;border-bottom:1px solid var(--border-soft)}
+.viz-table td{padding:9px 8px;border-bottom:1px solid var(--border-soft);color:rgba(26,31,42,0.80);font-weight:400}
+.viz-table td:last-child,.viz-table th:last-child{text-align:right;font-variant-numeric:tabular-nums;color:var(--text-strong);font-weight:600}
+.viz-table tr:last-child td{border-bottom:none}
+
+/* Flying line chart — polished visuals + interactive hover */
+.line-chart-wrap{position:relative;width:100%;margin-top:6px}
+.line-chart{width:100%;height:170px;display:block}
+.lc-line{stroke:#C97B3A;stroke-width:2.6;fill:none;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:1000;stroke-dashoffset:1000;animation:lineDraw 1500ms var(--ease) 80ms forwards;vector-effect:non-scaling-stroke;filter:drop-shadow(0 2px 4px rgba(201,123,58,0.22))}
+.lc-line.muted{stroke:#B9BCC2;stroke-width:1.8;stroke-dasharray:1000;stroke-dashoffset:1000;animation:lineDraw 1500ms var(--ease) 200ms forwards;filter:none}
+.lc-area{fill:url(#lcGrad);opacity:0;animation:lcFade 800ms var(--ease) 900ms forwards}
+.lc-dot{fill:#C97B3A;opacity:0;animation:lcFade 400ms var(--ease) 1500ms forwards;filter:drop-shadow(0 1px 3px rgba(201,123,58,0.40))}
+.lc-dot.lc-now{animation:lcFade 400ms var(--ease) 1500ms forwards, lcPulse 2.4s ease-in-out 2s infinite}
+@keyframes lcPulse{0%,100%{r:4}50%{r:5.5}}
+.lc-grid{stroke:rgba(26,31,42,0.06);stroke-width:1;vector-effect:non-scaling-stroke}
+.lc-lab{fill:var(--text-muted);font-size:10px;font-weight:600;font-family:inherit;text-anchor:end}
+@keyframes lineDraw{to{stroke-dashoffset:0}}
+@keyframes lcFade{to{opacity:1}}
+.lc-legend{display:flex;gap:14px;font-size:.6875rem;color:var(--text-muted);margin-top:6px;font-weight:500}
+.lc-legend .lg{display:inline-flex;align-items:center;gap:5px}
+.lc-legend .lg-dot{width:8px;height:2px;border-radius:1px;background:#C97B3A}
+.lc-legend .lg-dot.muted{background:#B9BCC2}
+
+/* Hover tooltip + guide for line chart */
+.lc-tip{position:absolute;background:#1A1F2A;color:#fff;padding:6px 10px;border-radius:7px;font-size:.75rem;font-weight:600;letter-spacing:-0.005em;pointer-events:none;white-space:nowrap;box-shadow:0 4px 14px rgba(26,31,42,0.30);opacity:0;transform:translate(-50%, calc(-100% - 12px));transition:opacity 140ms var(--ease);z-index:5;font-variant-numeric:tabular-nums}
+.lc-tip.show{opacity:1}
+.lc-tip .lc-tip-k{display:block;font-size:.625rem;font-weight:500;color:rgba(255,255,255,0.65);margin-bottom:1px;letter-spacing:.02em}
+.lc-tip::after{content:'';position:absolute;bottom:-4px;left:50%;transform:translateX(-50%);border:4px solid transparent;border-top-color:#1A1F2A}
+.lc-guide{stroke:rgba(201,123,58,0.50);stroke-width:1;stroke-dasharray:3 3;vector-effect:non-scaling-stroke;pointer-events:none;opacity:0;transition:opacity 140ms var(--ease)}
+.lc-guide.show{opacity:1}
+.lc-hot{fill:rgba(201,123,58,0);cursor:pointer;transition:fill 140ms var(--ease)}
+.lc-hot:hover{fill:rgba(201,123,58,0.10)}
+.lc-hot-marker{fill:#fff;stroke:#C97B3A;stroke-width:2;opacity:0;transition:opacity 140ms var(--ease);pointer-events:none}
+.lc-hot-marker.show{opacity:1}
+
+/* Interactive bar/table/tile hovers — make charts feel alive */
+.minibars .mb{position:relative;cursor:pointer;transition:transform 200ms var(--ease)}
+.minibars .mb-fill{transition:transform 200ms var(--ease),filter 200ms var(--ease);transform-origin:bottom}
+.minibars .mb:hover .mb-fill{filter:brightness(1.10);transform:scaleY(1.04)}
+
+.stats-list .stat-row{cursor:pointer;border-radius:6px;padding:4px 6px;margin:0 -6px;transition:background 160ms var(--ease)}
+.stats-list .stat-row:hover{background:rgba(201,123,58,0.05)}
+.stats-list .stat-bar > div{transition:filter 200ms var(--ease)}
+.stats-list .stat-row:hover .stat-bar > div{filter:brightness(1.10)}
+
+.viz-table tbody tr{cursor:pointer;transition:background 160ms var(--ease)}
+.viz-table tbody tr:hover{background:rgba(201,123,58,0.06)}
+.viz-table tbody tr:hover td{color:var(--text-strong)}
+
+.kpi-tile{cursor:pointer;transition:background 160ms var(--ease),transform 160ms var(--ease),border-color 160ms var(--ease)}
+.kpi-tile:hover{background:#FFFFFF;border-color:rgba(201,123,58,0.30);transform:translateY(-1px);box-shadow:0 4px 14px rgba(26,31,42,0.06)}
+
+.det-row{cursor:pointer;transition:background 160ms var(--ease),border-color 160ms var(--ease)}
+.det-row:hover{background:#FFFFFF;border-color:rgba(201,123,58,0.30)}
+
+/* Compact compare bars (two-series) */
+.compare-bars{display:flex;flex-direction:column;gap:10px;margin-top:4px}
+.cb-row{display:grid;grid-template-columns:80px 1fr 70px;gap:10px;align-items:center;font-size:.75rem}
+.cb-k{color:var(--text);font-weight:500}
+.cb-track{height:10px;border-radius:5px;background:#F0EFEB;overflow:hidden;position:relative}
+.cb-track > .cb-a{position:absolute;left:0;top:0;height:100%;background:linear-gradient(90deg,#C97B3A,#E0995E);border-radius:5px;animation:barGrow 700ms var(--ease)}
+.cb-track > .cb-b{position:absolute;left:0;top:0;height:100%;background:repeating-linear-gradient(45deg,rgba(26,31,42,0.18) 0 4px,transparent 4px 8px);border-right:1.5px dashed rgba(26,31,42,0.45);border-radius:0}
+.cb-v{font-size:.75rem;font-weight:600;text-align:right;color:var(--text);font-variant-numeric:tabular-nums}
+
+/* Detail list rows */
+.det-list{display:flex;flex-direction:column;gap:8px}
+.det-row{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;padding:9px 10px;background:#FBFAF7;border:1px solid var(--border-soft);border-radius:9px}
+.det-icon{width:22px;height:22px;border-radius:6px;background:rgba(201,123,58,0.14);color:var(--accent);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.6875rem;font-variant-numeric:tabular-nums;flex-shrink:0}
+.det-text{font-size:.8125rem;color:rgba(26,31,42,0.80);line-height:1.45;letter-spacing:-0.005em;font-weight:400}
+.det-sub{font-size:.6875rem;color:var(--text-muted);margin-top:2px}
+.det-val{font-size:.8125rem;font-weight:600;color:var(--text-strong);font-variant-numeric:tabular-nums;text-align:right}
+.det-val small{display:block;font-size:.625rem;font-weight:500;color:var(--text-muted);margin-top:1px}
+
+/* KPI grid */
+.kpi-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.kpi-tile{background:#FBFAF7;border:1px solid var(--border-soft);border-radius:10px;padding:11px 12px}
+.kpi-k{font-size:.625rem;color:var(--text-muted);font-weight:600;letter-spacing:.04em;text-transform:uppercase}
+.kpi-v{display:flex;align-items:baseline;gap:6px;margin-top:5px;font-variant-numeric:tabular-nums}
+.kpi-num{font-size:1.25rem;font-weight:600;color:var(--text-strong);line-height:1;letter-spacing:-0.02em}
+.kpi-unit{font-size:.6875rem;color:var(--text-muted)}
+.kpi-trend{margin-left:auto;font-size:.6875rem;font-weight:600;color:var(--up);font-variant-numeric:tabular-nums}
+.kpi-trend.down{color:var(--down)}
+
+/* Toast */
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);background:#1A1F2A;color:#fff;padding:12px 18px;border-radius:10px;font-size:.8125rem;font-weight:500;letter-spacing:-0.005em;box-shadow:0 10px 30px rgba(26,31,42,0.30);opacity:0;pointer-events:none;transition:opacity 200ms var(--ease),transform 200ms var(--ease);z-index:80;display:flex;align-items:center;gap:10px;max-width:90vw}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0);pointer-events:auto}
+.toast svg{width:15px;height:15px;color:#4F8268;stroke-width:2.2}
+.toast.accent svg{color:#E0995E}
+
+/* Scrollbars */
+.thread-wrap::-webkit-scrollbar,.viz-wrap::-webkit-scrollbar{width:6px}
+.thread-wrap::-webkit-scrollbar-thumb,.viz-wrap::-webkit-scrollbar-thumb{background:rgba(26,31,42,0.15);border-radius:3px}
+.thread-wrap::-webkit-scrollbar-track,.viz-wrap::-webkit-scrollbar-track{background:transparent}
+
+/* Responsive — collapse to single column, viz becomes a tab below */
+.viz-tabs{display:none;height:42px;flex-shrink:0;border-bottom:1px solid var(--border-soft);padding:0 22px;align-items:center;gap:0}
+.viz-tab{height:42px;padding:0 14px;border:none;background:transparent;font-family:inherit;font-size:.8125rem;font-weight:600;color:var(--text-muted);cursor:pointer;position:relative}
+.viz-tab.active{color:var(--text)}
+.viz-tab.active::after{content:'';position:absolute;left:14px;right:14px;bottom:0;height:2px;background:var(--accent);border-radius:2px}
+@media (max-width:1100px){
+  .main{grid-template-columns:1fr}
+  .main::before{display:none}
+  .right-hemi{display:none}
+  .right-hemi.show-mobile{display:flex}
+  .viz-tabs{display:flex}
+  .left-hemi.hide-mobile{display:none}
+}
+@media (max-width:820px){
+  :root{--sidebar-w:0px}
+  .sidebar{transform:translateX(-100%);transition:transform 200ms var(--ease);width:220px}
+  .sidebar.open{transform:translateX(0)}
+  .topbar{left:0;padding:0 14px}
+  .menu-toggle{display:inline-flex}
+  .main{margin-left:0}
+  .search{display:none}
+  .composer-wrap{padding:12px 14px 16px}
+  .thread{padding:18px 14px 180px}
+  .viz-wrap{padding:14px 14px 24px}
+  .welcome{padding:28px 16px 40px}
+  .welcome h2{font-size:1.5rem;margin-bottom:50px}
+  .welcome-orb{width:80px;height:80px;margin-bottom:14px}
+  .welcome-orb svg{width:34px;height:34px}
+  .welcome-greet{margin-bottom:6px}
+  .carousel{margin-top:14px}
+  .hemi-actions .top-btn,.hemi-actions .hemi-collapse{display:none}
+  .hemi-head{padding:0 14px 0 62px;height:64px}
+  .chat-top{padding:0 14px}
+  .viz-tabs{padding:0 14px 0 62px}
+  .hemi-name{font-size:.875rem}
+  .hemi-cap{font-size:.5625rem}
+  .viz-card-head{padding:12px 14px 6px}
+  .viz-card-body{padding:12px 14px}
+  .viz-card-title{font-size:.875rem}
+}
+@media (max-width:480px){
+  .welcome{padding:22px 14px 32px}
+  .welcome h2{font-size:1.25rem;margin-bottom:40px}
+  .welcome-orb{width:68px;height:68px;margin-bottom:12px}
+  .welcome-orb svg{width:30px;height:30px}
+  .welcome-composer{padding:4px 4px 4px 12px;border-radius:12px}
+  .welcome-composer input{font-size:.875rem;padding:8px 4px}
+  .carousel{margin-top:10px}
+  .car-viewport,.car-slide{height:32px}
+  .car-card{font-size:.75rem}
+  .composer-row input{font-size:.8125rem}
+  .composer-wrap{padding:10px 12px 14px}
+  .run-btn{padding:0 12px;font-size:.75rem;height:34px}
+  .voice-btn{width:32px;height:32px}
+  .msg-bubble{padding:11px 13px;font-size:.875rem}
+  .ai-actions{gap:6px}
+  .ai-act{height:28px;font-size:.6875rem;padding:0 10px}
+  .rec-list{padding:10px 12px}
+  .rec-list li{font-size:.75rem;grid-template-columns:20px 1fr;gap:8px}
+  .rec-list .ra{grid-column:1/-1;align-self:start;width:100%;justify-content:center;margin-top:4px}
+  .kpi-grid{grid-template-columns:1fr}
+  .line-chart{height:120px}
+  .minibars{height:110px;gap:8px;padding:22px 6px 4px}
+  .mb-val{font-size:.6875rem}
+  .mb-lab{font-size:.625rem}
+  .stat-row{grid-template-columns:1fr auto;gap:6px}
+  .stat-row .stat-bar{grid-column:1/-1}
+  .det-row{grid-template-columns:auto 1fr;gap:8px;padding:8px 10px}
+  .det-val{grid-column:2/-1;text-align:left;margin-top:2px}
+  .viz-card{border-radius:12px}
+  .viz-card-head{padding:11px 12px 6px}
+  .viz-card-body{padding:11px 12px}
+  .thread{padding:14px 12px 180px}
+  .viz-wrap{padding:12px 12px 22px;gap:10px}
+  .pinned{padding:8px 14px}
+  .toast{font-size:.75rem;padding:10px 14px;bottom:18px}
+}
+
+/* === Topbar removed on this page — reclaim the vertical space === */
+.main{padding-top:0 !important}
+.hemi{height:100vh !important}
+#sectionDivider{top:0 !important}
+/* Floating hamburger — visible only on mobile so the sidebar is still reachable */
+.menu-toggle.floating-menu{display:none;position:fixed;top:13px;left:12px;z-index:38;width:38px;height:38px;border-radius:10px;background:rgba(255,255,255,0.78);backdrop-filter:blur(12px) saturate(160%);-webkit-backdrop-filter:blur(12px) saturate(160%);border:1px solid var(--border);color:var(--text);box-shadow:0 2px 8px rgba(26,31,42,0.10);align-items:center;justify-content:center;cursor:pointer}
+.menu-toggle.floating-menu svg{width:18px;height:18px}
+@media (max-width:820px){
+  .menu-toggle.floating-menu{display:inline-flex}
+}
+</style>
+  <script src="services/api.js?v=10"></script>
+  <script src="services/error-boundary.js?v=19"></script>
+</head>
+<body>
+
+<!-- Global SVG defs (line-chart gradient) -->
+<svg aria-hidden="true" width="0" height="0" style="position:absolute"><defs>
+  <linearGradient id="lcGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="rgba(201,123,58,0.32)"/><stop offset="100%" stop-color="rgba(201,123,58,0)"/></linearGradient>
+</defs></svg>
+
+<div class="sb-overlay" id="sbOverlay"></div>
+
+<aside class="sidebar" id="sidebar">
+  <a class="sb-brand" href="ask-the-brain.html" style="text-decoration:none">
+    <span class="sb-brand-dot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/><path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/></svg></span>
+    <span>Endeavor</span>
+  </a>
+  <nav class="sb-nav">
+    <a class="sb-item sb-featured active" href="ask-the-brain.html" aria-label="Ask the Brain">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/><path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/></svg>
+      <span class="sb-tip">Ask the Brain</span>
+    </a>
+    <a class="sb-item" id="navCeo" href="ceo-dashboard.html" aria-label="CEO Dashboard">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 1 18 0"/><path d="M12 12l4-2"/><circle cx="12" cy="12" r="1.6"/></svg>
+      <span class="sb-tip">CEO Dashboard</span>
+
+    </a>
+    <a class="sb-item" id="navUpload" href="upload-leads.html" aria-label="Upload leads">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 8 5-5 5 5"/><path d="M5 17v2a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-2"/></svg>
+      <span class="sb-tip">Upload Leads</span>
+    </a>
+    <a class="sb-item" href="notifications.html" aria-label="Notifications">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 7 3 9H3c0-2 3-2 3-9Z"/><path d="M10 21a2 2 0 0 0 4 0"/></svg>
+      <span class="sb-tip">Notifications</span>
+      <span class="sb-badge" style="display:none">0</span>
+    </a>
+    <div class="sb-group" id="sbWorkspaces">
+      <button class="sb-group-head" type="button">
+        Workspaces
+        <svg class="sb-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg>
+      </button>
+      <div class="sb-group-body">
+        <a class="sb-item" href="my-team.html" aria-label="My Team">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="7" r="4"/><path d="M3 21c0-3.5 3-6 6-6s6 2.5 6 6"/><path d="M16 3.5a4 4 0 0 1 0 7.5"/><path d="M22 21c0-3-2-5-5-5.5"/></svg>
+          <span class="sb-tip">My Team</span>
+        </a>
+        <a class="sb-item" href="inbox.html" aria-label="Inbox">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h6l2 3h2l2-3h6"/><path d="M3 7l2 12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2l2-12"/><path d="M5 7l2-3h10l2 3"/></svg>
+          <span class="sb-tip">Inbox</span>
+          <span class="sb-badge" style="display:none">0</span>
+        </a>
+        <a class="sb-item" href="deals.html" aria-label="Deals">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 3 7v6c0 5 4 8 9 9 5-1 9-4 9-9V7Z"/><path d="M9 12l2 2 4-4"/></svg>
+          <span class="sb-tip">Deals</span>
+        </a>
+        <a class="sb-item" href="appointments.html" aria-label="Appointments">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 11h18"/></svg>
+          <span class="sb-tip">Appointments</span>
+        </a>
+        <a class="sb-item" href="analytics.html" aria-label="Analytics">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 15l4-6 4 4 5-7"/></svg>
+          <span class="sb-tip">Analytics</span>
+        </a>
+        <a class="sb-item" href="qa-review.html" aria-label="QA Review">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9 12l2 2 4-4"/><path d="M21 12c0 5-4 8.5-9 9-5-.5-9-4-9-9V5l9-3 9 3v7Z"/></svg>
+          <span class="sb-tip">QA Review</span>
+        </a>
+      </div>
+    </div>
+  </nav>
+  <div class="sb-bottom">
+    <a class="sb-item" href="settings.html" aria-label="Settings">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.8-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1A1.6 1.6 0 0 0 9 19.4a1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.8 1.6 1.6 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1A1.6 1.6 0 0 0 4.6 9a1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3H9a1.6 1.6 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1c0 .6.4 1.2 1 1.5a1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8V9c.3.6.9 1 1.5 1H21a2 2 0 1 1 0 4h-.1c-.6 0-1.2.4-1.5 1Z"/></svg>
+      <span class="sb-tip">Settings</span>
+    </a>
+    <a class="sb-item sb-logout" href="login.html" aria-label="Log out" title="Log out">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></svg>
+      <span class="sb-tip">Log out</span>
+    </a>
+  </div>
+</aside>
+
+<!-- Topbar removed on this page (Ask the Brain is a focused full-bleed canvas).
+     A floating hamburger remains so mobile users can still reach the sidebar. -->
+<button class="menu-toggle floating-menu" id="menuToggle" aria-label="Open menu">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+</button>
+
+<main class="main">
+
+  <!-- Mobile tabs (only show <= 1100px) -->
+  <div class="viz-tabs" id="vizTabs" style="grid-column:1/-1">
+    <button class="viz-tab active" type="button" data-tab="left">Reasoning</button>
+    <button class="viz-tab" type="button" data-tab="right">Visualization</button>
+  </div>
+
+  <!-- LEFT HEMISPHERE — Reasoning -->
+  <section class="hemi left-hemi" id="leftHemi">
+    <!-- Collapsed rail (shown when this hemi is tucked) -->
+    <div class="hemi-rail" id="leftRail">
+      <span class="hr-glyph"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4a4 4 0 0 0-4 4v8a4 4 0 0 0 4 4Z" fill="rgba(255,255,255,0.18)"/><path d="M12 4a4 4 0 0 0-4 4v8a4 4 0 0 0 4 4"/><path d="M8 10h4M8 14h4"/></svg></span>
+      <span class="hr-label">Reasoning</span>
+      <button class="hr-expand" type="button" aria-label="Expand reasoning"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></button>
+    </div>
+    <div class="hemi-head">
+      <span class="hemi-glyph">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 4a4 4 0 0 0-4 4v8a4 4 0 0 0 4 4Z" fill="rgba(255,255,255,0.18)"/>
+          <path d="M12 4a4 4 0 0 0-4 4v8a4 4 0 0 0 4 4"/>
+          <path d="M8 10h4M8 14h4"/>
+        </svg>
+      </span>
+      <div class="hemi-title">
+        <span class="hemi-cap"><span class="hemi-cap-intro">Personal AI · Endeavor</span><span class="hemi-cap-split">Left hemisphere · Reasoning</span></span>
+        <span class="hemi-name">Ask the Brain</span>
+      </div>
+      <div class="hemi-actions">
+        <button class="top-btn ghost" type="button" id="histBtn">History</button>
+        <button class="top-btn" type="button" id="newSessionBtn">New</button>
+        <button class="hemi-collapse" type="button" id="leftCollapseBtn" aria-label="Collapse reasoning"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg></button>
+      </div>
+    </div>
+
+    <!-- Pinned strip -->
+    <div class="pinned" id="pinned">
+      <div class="pinned-head">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17v5"/><path d="M9 9v3l-2 2v1h10v-1l-2-2V9"/><path d="M14 9V3h-4v6"/></svg>
+        Pinned insights
+      </div>
+      <div class="pinned-list" id="pinnedList"></div>
+    </div>
+
+    <!-- Thread / welcome -->
+    <div class="thread-wrap" id="threadWrap">
+      <div class="welcome" id="welcome">
+        <div class="welcome-inner">
+          <div class="welcome-orb">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/><path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/></svg>
+          </div>
+          <h2 id="welcomeTitle">What do you want to work on today?</h2>
+
+          <!-- Inline search bar (composer) below the title -->
+          <div class="welcome-composer">
+            <input id="welcomeInput" type="text" placeholder="Ask anything about your business…" data-mobile-placeholder="Ask anything"/>
+            <button class="run-btn" id="welcomeRunBtn" type="button"><span class="run-label" data-mobile-label="Run">Run Analysis</span></button>
+          </div>
+
+          <!-- Vertical auto-rotating carousel — role-aware prompts, populated by JS -->
+          <div class="carousel">
+            <div class="car-viewport">
+              <div class="car-track" id="carTrack"></div>
+            </div>
+            <div class="car-dots" id="carDots"></div>
+          </div>
+
+          <!-- 2x2 business-improvement suggestions, populated by JS -->
+          <div class="biz-grid" id="bizGrid"></div>
+
+        </div>
+      </div>
+      <div class="thread" id="thread" style="display:none"></div>
+    </div>
+
+    <!-- Composer -->
+    <div class="composer-wrap">
+      <div class="composer">
+        <div class="composer-row">
+          <button class="voice-btn" id="voiceBtn" type="button" aria-label="Voice input">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v3M8 21h8"/></svg>
+          </button>
+          <input id="askInput" type="text" placeholder="Ask anything about your business…" data-mobile-placeholder="Ask anything"/>
+          <button class="run-btn" id="runBtn" type="button">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg>
+            <span class="run-label" data-mobile-label="Run">Run Analysis</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- RIGHT HEMISPHERE — Visualization -->
+  <section class="hemi right-hemi" id="rightHemi">
+    <!-- Collapsed rail (shown when this hemi is tucked) -->
+    <div class="hemi-rail" id="rightRail">
+      <button class="hr-expand" type="button" aria-label="Expand visualization" style="margin-top:0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg></button>
+      <span class="hr-glyph"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4a4 4 0 0 1 4 4v8a4 4 0 0 1-4 4Z" fill="rgba(255,255,255,0.18)"/><path d="M12 4a4 4 0 0 1 4 4v8a4 4 0 0 1-4 4"/><path d="M12 10h4M12 14h4"/></svg></span>
+      <span class="hr-label" style="margin-top:auto">Visualization</span>
+    </div>
+    <div class="hemi-head">
+      <button class="hemi-collapse" type="button" id="rightCollapseBtn" aria-label="Collapse visualization" style="margin-right:4px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></button>
+      <span class="hemi-glyph">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 4a4 4 0 0 1 4 4v8a4 4 0 0 1-4 4Z" fill="rgba(255,255,255,0.18)"/>
+          <path d="M12 4a4 4 0 0 1 4 4v8a4 4 0 0 1-4 4"/>
+          <path d="M12 10h4M12 14h4"/>
+        </svg>
+      </span>
+      <div class="hemi-title">
+        <span class="hemi-cap">Right hemisphere · Visualization</span>
+        <span class="hemi-name">Live Analysis</span>
+      </div>
+      <div class="hemi-actions">
+        <button class="top-btn primary" type="button" id="vizReport"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h12l4 4v12a2 2 0 0 1-2 2H4Z"/><path d="M16 4v4h4"/><path d="M8 14h8M8 18h5"/></svg>Generate Report</button>
+      </div>
+    </div>
+    <div class="viz-wrap" id="vizWrap">
+      <div class="viz-empty" id="vizEmpty">
+        <div class="viz-empty-orb">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 15l4-6 4 4 5-7"/></svg>
+        </div>
+        <h3 id="vizWelcome">Visuals appear here</h3>
+        <p id="vizSubtitle">When you ask the brain a question on the left, charts, tables, and KPIs will render here on the right — the visual half of the conversation.</p>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<div class="toast" id="toast">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+  <span id="toastMsg">Done</span>
+</div>
+
+<script>
+(function(){
+  const $=q=>document.querySelector(q);
+  const $$=q=>document.querySelectorAll(q);
+  const sb=$('#sidebar'),sbo=$('#sbOverlay');
+  $('#menuToggle')?.addEventListener('click',()=>{sb.classList.add('open');sbo.classList.add('open')});
+  sbo?.addEventListener('click',()=>{sb.classList.remove('open');sbo.classList.remove('open')});
+
+  // Workspaces collapsible (auto-open if active item is inside)
+  const wkGroup = document.getElementById('sbWorkspaces');
+  if(wkGroup){
+    const hasActiveInside = !!wkGroup.querySelector('.sb-item.active');
+    const savedOpen = localStorage.getItem('ebSbWorkspaces');
+    if(hasActiveInside || savedOpen === 'open'){ wkGroup.classList.add('open'); }
+    const wkHead = wkGroup.querySelector('.sb-group-head');
+    wkHead?.addEventListener('click', ()=>{
+      wkGroup.classList.toggle('open');
+      localStorage.setItem('ebSbWorkspaces', wkGroup.classList.contains('open') ? 'open' : 'closed');
+    });
+  }
+
+
+  // === Role-aware personalization ===
+  // Valid roles: agent, lead (Team Leader), head (Head Manager), admin
+  const ROLE = (localStorage.getItem('ebRole') || 'admin');
+  const ROLE_DATA = {
+    agent: {
+      who: 'Agent',
+      welcome: 'What do you want to work on today?',
+      prompts: [
+        { q:'How can I improve my close rate?', text:'How can I improve my close rate?' },
+        { q:"What's hurting my response time this week?", text:'What&rsquo;s hurting my response time this week?' },
+        { q:'Which deals are at risk this week?', text:'Which deals are at risk this week?' },
+        { q:"Best follow-up time?", text:'When is the best time to follow up?' }
+      ],
+      bizGrowth: [
+        { eyebrow:'Lift close rate',  hint:'1 habit, biggest lift',         q:'What 1 habit change would lift my close rate the most?' },
+        { eyebrow:'Win back time',    hint:'Get under 1h response',         q:'How do I cut my response time below 1h this month?' },
+        { eyebrow:'Prevent loss',     hint:'Stop deals slipping',           q:'Which of my deals are most likely to slip — and how do I save them?' }
+      ]
+    },
+    lead: {
+      who: 'Team Leader',
+      welcome: 'How can I help your team today?',
+      prompts: [
+        { q:'Which teammate needs coaching this week?', text:'Which of my 6 teammates needs coaching this week?' },
+        { q:'How is my team trending vs target?', text:'How is the Houston team trending vs target?' },
+        { q:'Who has the lowest close rate and why?', text:'Who on my team has the lowest close rate — and why?' },
+        { q:"Prep me for Monday's team huddle", text:'Prep me for Monday&rsquo;s team huddle.' }
+      ],
+      bizGrowth: [
+        { eyebrow:'Plug pipeline leaks', hint:'Stage where deals die',      q:'Where is my pipeline leaking the most this month?' },
+        { eyebrow:'Coaching ROI',      hint:'Highest impact per hour',      q:'What coaching move has the biggest ROI on my team this week?' },
+        { eyebrow:'Win back stalled',  hint:'Reignite cold deals',          q:'Which stalled deals can we win back fastest, and how?' }
+      ]
+    },
+    head: {
+      who: 'Head Manager',
+      welcome: 'What region question is on your mind?',
+      prompts: [
+        { q:'Which team is underperforming this week?', text:'Which of my 4 teams is underperforming this week?' },
+        { q:'Which Team Leader needs support?', text:'Which Team Leader needs my support right now?' },
+        { q:'Where should I reallocate budget?', text:'Where should I reallocate budget across teams?' }
+      ],
+      bizGrowth: [
+        { eyebrow:'Growth headroom',   hint:'Team with biggest upside',     q:'Which of my 4 teams has the biggest growth headroom this quarter?' },
+        { eyebrow:'Carrier mix',       hint:'Lift close rate via mix',      q:'Which carrier shift would lift our regional close rate the most?' },
+        { eyebrow:'Reduce churn',      hint:'Save renewals across teams',   q:'Where is renewal churn hurting us most across teams, and how do we fix it?' }
+      ]
+    },
+    admin: {
+      who: 'Admin',
+      welcome: 'What do you want to know about the company?',
+      prompts: [
+        { q:'Show me org-wide health right now', text:'Show me org-wide health right now.' },
+        { q:'Where are we losing money this week?', text:'Where are we losing money this week?' },
+        { q:'What is the biggest risk across all teams?', text:'What is the biggest risk across all 4 teams?' },
+        { q:'Plan a 10-day improvement push', text:'Plan a 10-day improvement push for Q2 close.' }
+      ],
+      bizGrowth: [
+        { eyebrow:'Growth opportunity', hint:'Biggest lever this quarter',  q:'Where is our biggest growth opportunity this quarter?' },
+        { eyebrow:'Fix conversion',     hint:'Integrations dragging it',    q:'Which integrations are hurting conversion, and what is the fix?' },
+        { eyebrow:'Churn risk',         hint:'Spot it across teams',        q:'What is our biggest churn risk across all teams right now?' }
+      ]
+    }
+  };
+  var RD = ROLE_DATA[ROLE] || ROLE_DATA.admin;
+
+  function renderBrain(){
+    var wTitle = $('#welcomeTitle');
+    if(wTitle) wTitle.innerHTML = RD.welcome;
+    var carT0 = $('#carTrack');
+    if(carT0){
+      carT0.innerHTML = RD.prompts.map(function(p){
+        return '<div class="car-slide"><button class="car-card" type="button" data-q="' + p.q + '">' + p.text + '</button></div>';
+      }).join('');
+    }
+    var bizGrid = $('#bizGrid');
+    if(bizGrid && RD.bizGrowth){
+      var arrow = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7"/><path d="M8 7h9v9"/></svg>';
+      bizGrid.innerHTML = RD.bizGrowth.map(function(b){
+        return '<button class="biz-card" type="button" data-q="' + b.q.replace(/"/g,'&quot;') + '">' +
+          '<span class="biz-card-eyebrow">' + arrow + b.eyebrow + '</span>' +
+          '<span class="biz-card-q">' + b.q + '</span>' +
+        '</button>';
+      }).join('');
+      bizGrid.querySelectorAll('.biz-card').forEach(function(c){
+        c.addEventListener('click', function(){ send(c.dataset.q); });
+      });
+    }
+  }
+
+  async function initBrain() {
+    try {
+      var aiRes = await window.__ebAPI.get('/ai/status').catch(function(){ return null; });
+      var _role = (function(){ try { return localStorage.getItem('ebRole') || ''; } catch(_){ return ''; } })();
+      // Coaching insights are agent-specific; skip for non-agents (no agent profile -> 404).
+      if (aiRes && aiRes.ollama && aiRes.ollama.available && _role === 'agent') {
+        var coachingRes = await window.__ebAPI.get('/coaching/insights/' + (localStorage.getItem('ebUserId') || 'me') + '/summary').catch(function(){ return null; });
+        if (coachingRes && coachingRes.summary) {
+          var newPrompts = [];
+          if (coachingRes.focus_areas && coachingRes.focus_areas.length > 0) {
+            coachingRes.focus_areas.slice(0, 4).forEach(function(area){
+              newPrompts.push({ q: area.title || 'Coaching focus', text: area.description || 'Review your coaching insights.' });
+            });
+            if (newPrompts.length > 0) {
+              RD.prompts = newPrompts;
+            }
+          }
+        }
+      }
+    } catch(e) {
+      // Keep static prompts as fallback
+    }
+    renderBrain();
+  }
+  __ebSafeInit(function(){ return initBrain(); });
+
+  // Gate CEO Dashboard link
+  const ceoLink = $('#navCeo');
+  if(ceoLink && ROLE !== 'admin' && ROLE !== 'dev'){ ceoLink.style.display = 'none'; }
+
+  // === AI-first: role-aware Suggested workspaces in the right hemisphere ===
+  const ICON = {
+    inbox:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h6l2 3h2l2-3h6"/><path d="M3 7l2 12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2l2-12"/><path d="M5 7l2-3h10l2 3"/></svg>',
+    deal:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 3 7v6c0 5 4 8 9 9 5-1 9-4 9-9V7Z"/><path d="M9 12l2 2 4-4"/></svg>',
+    cal:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 11h18"/></svg>',
+    chart:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 15l4-6 4 4 5-7"/></svg>',
+    team:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="7" r="4"/><path d="M3 21c0-3.5 3-6 6-6s6 2.5 6 6"/><path d="M16 3.5a4 4 0 0 1 0 7.5"/><path d="M22 21c0-3-2-5-5-5.5"/></svg>',
+    qa:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9 12l2 2 4-4"/><path d="M21 12c0 5-4 8.5-9 9-5-.5-9-4-9-9V5l9-3 9 3v7Z"/></svg>',
+    crown:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 1 18 0"/><path d="M12 12l4-2"/><circle cx="12" cy="12" r="1.6"/></svg>',
+    set:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.8-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1A1.6 1.6 0 0 0 9 19.4a1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.8 1.6 1.6 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1A1.6 1.6 0 0 0 4.6 9a1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3H9a1.6 1.6 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1c0 .6.4 1.2 1 1.5a1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8V9c.3.6.9 1 1.5 1H21a2 2 0 1 1 0 4h-.1c-.6 0-1.2.4-1.5 1Z"/></svg>',
+    note:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 7 3 9H3c0-2 3-2 3-9Z"/><path d="M10 21a2 2 0 0 0 4 0"/></svg>'
+  };
+  // Descriptions are static navigation hints (no fabricated counts/figures).
+  const ROLE_PAGES = {
+    agent: [
+      { href:'inbox.html',             label:'Inbox',           desc:'Your conversations & replies', icon:'inbox' },
+      { href:'deals.html',             label:'My Deals',        desc:'Your open & submitted deals',  icon:'deal' },
+      { href:'appointments.html',      label:'Calendar',        desc:'Your appointments & slots',    icon:'cal' },
+      { href:'agent-performance.html', label:'My Scorecard',    desc:'Your performance metrics',     icon:'chart' }
+    ],
+    lead: [
+      { href:'my-team.html',           label:'My Team',         desc:'Your team & coaching',         icon:'team' },
+      { href:'inbox.html',             label:'Team Inbox',      desc:'Team conversations',           icon:'inbox' },
+      { href:'deals.html',             label:'Team Deals',      desc:'Team pipeline',                icon:'deal' },
+      { href:'agent-performance.html', label:'Agent Performance', desc:'Team performance',           icon:'chart' }
+    ],
+    head: [
+      { href:'my-team.html',           label:'All Teams',       desc:'Every team & leader',          icon:'team' },
+      { href:'analytics.html',         label:'Region Analytics',desc:'Region-wide trends',           icon:'chart' },
+      { href:'qa-review.html',         label:'QA Review',       desc:'Transcript quality',           icon:'qa' },
+      { href:'agent-performance.html', label:'Performance',     desc:'Agents across teams',          icon:'chart' }
+    ],
+    admin: [
+      { href:'ceo-dashboard.html',     label:'CEO Dashboard',   desc:'Org-wide health',              icon:'crown' },
+      { href:'analytics.html',         label:'Org Analytics',   desc:'Full company trends',          icon:'chart' },
+      { href:'my-team.html',           label:'Org Structure',   desc:'Teams & people',               icon:'team' },
+      { href:'settings.html',          label:'Org Settings',    desc:'Admin controls, integrations', icon:'set' }
+    ]
+  };
+  const ROLE_WELCOME = {
+    agent: '{n} — where should we start today?',
+    lead:  '{n} — what should we look at?',
+    head:  '{n} — what region question is on your mind?',
+    admin: '{n} — what should we look at across the company?'
+  };
+  // Greet the REAL signed-in agent (was a hardcoded placeholder name per role).
+  let AGENT_NAME = 'there';
+  const vw = $('#vizWelcome');
+  function applyWelcome(){ if(vw) vw.textContent = (ROLE_WELCOME[ROLE] || ROLE_WELCOME.admin).replace('{n}', 'Hi ' + AGENT_NAME); }
+  applyWelcome();
+  (async function(){
+    try { var me = await window.__ebAPI.get('/auth/me'); if(me && me.first_name){ AGENT_NAME = me.first_name; applyWelcome(); } } catch(_){}
+  })();
+
+  // Coach priorities live in the notification bar on every other workspace
+  // page — not on Ask the Brain. The container below is kept in markup for
+  // possible future use but stays empty / hidden here.
+
+  let toastT;
+  function toast(msg, kind){
+    const t=$('#toast'); $('#toastMsg').textContent=msg;
+    t.classList.remove('accent');
+    if(kind==='accent') t.classList.add('accent');
+    t.classList.add('show');
+    clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('show'),2400);
+  }
+
+  // === Pinned insights ===
+  const pinned = $('#pinned'), pinnedList = $('#pinnedList');
+  const pins = [];
+  function renderPins(){
+    if(pins.length===0){ pinned.classList.remove('show'); return; }
+    pinned.classList.add('show');
+    pinnedList.innerHTML = pins.map((p,i)=>`<div class="pinned-item"><div>${p}</div><button class="pin-unpin" data-i="${i}" aria-label="Unpin"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button></div>`).join('');
+    pinnedList.querySelectorAll('.pin-unpin').forEach(b=>b.addEventListener('click',()=>{ pins.splice(+b.dataset.i,1); renderPins(); toast('Unpinned'); }));
+  }
+
+  // === Thread + visual sync ===
+  const threadWrap = $('#threadWrap');
+  const thread = $('#thread');
+  const welcome = $('#welcome');
+  const input = $('#askInput');
+  const runBtn = $('#runBtn');
+  const vizWrap = $('#vizWrap');
+  const vizEmpty = $('#vizEmpty');
+
+  function showWelcome(){ welcome.style.display='flex'; thread.style.display='none'; }
+  function showThread(){ welcome.style.display='none'; thread.style.display='flex'; }
+  function clearThread(){ thread.innerHTML=''; }
+  function clearViz(){ vizWrap.innerHTML=''; vizWrap.appendChild(vizEmpty); vizEmpty.style.display=''; }
+  function hideVizEmpty(){ vizEmpty.style.display='none'; }
+  function scrollThreadBottom(){ threadWrap.scrollTop = threadWrap.scrollHeight; }
+  function scrollVizBottom(){ vizWrap.scrollTop = vizWrap.scrollHeight; }
+  // Anchor a new message at the TOP of the visible thread so long answers
+  // are read from their first line instead of being clipped above the fold.
+  function anchorMsgTop(el){
+    if(!el) return;
+    const top = el.offsetTop - 12;
+    threadWrap.scrollTop = Math.max(0, top);
+  }
+  // While the AI is streaming, only auto-follow if the user is already near
+  // the bottom. Otherwise leave the scroll position so they can read from top.
+  function followIfPinned(){
+    const nearBottom = (threadWrap.scrollHeight - threadWrap.scrollTop - threadWrap.clientHeight) < 80;
+    if(nearBottom) threadWrap.scrollTop = threadWrap.scrollHeight;
+  }
+  function nowTime(){const d=new Date(); let h=d.getHours(), m=d.getMinutes(); const ap=h>=12?'PM':'AM'; h=((h+11)%12)+1; m=String(m).padStart(2,'0'); return `${h}:${m} ${ap}`}
+
+  // Track the most recently added user-question element so the next AI answer
+  // can be anchored just below it (user msg + answer top both in view).
+  let lastUserMsgEl = null;
+
+  // ===== Real "Create Action" / "View Details" / "Generate Report" =====
+  function escapeHtml(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
+
+  // Create Action — there is no server-side task store yet, so action items are
+  // persisted in localStorage (per browser) and survive reloads; shown as a
+  // removable list above the thread. Honest "real": it actually saves & tracks.
+  let acts = (function(){ try { return JSON.parse(localStorage.getItem('ebBrainActions')||'[]'); } catch(_){ return []; } })();
+  function saveActs(){ try { localStorage.setItem('ebBrainActions', JSON.stringify(acts)); } catch(_){} }
+  function renderActions(){
+    let bar = document.getElementById('brainActions');
+    if(!acts.length){ if(bar) bar.remove(); return; }
+    if(!bar){ bar = document.createElement('div'); bar.id='brainActions'; bar.className='pinned show'; thread.parentNode.insertBefore(bar, thread); }
+    bar.innerHTML = '<div class="pinned-head"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>Action items · '+acts.length+'</div><div class="pinned-list">'+
+      acts.map(function(a,i){ return '<div class="pinned-item"><div>'+escapeHtml(a.text)+'</div><button class="pin-unpin" data-i="'+i+'" aria-label="Mark done" title="Mark done"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></button></div>'; }).join('')+'</div>';
+    bar.querySelectorAll('.pin-unpin').forEach(function(b){ b.addEventListener('click', function(){ acts.splice(+b.dataset.i,1); saveActs(); renderActions(); toast('Action completed'); }); });
+  }
+  function addAction(answer, question){
+    var text = String(answer||question||'').trim().slice(0,160);
+    if(!text){ toast('Nothing to turn into an action'); return; }
+    acts.unshift({ text:text, q:question||'', ts:Date.now() });
+    saveActs(); renderActions(); toast('Action saved to your list','accent');
+  }
+
+  // View Details — expand the real question, full answer (+ length) and the
+  // message metadata line (model/time) under the message.
+  function toggleDetails(rightCol, actions, question, answer, metaEl){
+    var d = rightCol.querySelector('.ai-details');
+    if(d){ d.remove(); return; }
+    d = document.createElement('div'); d.className='ai-details';
+    d.style.cssText='margin:8px 0 0;padding:10px 12px;border:1px solid var(--border-soft);border-radius:10px;background:rgba(255,255,255,0.6);font-size:.8125rem;line-height:1.55;color:var(--text-muted)';
+    d.innerHTML = '<div style="font-weight:700;color:var(--text);margin-bottom:5px">Details</div>'+
+      '<div><strong>Question:</strong> '+escapeHtml(question||'—')+'</div>'+
+      '<div style="margin-top:5px"><strong>Answer ('+String(answer||'').length+' chars):</strong> '+escapeHtml(answer||'')+'</div>'+
+      (metaEl?'<div style="margin-top:5px;color:var(--text-faint)">'+escapeHtml(metaEl.textContent)+'</div>':'');
+    rightCol.insertBefore(d, actions.nextSibling);
+  }
+
+  // Generate Report — build a real, downloadable HTML report (printable to PDF)
+  // of either one Q&A pair or the whole session, with the agent + timestamp.
+  function _allPairs(){
+    var pairs=[], q=null;
+    thread.querySelectorAll('.msg').forEach(function(m){
+      if(m.classList.contains('user')){ var ub=m.querySelector('.msg-bubble'); q = ub?ub.textContent.trim():''; }
+      else if(m.classList.contains('ai') && q!==null){ var ab=m.querySelector('.ai-text'); pairs.push({q:q, a:ab?ab.textContent.trim():''}); q=null; }
+    });
+    return pairs;
+  }
+  function generateReport(scope){
+    var pairs = (scope && scope.q!==undefined) ? [{q:scope.q||'(question)', a:scope.a||''}] : _allPairs();
+    if(!pairs.length){ toast('Ask the brain something first, then generate a report'); return; }
+    var now = new Date();
+    var rows = pairs.map(function(p,i){ return '<section class="qa"><h2>Q'+(i+1)+'. '+escapeHtml(p.q)+'</h2><p>'+escapeHtml(p.a).replace(/\n/g,'<br>')+'</p></section>'; }).join('');
+    var html = '<!doctype html><html><head><meta charset="utf-8"><title>Endeavor — Brain Report</title>'+
+      '<style>body{font:14px/1.6 -apple-system,Segoe UI,Roboto,sans-serif;color:#1A1F2A;max-width:760px;margin:40px auto;padding:0 24px}'+
+      'h1{font-size:22px;margin:0 0 4px}.meta{color:#666;font-size:12px;margin-bottom:24px}'+
+      '.qa{margin:0 0 20px;padding:0 0 16px;border-bottom:1px solid #eee}.qa h2{font-size:15px;color:#C97B3A;margin:0 0 6px}'+
+      '@media print{body{margin:0}}</style></head><body>'+
+      '<h1>Endeavor — Brain Report</h1><div class="meta">Agent: '+escapeHtml(AGENT_NAME)+' · Generated: '+escapeHtml(now.toLocaleString())+' · '+pairs.length+' item'+(pairs.length===1?'':'s')+'</div>'+
+      rows+'</body></html>';
+    var url = URL.createObjectURL(new Blob([html], {type:'text/html'}));
+    var a = document.createElement('a'); a.href=url; a.download='brain-report-'+now.toISOString().slice(0,10)+'.html';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function(){ URL.revokeObjectURL(url); }, 4000);
+    toast('Report downloaded — open it and print to PDF','accent');
+  }
+  renderActions();
+
+  function addUser(q){
+    showThread();
+    const el = document.createElement('div'); el.className='msg user';
+    el.innerHTML = `<div><div class="msg-bubble">${q.replace(/</g,'&lt;')}</div><div class="msg-meta" style="justify-content:flex-end">You · ${nowTime()}</div></div>`;
+    thread.appendChild(el);
+    lastUserMsgEl = el;
+    anchorMsgTop(el);
+  }
+
+  function showTyping(){
+    const el = document.createElement('div'); el.className='msg ai'; el.id='typingRow';
+    el.innerHTML = `<div class="ai-avatar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/><path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/></svg></div><div style="flex:1;min-width:0"><div class="typing"><span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span></div></div>`;
+    thread.appendChild(el);
+    if(lastUserMsgEl) anchorMsgTop(lastUserMsgEl); else anchorMsgTop(el);
+  }
+  function removeTyping(){ const t=$('#typingRow'); if(t) t.remove(); }
+
+  function streamInto(textEl, text, doneCb){
+    const words = text.split(/(\s+)/);
+    let i=0;
+    const caret = document.createElement('span'); caret.className='caret';
+    textEl.appendChild(caret);
+    const tick = ()=>{
+      if(i>=words.length){
+        caret.remove();
+        if(doneCb) doneCb();
+        return;
+      }
+      caret.insertAdjacentHTML('beforebegin', words[i].replace(/</g,'&lt;'));
+      i++; followIfPinned();
+      setTimeout(tick, words[i-1].trim()===''?22:42);
+    };
+    tick();
+  }
+
+  function addVizCard(card){
+    hideVizEmpty();
+    const el = document.createElement('div'); el.className='viz-card';
+    el.innerHTML = `
+      <div class="viz-card-head">
+        <div class="viz-card-l">
+          <div class="viz-card-cap">${card.cap || 'Visualization'}</div>
+          <div class="viz-card-title">${card.title}</div>
+          ${card.sub?`<div class="viz-card-sub">${card.sub}</div>`:''}
+        </div>
+        <div class="viz-card-actions">
+          <button class="viz-icon-btn" type="button" aria-label="Expand" data-viz="expand"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14v6h6"/><path d="M20 10V4h-6"/><path d="m20 4-7 7M4 20l7-7"/></svg></button>
+          <button class="viz-icon-btn" type="button" aria-label="Pin" data-viz="pin"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17v5"/><path d="M9 9v3l-2 2v1h10v-1l-2-2V9"/><path d="M14 9V3h-4v6"/></svg></button>
+        </div>
+      </div>
+      <div class="viz-card-body">${card.body}</div>`;
+    vizWrap.appendChild(el);
+    el.querySelector('[data-viz="expand"]').addEventListener('click', ()=>toast('Opening full visualization…'));
+    el.querySelector('[data-viz="pin"]').addEventListener('click', ()=>{ pins.push(card.title); renderPins(); toast('Pinned to top','accent'); });
+    enhanceVizCard(el);
+    scrollVizBottom();
+    return el;
+  }
+
+  // Adds hover tooltips + click-to-drill interactivity to charts inside a viz card.
+  // Each line-chart can carry a `data-points` JSON attribute describing its points
+  // (x, y in viewBox coords, v = display value, l = label). When present, we lay
+  // invisible hit-circles over each point so hovering pops a tooltip + guide line.
+  // Bar/table/tile rows get hover styling via CSS, and click handlers that toast.
+  function enhanceVizCard(card){
+    // 1) Line-chart hover tooltips
+    card.querySelectorAll('.line-chart').forEach(svg=>{
+      if(svg._lcEnhanced) return; svg._lcEnhanced = true;
+
+      // Wrap SVG so we can position the tooltip in DOM coords
+      const wrap = document.createElement('div'); wrap.className = 'line-chart-wrap';
+      svg.parentNode.insertBefore(wrap, svg);
+      wrap.appendChild(svg);
+
+      let points = [];
+      try { points = JSON.parse(svg.getAttribute('data-points') || '[]'); } catch(e){}
+      if(!points.length) return;
+
+      const tip = document.createElement('div'); tip.className = 'lc-tip';
+      wrap.appendChild(tip);
+
+      // Guide line + hover marker live INSIDE the SVG so they scale with viewBox
+      const SVG_NS = 'http://www.w3.org/2000/svg';
+      const vb = svg.viewBox.baseVal;
+      const guide = document.createElementNS(SVG_NS, 'line');
+      guide.setAttribute('class', 'lc-guide');
+      guide.setAttribute('y1', String(vb.y));
+      guide.setAttribute('y2', String(vb.y + vb.height));
+      svg.appendChild(guide);
+
+      const marker = document.createElementNS(SVG_NS, 'circle');
+      marker.setAttribute('class', 'lc-hot-marker');
+      marker.setAttribute('r', '5');
+      svg.appendChild(marker);
+
+      const hotG = document.createElementNS(SVG_NS, 'g');
+      hotG.setAttribute('class', 'lc-hots');
+      points.forEach(p=>{
+        const c = document.createElementNS(SVG_NS, 'circle');
+        c.setAttribute('class', 'lc-hot');
+        c.setAttribute('cx', String(p.x));
+        c.setAttribute('cy', String(p.y));
+        c.setAttribute('r', '16');
+        c.addEventListener('mouseenter', ()=>{
+          // Convert viewBox coords to wrap-relative pixels for tooltip placement
+          const rect = wrap.getBoundingClientRect();
+          const px = ((p.x - vb.x) / vb.width) * rect.width;
+          const py = ((p.y - vb.y) / vb.height) * rect.height;
+          tip.style.left = px + 'px';
+          tip.style.top  = py + 'px';
+          tip.innerHTML = (p.l ? '<span class="lc-tip-k">'+p.l+'</span>' : '') + p.v;
+          tip.classList.add('show');
+          guide.setAttribute('x1', String(p.x));
+          guide.setAttribute('x2', String(p.x));
+          guide.classList.add('show');
+          marker.setAttribute('cx', String(p.x));
+          marker.setAttribute('cy', String(p.y));
+          marker.classList.add('show');
+        });
+        c.addEventListener('mouseleave', ()=>{
+          tip.classList.remove('show');
+          guide.classList.remove('show');
+          marker.classList.remove('show');
+        });
+        hotG.appendChild(c);
+      });
+      svg.appendChild(hotG);
+    });
+
+    // 2) Vertical mini-bars — auto-inject .mb-val for tooltip if missing,
+    //    and wire click to surface the bar's label.
+    card.querySelectorAll('.minibars .mb').forEach(b=>{
+      const lab = (b.querySelector('.mb-lab')||{}).textContent || '';
+      // Inject value chip if the markup didn't declare one (some answers omit it)
+      if(!b.querySelector('.mb-val')){
+        const fill = b.querySelector('.mb-fill');
+        const pct = fill ? (fill.style.height || '').trim() : '';
+        if(pct){
+          const v = document.createElement('div'); v.className = 'mb-val';
+          v.textContent = pct;
+          b.insertBefore(v, b.firstChild);
+        }
+      }
+      b.addEventListener('click', ()=>{ if(lab) toast('Filtering by ' + lab, 'accent'); });
+    });
+
+    // 3) Horizontal stat rows — drill-in click
+    card.querySelectorAll('.stats-list .stat-row').forEach(r=>{
+      r.addEventListener('click', ()=>{
+        const k = (r.querySelector('.stat-k')||{}).textContent || 'stage';
+        toast('Drilling into ' + k, 'accent');
+      });
+    });
+
+    // 4) Table rows — drill-in click
+    card.querySelectorAll('.viz-table tbody tr').forEach(tr=>{
+      tr.addEventListener('click', ()=>{
+        // Use the most descriptive cell as the toast subject
+        const cells = tr.querySelectorAll('td');
+        if(!cells.length) return;
+        const subject = (cells[1] || cells[0]).textContent.trim().slice(0, 48);
+        toast('Opening details · ' + subject, 'accent');
+      });
+    });
+
+    // 5) KPI tiles — drill-in click
+    card.querySelectorAll('.kpi-tile').forEach(t=>{
+      t.addEventListener('click', ()=>{
+        const k = (t.querySelector('.kpi-k')||{}).textContent || 'KPI';
+        toast('Opening ' + k, 'accent');
+      });
+    });
+
+    // 6) Detail rows — drill-in click
+    card.querySelectorAll('.det-row').forEach(r=>{
+      r.addEventListener('click', ()=>{
+        const t = (r.querySelector('.det-text')||{}).textContent || '';
+        toast('Opening · ' + t.trim().slice(0, 48), 'accent');
+      });
+    });
+  }
+
+  function addAi(textHtml, recsHtml, vizCards, question){
+    showThread();
+    const el = document.createElement('div'); el.className='msg ai';
+    el.innerHTML = `
+      <div class="ai-avatar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/><path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/></svg></div>
+      <div style="flex:1;min-width:0">
+        <div class="msg-bubble"><div class="ai-text"></div></div>
+        <div class="msg-meta">Brain · ${nowTime()} · reasoning</div>
+      </div>`;
+    thread.appendChild(el);
+    // Keep the user's question + answer top in view as the answer streams in.
+    if(lastUserMsgEl) anchorMsgTop(lastUserMsgEl); else anchorMsgTop(el);
+    const rightCol = el.lastElementChild;
+    const bubble = el.querySelector('.msg-bubble');
+    const textEl = el.querySelector('.ai-text');
+    const plain = textHtml.replace(/<[^>]*>/g,'');
+
+    streamInto(textEl, plain, ()=>{
+      textEl.innerHTML = textHtml;
+      // Render visualizations to the RIGHT side in sequence
+      const firstCard = vizCards && vizCards[0];
+      if(vizCards && vizCards.length){
+        vizCards.forEach((c,i)=> setTimeout(()=>addVizCard(c), 140*i));
+        // Add a "viz reference" chip below text to anchor right-side card
+        const ref = document.createElement('button');
+        ref.className = 'viz-ref'; ref.type = 'button';
+        ref.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 15l4-6 4 4 5-7"/></svg>See visual · ${firstCard.title}`;
+        ref.addEventListener('click',()=>{
+          const cards = vizWrap.querySelectorAll('.viz-card');
+          const target = cards[cards.length-1];
+          if(target){ target.scrollIntoView({behavior:'smooth',block:'center'}); target.style.outline='2px solid rgba(201,123,58,0.55)'; setTimeout(()=>target.style.outline='',1200); }
+        });
+        bubble.appendChild(ref);
+      }
+      // Recommendations inside bubble
+      if(recsHtml){
+        const recWrap = document.createElement('div'); recWrap.innerHTML = recsHtml;
+        while(recWrap.firstChild) bubble.appendChild(recWrap.firstChild);
+        bubble.querySelectorAll('[data-mini="action"]').forEach(b=>b.addEventListener('click',()=>addAction(b.textContent||'', question)));
+      }
+      // Action row
+      const actions = document.createElement('div'); actions.className='ai-actions';
+      actions.innerHTML = `
+        <button class="ai-act" type="button" data-act="details"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>View Details</button>
+        <button class="ai-act" type="button" data-act="action"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>Create Action</button>
+        <button class="ai-act primary" type="button" data-act="report"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h12l4 4v12a2 2 0 0 1-2 2H4Z"/><path d="M16 4v4h4"/><path d="M8 14h8M8 18h5"/></svg>Generate Report</button>
+        <button class="ai-act icon-only" type="button" data-act="pin" aria-label="Pin"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17v5"/><path d="M9 9v3l-2 2v1h10v-1l-2-2V9"/><path d="M14 9V3h-4v6"/></svg></button>`;
+      rightCol.insertBefore(actions, rightCol.lastElementChild);
+      const answerText = (textEl.textContent || bubble.innerText || '').trim();
+      const metaEl = el.querySelector('.msg-meta');
+      actions.querySelectorAll('[data-act]').forEach(b=>b.addEventListener('click',()=>{
+        const a = b.dataset.act;
+        if(a==='details') toggleDetails(rightCol, actions, question, answerText, metaEl);
+        else if(a==='action') addAction(answerText, question);
+        else if(a==='report') generateReport({ q: question || '', a: answerText });
+        else if(a==='pin'){ pins.push(bubble.innerText.slice(0,180) + (bubble.innerText.length>180?'…':'')); renderPins(); toast('Pinned to top','accent'); }
+      }));
+      runBtn.disabled = false;
+      scrollThreadBottom();
+    });
+    return el;
+  }
+
+  const mainEl = document.querySelector('.main');
+
+  async function send(q){
+    if(!q || !q.trim()) return;
+    const trimmed = q.trim();
+    if(!mainEl.classList.contains('split')){
+      mainEl.classList.add('split');
+    }
+    clearViz();
+    addUser(trimmed);
+    input.value = '';
+    if(welcomeInput) welcomeInput.value = '';
+    runBtn.disabled = true;
+    showTyping();
+    try {
+      var aiResp = await window.__ebAPI.post('/ai/conversation/ask', {
+        message: trimmed,
+        conversation_id: 'ask-brain',
+        thread_id: window._threadId || null,
+        language: (function(){ try { return localStorage.getItem('ebLanguage') || ''; } catch(_){ return ''; } })()
+      });
+      removeTyping();
+      var responseText = aiResp.response || aiResp.choices?.[0]?.message?.content || '';
+      var recs = '';
+      var viz = [];
+      if (aiResp.suggestions && aiResp.suggestions.length > 0) {
+        recs = '<div class="ai-rec"><span class="ai-rec-cap">Follow up</span><ul>' +
+          aiResp.suggestions.map(function(s){ return '<li class="ai-rec-li" data-q="' + s.replace(/"/g,'&quot;') + '">' + s + '</li>'; }).join('') +
+          '</ul></div>';
+      }
+      if (aiResp.viz_data) {
+        viz = [{ cap:'Result', title:'Analysis', sub:'', body: aiResp.viz_data }];
+      }
+      addAi(responseText, recs, viz, trimmed);
+    } catch(e) {
+      console.warn('AI API error:', e);
+      removeTyping();
+      addAi('AI is unavailable from the backend right now. Please check the AI service configuration and try again.', '', [], trimmed);
+    }
+  }
+
+  runBtn.addEventListener('click', ()=>send(input.value));
+  input.addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); send(input.value); }});
+
+  // Welcome inline composer
+  const welcomeInput = $('#welcomeInput');
+  const welcomeRunBtn = $('#welcomeRunBtn');
+  welcomeRunBtn?.addEventListener('click', ()=>send(welcomeInput.value));
+  welcomeInput?.addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); send(welcomeInput.value); }});
+
+  // Carousel — vertical auto-rotate
+  const carTrack = $('#carTrack');
+  const carSlides = Array.from($$('#carTrack .car-slide'));
+  const carDots = $('#carDots');
+  let carIdx = 0;
+  let carTimer;
+  function renderDots(){
+    if(!carDots) return;
+    carDots.innerHTML = carSlides.map((_,i)=>`<button class="car-dot ${i===carIdx?'active':''}" type="button" data-i="${i}" aria-label="Question ${i+1}"></button>`).join('');
+    carDots.querySelectorAll('.car-dot').forEach(d=>d.addEventListener('click', ()=>{ stopCar(); goCar(+d.dataset.i); startCar(); }));
+  }
+  function goCar(i){
+    if(!carSlides.length) return;
+    carIdx = (i + carSlides.length) % carSlides.length;
+    if(carTrack) carTrack.style.transform = `translateY(-${carIdx * 36}px)`;
+    renderDots();
+  }
+  function startCar(){ stopCar(); carTimer = setInterval(()=>goCar(carIdx+1), 4200); }
+  function stopCar(){ if(carTimer){ clearInterval(carTimer); carTimer=null; } }
+  $$('#carTrack .car-card').forEach(c=>c.addEventListener('click', ()=>{ stopCar(); send(c.dataset.q); }));
+  const carousel = document.querySelector('.carousel');
+  carousel?.addEventListener('mouseenter', stopCar);
+  carousel?.addEventListener('mouseleave', startCar);
+  renderDots();
+  startCar();
+
+  // No auto-fire: the right hemisphere only opens when the user actually
+  // asks a question. Until then the page is single-pane (just the welcome
+  // zone on the left).
+
+  // Voice
+  let recording = false;
+  $('#voiceBtn').addEventListener('click', ()=>{
+    recording = !recording;
+    $('#voiceBtn').classList.toggle('rec', recording);
+    if(recording) toast('Listening… speak now','accent');
+    else toast('Voice input stopped');
+  });
+
+  // Top bar actions
+  $('#vizReport').addEventListener('click', ()=>generateReport('all'));
+  $('#histBtn').addEventListener('click', ()=>toast('Chat history — coming soon'));
+  $('#newSessionBtn').addEventListener('click', ()=>{
+    clearThread();
+    clearViz();
+    showWelcome();
+    mainEl.classList.remove('split','r-collapsed','l-collapsed');
+    if(input) input.value = '';
+    if(welcomeInput){ welcomeInput.value = ''; welcomeInput.focus(); }
+    lastUserMsgEl = null;
+    runBtn.disabled = false;
+    toast('New session started');
+  });
+
+  // Hemisphere collapse / expand (mutually exclusive)
+  function collapseLeft(){ mainEl.classList.remove('r-collapsed'); mainEl.classList.add('l-collapsed'); }
+  function collapseRight(){ mainEl.classList.remove('l-collapsed'); mainEl.classList.add('r-collapsed'); }
+  function expandBoth(){ mainEl.classList.remove('l-collapsed','r-collapsed'); }
+  $('#leftCollapseBtn').addEventListener('click', collapseLeft);
+  $('#rightCollapseBtn').addEventListener('click', collapseRight);
+  $$('.hemi-rail').forEach(r=>r.addEventListener('click', e=>{ if(e.target.closest('.hr-expand') || e.target===r) expandBoth(); }));
+  $$('.hr-expand').forEach(b=>b.addEventListener('click', e=>{ e.stopPropagation(); expandBoth(); }));
+
+  // Mobile tab switching
+  const leftHemi = $('#leftHemi'), rightHemi = $('#rightHemi');
+  $$('#vizTabs .viz-tab').forEach(t=>t.addEventListener('click', ()=>{
+    $$('#vizTabs .viz-tab').forEach(x=>x.classList.remove('active'));
+    t.classList.add('active');
+    const which = t.dataset.tab;
+    if(which==='left'){ leftHemi.classList.remove('hide-mobile'); rightHemi.classList.remove('show-mobile'); }
+    else { leftHemi.classList.add('hide-mobile'); rightHemi.classList.add('show-mobile'); }
+  }));
+
+  // Mobile-only: shorten composer placeholders to "Ask anything" and the
+  // run CTA to "Run". Restore full text when the viewport grows back.
+  const mobileQ = window.matchMedia('(max-width:600px)');
+  function applyComposerCopy(){
+    const isMobile = mobileQ.matches;
+    $$('[data-mobile-placeholder]').forEach(el=>{
+      if(!el.dataset.deskPlaceholder) el.dataset.deskPlaceholder = el.getAttribute('placeholder') || '';
+      el.setAttribute('placeholder', isMobile ? el.dataset.mobilePlaceholder : el.dataset.deskPlaceholder);
+    });
+    $$('[data-mobile-label]').forEach(el=>{
+      if(!el.dataset.deskLabel) el.dataset.deskLabel = el.textContent.trim();
+      el.textContent = isMobile ? el.dataset.mobileLabel : el.dataset.deskLabel;
+    });
+  }
+  applyComposerCopy();
+  if(mobileQ.addEventListener) mobileQ.addEventListener('change', applyComposerCopy);
+  else if(mobileQ.addListener) mobileQ.addListener(applyComposerCopy);
+
+})();
+</script>
+</body>
+</html>

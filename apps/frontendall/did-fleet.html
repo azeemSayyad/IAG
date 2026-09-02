@@ -1,0 +1,953 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>DID Fleet — Endeavor</title>
+<script>
+(function(){try{
+const FM={sm:'14px',md:'16px',lg:'18px',xl:'20px'};
+const TM={
+warm:{a:'#C97B3A',a2:'#E0995E',ah:'#B26A2D',g:'linear-gradient(135deg,#FFFBF5 0%,#FFEFDC 50%,#FFF6E9 100%)',gl:'rgba(178,106,45,.08)'},
+forest:{a:'#4F8268',a2:'#6B9F86',ah:'#3D6651',g:'linear-gradient(135deg,#F5FBF7 0%,#E0F1E6 50%,#E8F4ED 100%)',gl:'rgba(63,109,84,.08)'},
+indigo:{a:'#5E7BA8',a2:'#7B96BD',ah:'#4A6488',g:'linear-gradient(135deg,#F5F7FB 0%,#DCE4F1 50%,#E5EBF4 100%)',gl:'rgba(74,100,136,.08)'},
+rose:{a:'#A3525C',a2:'#B97077',ah:'#82414B',g:'linear-gradient(135deg,#FBF5F6 0%,#F1DCDF 50%,#F4E5E8 100%)',gl:'rgba(130,65,75,.08)'},
+slate:{a:'#2D3340',a2:'#5A6275',ah:'#1A1F2A',g:'linear-gradient(135deg,#B8BCC5 0%,#9DA3AD 50%,#ABB0BA 100%)',gl:'rgba(26,31,42,.14)'},
+amber:{a:'#9C7842',a2:'#B89058',ah:'#7C5E2F',g:'linear-gradient(135deg,#FBF7F0 0%,#F0E5D0 50%,#F4EBDB 100%)',gl:'rgba(124,94,47,.08)'}
+};
+window.__ebApplyFont=function(v){document.documentElement.style.fontSize=FM[v]||'16px';};
+window.__ebApplyTheme=function(v){
+var t=TM[v]||TM.warm,D=document.documentElement;
+D.style.setProperty('--accent',t.a);
+D.style.setProperty('--accent-2',t.a2);
+D.style.setProperty('--accent-hover',t.ah);
+var st=document.getElementById('ebPrefsTheme');
+if(!st){st=document.createElement('style');st.id='ebPrefsTheme';document.head.appendChild(st);}
+st.textContent='body::before{background:'+t.g+' !important}body::after{background:radial-gradient(ellipse 95% 85% at 50% 50%,transparent 55%,'+t.gl+' 100%) !important}.sb-brand-dot{background:linear-gradient(135deg,'+t.a+','+t.a2+') !important}.usage-fill{background:linear-gradient(90deg,'+t.a+','+t.a2+') !important}';
+};
+window.__ebApplyFont(localStorage.getItem('ebFontSize')||'md');
+window.__ebApplyTheme(localStorage.getItem('ebTheme')||'warm');
+}catch(e){}})();
+</script>
+<script>
+// Page guard — DID Fleet is admin/dev only. A non-admin who opens this URL
+// directly is bounced out before any dashboard data is fetched. The nav link is
+// also hidden by prefs-extras, and prefs-extras' gateDidFleetPage() is a shared
+// second layer (mirrors the admin-only guard used on all-deals.html).
+(function(){try{
+  var role = localStorage.getItem('ebRole') || 'agent';
+  if(['admin','tenant_admin','super_admin','dev'].indexOf(role) === -1){
+    location.replace('ask-the-brain.html');
+  }
+}catch(e){}})();
+</script>
+<script src="i18n-dict.js?v=2"></script>
+<script src="prefs-extras.js?v=28"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#DDD8CE;
+  --border:rgba(26,31,42,0.07);--border-hover:rgba(26,31,42,0.14);--border-soft:rgba(26,31,42,0.06);
+  --text-strong:#1A1F2A;--text:#2D3340;--text-muted:rgba(26,31,42,0.60);--text-faint:rgba(26,31,42,0.42);
+  --accent:#C97B3A;--accent-2:#E0995E;--accent-hover:#B26A2D;
+  --up:#4F8268;--down:#A3525C;--pending:#9C7842;
+  --sidebar-w:220px;--topbar-h:64px;
+  --ease:cubic-bezier(0.4,0,0.2,1);
+}
+html,body{height:100%}
+body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;position:relative;overflow-x:hidden;-webkit-font-smoothing:antialiased}
+body::before{content:'';position:fixed;inset:-15%;z-index:-3;background:linear-gradient(135deg,#FFFBF5 0%,#FFEFDC 50%,#FFF6E9 100%);animation:bgDrift 22s ease-in-out infinite;transform-origin:center;will-change:transform}
+body::after{content:'';position:fixed;inset:-10%;z-index:-2;pointer-events:none;background:radial-gradient(ellipse 95% 85% at 50% 50%,transparent 55%,rgba(178,106,45,0.08) 100%);animation:bgFloat 28s ease-in-out infinite reverse;transform-origin:center;will-change:transform}
+@keyframes bgDrift{0%{transform:scale(1) translate(0,0) rotate(0deg)}50%{transform:scale(1.1) translate(-2.5%,-3.5%) rotate(0.7deg)}100%{transform:scale(1) translate(0,0) rotate(0deg)}}
+@keyframes bgFloat{0%,100%{transform:scale(1) translate(0,0)}50%{transform:scale(1.08) translate(2%,-2%)}}
+@media (prefers-reduced-motion:reduce){body::before,body::after{animation:none}}
+
+/* ===== shell (sidebar + topbar) — same conventions as the other portal pages ===== */
+.sidebar{position:fixed;top:0;left:0;width:var(--sidebar-w);height:100vh;background:rgba(255,255,255,0.55);backdrop-filter:blur(22px) saturate(160%);-webkit-backdrop-filter:blur(22px) saturate(160%);border-right:1px solid var(--border);display:flex;flex-direction:column;padding:0 12px 12px;z-index:40}
+.sb-brand{height:var(--topbar-h);display:flex;align-items:center;gap:10px;padding:0 10px;font-weight:600;font-size:1.0625rem;letter-spacing:-0.015em;color:var(--text);border-bottom:1px solid var(--border-soft);margin:0 -12px 12px;text-decoration:none}
+.sb-brand-dot{width:26px;height:26px;border-radius:8px;background:linear-gradient(135deg,#C97B3A,#E0995E);box-shadow:0 1px 2px rgba(178,106,45,0.30),inset 0 1px 0 rgba(255,255,255,0.22);flex-shrink:0;display:flex;align-items:center;justify-content:center}
+.sb-brand-dot svg{width:14px;height:14px;color:#fff;stroke-width:1.8}
+.sb-nav{display:flex;flex-direction:column;gap:2px;flex:1;width:100%}
+.sb-item{width:100%;height:38px;border-radius:8px;padding:0 10px;display:flex;align-items:center;gap:10px;color:var(--text-muted);font-family:inherit;font-size:.875rem;font-weight:500;cursor:pointer;text-decoration:none;transition:color 160ms var(--ease),background 160ms var(--ease);position:relative}
+.sb-item:hover{color:var(--text);background:rgba(26,31,42,0.05)}
+.sb-item.active{background:rgba(201,123,58,0.10);color:var(--text)}
+.sb-item.active svg{color:var(--accent)}
+.sb-item svg{width:17px;height:17px;stroke-width:1.7;flex-shrink:0}
+.sb-tip{font-size:.875rem;font-weight:500}
+.sb-badge{margin-left:auto;min-width:20px;height:18px;padding:0 6px;border-radius:9px;background:var(--accent);color:#fff;font-size:.6875rem;font-weight:600;display:inline-flex;align-items:center;justify-content:center;font-variant-numeric:tabular-nums}
+.sb-featured{background:linear-gradient(135deg,rgba(201,123,58,0.10),rgba(224,153,94,0.04));border:1px solid rgba(201,123,58,0.20);margin-bottom:6px}
+.sb-featured svg{color:var(--accent)}
+.sb-featured .sb-tip{font-weight:600;color:var(--text)}
+.sb-group{display:flex;flex-direction:column;width:100%;margin-top:6px}
+.sb-group-head{width:100%;height:32px;display:flex;align-items:center;gap:8px;padding:0 10px;background:transparent;border:none;font-family:inherit;font-size:.6875rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-faint);cursor:pointer;border-radius:6px;transition:color 120ms var(--ease)}
+.sb-group-head .sb-chev{margin-left:auto;width:11px;height:11px;transition:transform 220ms var(--ease);stroke-width:2}
+.sb-group.open .sb-group-head .sb-chev{transform:rotate(90deg)}
+.sb-group-body{display:flex;flex-direction:column;gap:2px;max-height:0;overflow:hidden;transition:max-height 280ms var(--ease)}
+.sb-group.open .sb-group-body{max-height:600px}
+.sb-bottom{display:flex;flex-direction:column;gap:2px;padding-top:10px;margin-top:8px;border-top:1px solid var(--border);width:100%}
+.topbar{position:fixed;top:0;left:var(--sidebar-w);right:0;height:var(--topbar-h);background:rgba(255,255,255,0.55);backdrop-filter:blur(22px) saturate(160%);-webkit-backdrop-filter:blur(22px) saturate(160%);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 22px;gap:18px;z-index:30}
+.menu-toggle{display:none;width:36px;height:36px;border-radius:9px;background:transparent;border:1px solid var(--border);color:var(--text);cursor:pointer;align-items:center;justify-content:center;margin-right:4px}
+.menu-toggle svg{width:18px;height:18px}
+.sb-overlay{display:none;position:fixed;inset:0;background:rgba(26,31,42,0.35);z-index:35}
+.sb-overlay.open{display:block}
+.search{flex:1;max-width:520px;margin-left:24px;display:flex;align-items:center;gap:10px;height:38px;padding:0 14px;background:rgba(255,255,255,0.65);border:none;border-radius:10px;color:var(--text-muted);cursor:text}
+.search svg{width:16px;height:16px;flex-shrink:0;stroke-width:1.6}
+.search input{flex:1;background:transparent;border:none;outline:none;color:var(--text);font-family:inherit;font-size:.8125rem}
+.search input::placeholder{color:var(--text-faint)}
+.search kbd{font-family:inherit;font-size:.6875rem;color:var(--text-muted);background:rgba(255,255,255,0.85);border:none;border-radius:4px;padding:2px 6px}
+.tb-right{display:flex;align-items:center;gap:10px;margin-left:auto}
+.icon-btn{width:36px;height:36px;border-radius:9px;background:rgba(255,255,255,0.6);border:none;color:var(--text-muted);display:inline-flex;align-items:center;justify-content:center;cursor:pointer;position:relative}
+.icon-btn svg{width:16px;height:16px;stroke-width:1.6}
+.icon-btn .dot{position:absolute;top:8px;right:8px;width:7px;height:7px;border-radius:50%;background:#1A1F2A;border:2px solid #E7E9EE}
+.avatar{width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#2A2F3A,#1A1F2A);display:inline-flex;align-items:center;justify-content:center;font-weight:600;font-size:.75rem;color:#fff;border:1px solid rgba(0,0,0,0.18);cursor:pointer}
+.main{margin-left:var(--sidebar-w);padding:calc(var(--topbar-h) + 22px) 22px 28px;max-width:1180px}
+.page-hdr{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap;margin-bottom:18px}
+.enf-badge{display:inline-flex;align-items:center;gap:8px;font-size:.75rem;font-weight:700;padding:8px 14px;border-radius:9px;white-space:nowrap;margin-top:2px}
+.enf-badge::before{content:"";width:8px;height:8px;border-radius:50%;flex:none}
+.enf-badge.enf-on{background:rgba(79,130,104,.14);color:var(--up)}
+.enf-badge.enf-on::before{background:var(--up)}
+.enf-badge.enf-off{background:rgba(156,120,66,.16);color:#7C5E2F}
+.enf-badge.enf-off::before{background:var(--pending)}
+/* per-dimension enforcement chips (provider/did = enforcing, carrier = observe-only in Phase 1) */
+.enf-wrap{display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:2px}
+.enf-label{font-size:.6875rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--text-faint);margin-right:2px}
+.enf-dim{display:inline-flex;align-items:center;gap:6px;font-size:.6875rem;font-weight:700;padding:5px 10px;border-radius:8px;white-space:nowrap}
+.enf-dim::before{content:"";width:7px;height:7px;border-radius:50%;flex:none}
+.enf-dim.enf-on{background:rgba(79,130,104,.14);color:var(--up)}
+.enf-dim.enf-on::before{background:var(--up)}
+.enf-dim.enf-off{background:rgba(156,120,66,.16);color:#7C5E2F}
+.enf-dim.enf-off::before{background:var(--pending)}
+.obs-tag{font-size:.6875rem;font-weight:700;letter-spacing:.01em;color:#7C5E2F;background:rgba(156,120,66,.16);padding:3px 9px;border-radius:7px;margin-left:8px;vertical-align:middle}
+.unk-note{font-size:.6875rem;font-weight:500;color:var(--text-faint);margin-left:6px}
+.did-card{padding:4px 18px}
+.did-group{border-top:1px solid var(--border-soft)}
+.did-group:first-child{border-top:none}
+/* dispatch / dedup stats strip */
+.dstats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:-2px 0 18px}
+.dstat{background:#fff;border:1px solid var(--border);border-radius:12px;padding:12px 14px;box-shadow:0 1px 2px rgba(26,31,42,.04)}
+.dstat-v{font-size:1.375rem;font-weight:700;color:var(--text-strong);font-variant-numeric:tabular-nums;line-height:1.1}
+.dstat-l{font-size:.6875rem;font-weight:600;letter-spacing:.03em;text-transform:uppercase;color:var(--text-muted);margin-top:4px}
+.dstat.dstat-dup .dstat-v{color:#5E7BA8}
+.dstat.dstat-held .dstat-v{color:var(--pending)}
+/* daily-reset indicator (in the fleet header) + T-Mobile per-provider card label */
+.reset-line{display:flex;align-items:center;gap:7px;margin-top:12px;padding-top:11px;border-top:1px solid var(--border-soft);font-size:.75rem;font-weight:600;color:var(--text-muted)}
+.reset-line svg{width:14px;height:14px;flex:none;stroke-width:1.8;color:var(--text-faint)}
+.tmo-arrow{font-weight:600;font-size:.8125rem;color:var(--text-muted)}
+.page-hdr h1{font-size:1.625rem;font-weight:600;letter-spacing:-0.015em;line-height:1.15;color:var(--text-strong)}
+.page-hdr .sub{color:var(--text-muted);font-size:.875rem;margin-top:6px;line-height:1.45}
+.card{background:#FFFFFF;border:1px solid var(--border);border-radius:16px;padding:18px;box-shadow:0 1px 2px rgba(26,31,42,0.04),0 2px 8px rgba(26,31,42,0.04)}
+
+/* ===== DID Fleet — bespoke surfaces ===== */
+.sec-title{font-size:.9375rem;font-weight:600;color:var(--text-strong);margin:24px 2px 12px}
+.as-of{color:var(--text-faint);font-size:.75rem;margin-left:8px;font-weight:400}
+
+/* Fleet header */
+.fleet-hdr{margin-bottom:14px}
+.fleet-hdr-top{display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:14px;gap:12px}
+.fleet-cap-label{font-size:.6875rem;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--text-muted);margin-bottom:5px}
+.fleet-cap{font-size:1.75rem;font-weight:700;color:var(--text-strong);letter-spacing:-.01em;font-variant-numeric:tabular-nums;line-height:1}
+.fleet-cap small{font-size:.9375rem;font-weight:500;color:var(--text-muted)}
+.fleet-pct{font-size:1.375rem;font-weight:700;color:var(--accent);font-variant-numeric:tabular-nums}
+
+/* Usage bars (shared by header + carrier cards) */
+.usage-track{position:relative;height:10px;border-radius:6px;background:rgba(26,31,42,.08)}
+.usage-fill{height:100%;border-radius:6px;background:linear-gradient(90deg,var(--accent),var(--accent-2));transition:width 400ms var(--ease);max-width:100%}
+.usage-marker{position:absolute;top:-4px;bottom:-4px;width:2px;background:var(--text-strong);opacity:.45;border-radius:2px}
+
+/* Alert banner */
+.alert-banner{display:flex;align-items:center;gap:10px;padding:12px 16px;border-radius:12px;background:rgba(156,120,66,.13);border:1px solid rgba(156,120,66,.30);color:#7C5E2F;font-size:.875rem;font-weight:600;margin-bottom:16px}
+.alert-banner svg{width:18px;height:18px;flex:none;stroke-width:1.8}
+
+/* Carrier grid + cards */
+.carrier-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(286px,1fr));gap:16px}
+.carrier-card{background:#fff;border:1px solid var(--border);border-left:4px solid var(--text-faint);border-radius:14px;padding:16px;box-shadow:0 1px 2px rgba(26,31,42,.04),0 2px 8px rgba(26,31,42,.04)}
+.carrier-card.st-ok{border-left-color:var(--up)}
+.carrier-card.st-warn{border-left-color:var(--pending)}
+.carrier-card.st-crit{border-left-color:var(--down)}
+.cc-head{display:flex;align-items:center;gap:8px;margin-bottom:14px}
+.cc-name{font-size:1.0625rem;font-weight:700;color:var(--text-strong)}
+.cc-role{font-size:.625rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:3px 7px;border-radius:6px;background:rgba(26,31,42,.06);color:var(--text-muted)}
+.cc-role.role-primary{background:rgba(94,123,168,.16);color:#4A6488}
+.cc-status-dot{margin-left:auto;width:9px;height:9px;border-radius:50%;background:var(--text-faint)}
+.st-ok .cc-status-dot{background:var(--up)}
+.st-warn .cc-status-dot{background:var(--pending)}
+.st-crit .cc-status-dot{background:var(--down)}
+.cc-usage{margin-bottom:14px}
+.cc-usage-meta{display:flex;justify-content:space-between;margin-top:7px;font-size:.75rem;color:var(--text-muted);font-variant-numeric:tabular-nums}
+.cc-usage-meta strong{color:var(--text);font-weight:600}
+.cc-stats{display:flex;gap:22px;margin-bottom:14px}
+.cc-stat-v{font-size:1rem;font-weight:700;color:var(--text-strong);font-variant-numeric:tabular-nums}
+.cc-stat-v.warn{color:var(--down)}
+.cc-stat-l{display:block;font-size:.6875rem;color:var(--text-muted);margin-top:1px}
+.cc-foot{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.fc-chip{font-size:.75rem;font-weight:600;padding:4px 10px;border-radius:999px;background:rgba(26,31,42,.06);color:var(--text-muted)}
+.fc-chip-ok{background:rgba(79,130,104,.14);color:var(--up)}
+.fc-chip-warn{background:rgba(156,120,66,.16);color:#7C5E2F}
+.fc-chip-crit{background:rgba(163,82,92,.14);color:var(--down)}
+.cc-cta{height:30px;padding:0 12px;border-radius:8px;border:none;background:var(--accent);color:#fff;font-family:inherit;font-size:.75rem;font-weight:600;cursor:pointer;box-shadow:0 1px 2px rgba(178,106,45,.2)}
+.cc-cta:hover{background:var(--accent-hover)}
+
+/* Engine toggles */
+.toggles{padding:6px 18px}
+.toggle-row{display:flex;align-items:center;gap:16px;padding:15px 0;border-bottom:1px solid var(--border-soft)}
+.toggle-row:last-child{border-bottom:none}
+.toggle-meta{flex:1;min-width:0}
+.toggle-name{font-size:.9375rem;font-weight:600;color:var(--text-strong);display:flex;align-items:center;gap:8px}
+.toggle-desc{font-size:.8125rem;color:var(--text-muted);margin-top:3px}
+.ovr-badge{font-size:.5625rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:2px 6px;border-radius:5px;background:rgba(156,120,66,.16);color:#7C5E2F}
+.switch{position:relative;width:44px;height:26px;border-radius:13px;border:none;background:rgba(26,31,42,.18);cursor:pointer;flex:none;transition:background 200ms var(--ease);padding:0}
+.switch .knob{position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(26,31,42,.3);transition:left 200ms var(--ease)}
+.switch[aria-checked="true"]{background:var(--up)}
+.switch[aria-checked="true"] .knob{left:21px}
+.switch:disabled{opacity:.55;cursor:default}
+.empty-note{color:var(--text-faint);font-size:.875rem;padding:18px 2px}
+
+/* ===== near-limit flag (shown at every level when near_limit) ===== */
+.near-flag{display:inline-flex;align-items:center;gap:3px;font-size:.625rem;font-weight:700;letter-spacing:.02em;color:#7C5E2F;background:rgba(156,120,66,.16);padding:2px 7px;border-radius:6px;white-space:nowrap}
+.near-flag-lg{font-size:.6875rem;padding:4px 9px}
+.near-summary{display:flex;align-items:center;gap:8px;margin:-4px 0 16px;padding:10px 14px;border-radius:11px;background:rgba(156,120,66,.10);border:1px solid rgba(156,120,66,.26);color:#7C5E2F;font-size:.8125rem;font-weight:600}
+.near-summary svg{width:16px;height:16px;flex:none;stroke-width:1.8}
+
+/* ===== mini usage bar (per-DID + per-campaign rows) — colored by status, NOT the accent .usage-fill ===== */
+.mini-track{position:relative;height:6px;border-radius:4px;background:rgba(26,31,42,.08);overflow:hidden}
+.mini-fill{height:100%;border-radius:4px;transition:width 400ms var(--ease);background:var(--text-faint)}
+.mini-fill.st-ok{background:var(--up)}
+.mini-fill.st-warn{background:var(--pending)}
+.mini-fill.st-crit{background:var(--down)}
+/* unlimited (limit null) → neutral striped track, no fill (never a NaN%/full/broken bar) */
+.usage-track.unlimited,.mini-track.unlimited{background:repeating-linear-gradient(90deg,rgba(26,31,42,.07) 0 8px,transparent 8px 15px)}
+.held-v{color:var(--down);font-weight:700}
+
+/* ===== per-DID drill-down inside each carrier card ===== */
+.cc-numbers{margin-top:14px;border-top:1px solid var(--border-soft);padding-top:4px}
+.cc-num-head{width:100%;display:flex;align-items:center;gap:7px;background:transparent;border:none;padding:8px 0;font-family:inherit;font-size:.6875rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--text-muted);cursor:pointer}
+.cc-num-head:hover{color:var(--text)}
+.cc-num-chev{width:12px;height:12px;stroke-width:2.4;transition:transform 200ms var(--ease);flex:none}
+.cc-numbers.open .cc-num-chev{transform:rotate(90deg)}
+.cc-num-near{margin-left:auto;font-size:.625rem;font-weight:700;color:#7C5E2F;background:rgba(156,120,66,.16);padding:2px 7px;border-radius:6px;text-transform:none;letter-spacing:0}
+.cc-num-body{display:none;padding-top:2px}
+.cc-numbers.open .cc-num-body{display:block}
+.cc-num-list{display:flex;flex-direction:column;gap:1px}
+.num-row{padding:8px;border-radius:8px;border-left:3px solid transparent}
+.num-row:hover{background:rgba(26,31,42,.03)}
+.num-row.st-warn{border-left-color:var(--pending)}
+.num-row.st-crit{border-left-color:var(--down)}
+.num-extra{display:none}
+.cc-numbers.show-all .num-extra{display:block}
+.num-row-top{display:flex;align-items:center;gap:8px}
+.num-id{flex:1;min-width:0;font-size:.8125rem;font-weight:600;color:var(--text-strong);font-variant-numeric:tabular-nums;display:flex;align-items:center;gap:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.num-health{width:9px;height:9px;border-radius:50%;background:var(--text-faint);flex:none}
+.num-health.h-ok{background:var(--up)}
+.num-health.h-warn{background:var(--pending)}
+.num-health.h-crit{background:var(--down)}
+.num-row-bot{display:flex;align-items:center;gap:10px;margin-top:6px}
+.num-row-bot .mini-track{flex:1}
+.num-figures{font-size:.6875rem;color:var(--text-muted);font-variant-numeric:tabular-nums;white-space:nowrap}
+.show-all-btn{margin:6px 0 2px;background:transparent;border:none;color:var(--accent);font-family:inherit;font-size:.75rem;font-weight:600;cursor:pointer;padding:2px 0}
+.show-all-btn:hover{color:var(--accent-hover)}
+
+/* ===== per-campaign section (table — orthogonal axis, distinct from carrier cards) ===== */
+.camp-card{padding:0;overflow:hidden}
+.camp-table{width:100%;border-collapse:collapse;font-size:.8125rem}
+.camp-table thead th{text-align:left;font-size:.6875rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--text-faint);padding:12px 16px;border-bottom:1px solid var(--border)}
+.camp-table tbody td{padding:12px 16px;border-bottom:1px solid var(--border-soft);vertical-align:middle}
+.camp-table tbody tr:last-child td{border-bottom:none}
+.camp-row.st-warn td:first-child{box-shadow:inset 3px 0 0 var(--pending)}
+.camp-row.st-crit td:first-child{box-shadow:inset 3px 0 0 var(--down)}
+.camp-name{font-weight:600;color:var(--text-strong);display:flex;align-items:center;gap:7px}
+.camp-meta{font-variant-numeric:tabular-nums;white-space:nowrap;color:var(--text)}
+.camp-usage{display:flex;align-items:center;gap:10px;min-width:150px}
+.camp-usage .mini-track{flex:1}
+.camp-usage span{font-size:.75rem;color:var(--text-muted);font-variant-numeric:tabular-nums;min-width:44px;text-align:right}
+
+/* ===== dark mode for the bespoke surfaces (prefs-extras won't auto-theme these) ===== */
+/* .card (fleet header + toggles) is themed by prefs-extras' own dark block; the
+   carrier cards are matched to it below so every surface reads consistently. */
+html[data-mode="dark"] .usage-track{background:rgba(255,255,255,.12)}
+html[data-mode="dark"] .usage-marker{background:#E8EAEE;opacity:.6}
+html[data-mode="dark"] .alert-banner{background:rgba(184,144,88,.15);border-color:rgba(184,144,88,.32);color:#E0B978}
+html[data-mode="dark"] .carrier-card{background:rgba(24,28,36,.78);border-color:rgba(255,255,255,.08)}
+html[data-mode="dark"] .cc-name,html[data-mode="dark"] .fleet-cap,html[data-mode="dark"] .cc-stat-v,html[data-mode="dark"] .toggle-name{color:#E8EAEE}
+html[data-mode="dark"] .cc-role{background:rgba(255,255,255,.08);color:#C9CFD9}
+html[data-mode="dark"] .cc-role.role-primary{background:rgba(123,150,189,.24);color:#A9C0E0}
+/* forecast chips use a page-unique class (.fc-chip) so the global ".chip" dark
+   !important rule in prefs-extras can't strip their semantic ok/warn/crit colors. */
+html[data-mode="dark"] .fc-chip{background:rgba(255,255,255,.08);color:#C9CFD9}
+html[data-mode="dark"] .fc-chip-ok{background:rgba(107,159,134,.22);color:#8FCBAE}
+html[data-mode="dark"] .fc-chip-warn{background:rgba(184,144,88,.22);color:#E0B978}
+html[data-mode="dark"] .fc-chip-crit{background:rgba(185,112,119,.22);color:#E6989F}
+html[data-mode="dark"] .ovr-badge{background:rgba(184,144,88,.22);color:#E0B978}
+html[data-mode="dark"] .switch{background:rgba(255,255,255,.18)}
+html[data-mode="dark"] .cc-stat-v.warn{color:#E6989F}
+/* new 3-level surfaces */
+html[data-mode="dark"] .near-flag,html[data-mode="dark"] .cc-num-near{background:rgba(184,144,88,.22);color:#E0B978}
+html[data-mode="dark"] .near-summary{background:rgba(184,144,88,.14);border-color:rgba(184,144,88,.30);color:#E0B978}
+html[data-mode="dark"] .mini-track{background:rgba(255,255,255,.12)}
+html[data-mode="dark"] .cc-numbers{border-top-color:rgba(255,255,255,.10)}
+html[data-mode="dark"] .num-row:hover{background:rgba(255,255,255,.05)}
+html[data-mode="dark"] .num-id{color:#E8EAEE}
+html[data-mode="dark"] .num-figures,html[data-mode="dark"] .camp-meta{color:#C9CFD9}
+html[data-mode="dark"] .camp-table thead th{color:rgba(255,255,255,.5);border-bottom-color:rgba(255,255,255,.12)}
+html[data-mode="dark"] .camp-table tbody td{border-bottom-color:rgba(255,255,255,.07)}
+html[data-mode="dark"] .camp-name{color:#E8EAEE}
+html[data-mode="dark"] .enf-badge.enf-on{background:rgba(107,159,134,.20);color:#8FCBAE}
+html[data-mode="dark"] .enf-badge.enf-off{background:rgba(184,144,88,.20);color:#E0B978}
+html[data-mode="dark"] .enf-dim.enf-on{background:rgba(107,159,134,.20);color:#8FCBAE}
+html[data-mode="dark"] .enf-dim.enf-off,html[data-mode="dark"] .obs-tag{background:rgba(184,144,88,.20);color:#E0B978}
+html[data-mode="dark"] .did-group{border-top-color:rgba(255,255,255,.08)}
+html[data-mode="dark"] .unk-note{color:rgba(255,255,255,.45)}
+html[data-mode="dark"] .dstat{background:rgba(255,255,255,.045);border-color:rgba(255,255,255,.10)}
+html[data-mode="dark"] .dstat-v{color:#E8EAEE}
+html[data-mode="dark"] .dstat.dstat-dup .dstat-v{color:#A9C0E0}
+html[data-mode="dark"] .dstat.dstat-held .dstat-v{color:#E0B978}
+html[data-mode="dark"] .reset-line{border-top-color:rgba(255,255,255,.08)}
+html[data-mode="dark"] .usage-track.unlimited,html[data-mode="dark"] .mini-track.unlimited{background:repeating-linear-gradient(90deg,rgba(255,255,255,.12) 0 8px,transparent 8px 15px)}
+html[data-mode="dark"] .held-v{color:#E6989F}
+
+@media (max-width:720px){
+  .sidebar{transform:translateX(-100%);transition:transform 240ms var(--ease)}
+  .sidebar.open{transform:translateX(0)}
+  .topbar{left:0}.main{margin-left:0}
+  .menu-toggle{display:inline-flex}
+  /* Hide the (non-functional) search bar on phones, matching the other portal pages. */
+  .search{display:none}
+}
+</style>
+<script src="services/api.js?v=10"></script>
+<script src="services/error-boundary.js?v=19"></script>
+</head>
+<body>
+
+<div class="sb-overlay" id="sbOverlay"></div>
+
+<aside class="sidebar" id="sidebar">
+  <a class="sb-brand" href="ask-the-brain.html">
+    <span class="sb-brand-dot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/><path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/></svg></span>
+    <span>Endeavor</span>
+  </a>
+  <nav class="sb-nav">
+    <a class="sb-item sb-featured" href="ask-the-brain.html" aria-label="Ask the Brain">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/><path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/></svg>
+      <span class="sb-tip">Ask the Brain</span>
+    </a>
+    <a class="sb-item" id="navUpload" href="upload-leads.html" aria-label="Upload leads">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 8 5-5 5 5"/><path d="M5 17v2a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-2"/></svg>
+      <span class="sb-tip">Upload Leads</span>
+    </a>
+    <a class="sb-item" href="notifications.html" aria-label="Notifications">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 7 3 9H3c0-2 3-2 3-9Z"/><path d="M10 21a2 2 0 0 0 4 0"/></svg>
+      <span class="sb-tip">Notifications</span>
+      <span class="sb-badge" style="display:none">0</span>
+    </a>
+    <div class="sb-group" id="sbWorkspaces">
+      <button class="sb-group-head" type="button">
+        Workspaces
+        <svg class="sb-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg>
+      </button>
+      <div class="sb-group-body">
+        <a class="sb-item" href="my-team.html" aria-label="My Team">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="7" r="4"/><path d="M3 21c0-3.5 3-6 6-6s6 2.5 6 6"/><path d="M16 3.5a4 4 0 0 1 0 7.5"/><path d="M22 21c0-3-2-5-5-5.5"/></svg>
+          <span class="sb-tip">My Team</span>
+        </a>
+        <a class="sb-item" href="inbox.html" aria-label="Inbox">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h6l2 3h2l2-3h6"/><path d="M3 7l2 12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2l2-12"/><path d="M5 7l2-3h10l2 3"/></svg>
+          <span class="sb-tip">Inbox</span>
+          <span class="sb-badge" style="display:none">0</span>
+        </a>
+        <a class="sb-item" href="deals.html" aria-label="Deals">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 3 7v6c0 5 4 8 9 9 5-1 9-4 9-9V7Z"/><path d="M9 12l2 2 4-4"/></svg>
+          <span class="sb-tip">Deals</span>
+        </a>
+        <a class="sb-item" href="appointments.html" aria-label="Appointments">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 11h18"/></svg>
+          <span class="sb-tip">Appointments</span>
+        </a>
+        <a class="sb-item" href="analytics.html" aria-label="Analytics">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 15l4-6 4 4 5-7"/></svg>
+          <span class="sb-tip">Analytics</span>
+        </a>
+        <a class="sb-item" href="qa-review.html" aria-label="QA Review">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9 12l2 2 4-4"/><path d="M21 12c0 5-4 8.5-9 9-5-.5-9-4-9-9V5l9-3 9 3v7Z"/></svg>
+          <span class="sb-tip">QA Review</span>
+        </a>
+      </div>
+    </div>
+  </nav>
+  <div class="sb-bottom">
+    <a class="sb-item" href="settings.html" aria-label="Settings">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.8-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1A1.6 1.6 0 0 0 9 19.4a1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.8 1.6 1.6 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1A1.6 1.6 0 0 0 4.6 9a1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3H9a1.6 1.6 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1c0 .6.4 1.2 1 1.5a1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8V9c.3.6.9 1 1.5 1H21a2 2 0 1 1 0 4h-.1c-.6 0-1.2.4-1.5 1Z"/></svg>
+      <span class="sb-tip">Settings</span>
+    </a>
+    <a class="sb-item sb-logout" href="login.html" aria-label="Log out" title="Log out">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></svg>
+      <span class="sb-tip">Log out</span>
+    </a>
+  </div>
+</aside>
+
+<header class="topbar">
+  <button class="menu-toggle" id="menuToggle" aria-label="Open menu">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+  </button>
+  <div class="search">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+    <input placeholder="Search…"/>
+    <kbd>⌘K</kbd>
+  </div>
+  <div class="tb-right">
+    <button class="icon-btn" aria-label="Notifications" type="button">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 7 3 9H3c0-2 3-2 3-9Z"/><path d="M10 21a2 2 0 0 0 4 0"/></svg>
+      <span class="dot"></span>
+    </button>
+    <button class="avatar" type="button" aria-label="Account">AW</button>
+  </div>
+</header>
+
+<main class="main">
+  <div class="page-hdr">
+    <div>
+      <h1>DID Fleet</h1>
+      <div class="sub">Message usage and cap tracking across the DID fleet — providers, recipient carriers, and DIDs.<span class="as-of" id="asOf"></span></div>
+    </div>
+    <div class="enf-wrap" id="enfWrap" title="">
+      <span class="enf-label">Enforcement</span>
+      <span class="enf-dim enf-on" id="enfProvider">Providers</span>
+      <span class="enf-dim enf-on" id="enfDid">DIDs</span>
+      <span class="enf-dim enf-on" id="enfTmobile">T-Mobile</span>
+      <span class="enf-dim enf-on" id="enfDedup">Dedup</span>
+    </div>
+  </div>
+
+  <!-- Fleet header (totals): sent_today / limit + usage bar -->
+  <div class="card fleet-hdr">
+    <div class="fleet-hdr-top">
+      <div>
+        <div class="fleet-cap-label">Sent today</div>
+        <div class="fleet-cap" id="fleetCap">— <small>/ — today</small></div>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <span class="near-flag near-flag-lg" id="fleetNear" style="display:none">⚠ near limit</span>
+        <div class="fleet-pct" id="fleetPct">—</div>
+      </div>
+    </div>
+    <div class="usage-track" id="fleetTrack"><div class="usage-fill" id="fleetBar" style="width:0%"></div></div>
+    <div class="reset-line">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+      <span id="resetText">Daily caps · resets 12:00 AM PT</span>
+    </div>
+  </div>
+
+  <!-- Alert banner (only when soonest_provision_days != null) -->
+  <div class="alert-banner" id="alertBanner" style="display:none">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4M12 17h.01"/></svg>
+    <span id="alertText"></span>
+  </div>
+
+  <!-- Near-limit roll-up (any level near its cap) -->
+  <div class="near-summary" id="nearSummary" style="display:none"></div>
+
+  <!-- Dispatch / dedup stats — the router preventing double-sends (T-Mobile claim dedup) -->
+  <h2 class="sec-title">Dedup / routing <span style="font-weight:400;color:var(--text-faint);font-size:.8125rem">· T-Mobile claim dedup — prevents double-sends across providers</span></h2>
+  <div class="dstats" id="dispatchStrip">
+    <div class="dstat"><div class="dstat-v">—</div><div class="dstat-l">recipients</div></div>
+    <div class="dstat"><div class="dstat-v">—</div><div class="dstat-l">sent</div></div>
+    <div class="dstat"><div class="dstat-v">—</div><div class="dstat-l">skipped · duplicate</div></div>
+    <div class="dstat"><div class="dstat-v">—</div><div class="dstat-l">held by cap</div></div>
+  </div>
+
+  <!-- T-MOBILE PER-PROVIDER CAPS — T-Mobile is the ONLY carrier with a per-(provider×carrier) cap -->
+  <h2 class="sec-title">T-Mobile caps <span style="font-weight:400;color:var(--text-faint);font-size:.8125rem">· T-Mobile only — capped separately per provider (a 2,000/day counter each)</span></h2>
+  <div class="carrier-grid" id="tmobileGrid">
+    <div class="empty-note">Loading T-Mobile cap data…</div>
+  </div>
+
+  <!-- 1) PROVIDERS — send-side infrastructure (e.g. Sinch) -->
+  <h2 class="sec-title">Providers <span style="font-weight:400;color:var(--text-faint);font-size:.8125rem">· send-side infrastructure</span></h2>
+  <div class="carrier-grid" id="providerGrid">
+    <div class="empty-note">Loading provider data…</div>
+  </div>
+
+  <!-- 2) RECIPIENT CARRIERS — destination networks (T-Mobile, AT&T, unknown). Observe-only in Phase 1. -->
+  <h2 class="sec-title">Recipient carriers <span style="font-weight:400;color:var(--text-faint);font-size:.8125rem">· rollup only — no carrier cap (T-Mobile is capped per provider, above); others roll up to the provider cap</span></h2>
+  <div class="card camp-card">
+    <table class="camp-table">
+      <thead><tr><th>Carrier</th><th>Sent / Limit</th><th>Usage</th><th>Remaining</th><th>Status</th></tr></thead>
+      <tbody id="carrierBody"><tr><td colspan="5" class="empty-note" style="padding:14px 16px">Loading carrier data…</td></tr></tbody>
+    </table>
+  </div>
+
+  <!-- 3) DIDs — individual numbers, grouped client-side by provider -->
+  <h2 class="sec-title">DIDs <span style="font-weight:400;color:var(--text-faint);font-size:.8125rem">· grouped by provider</span></h2>
+  <div class="card did-card" id="didArea">
+    <div class="empty-note" style="padding:18px 0">Loading DID data…</div>
+  </div>
+
+  <h2 class="sec-title">Engine controls</h2>
+  <div class="card toggles">
+    <div class="toggle-row" data-flag="SAME_DAY_PACING_ENABLED">
+      <div class="toggle-meta">
+        <div class="toggle-name">Automation engine <span class="ovr-badge" style="display:none">override</span></div>
+        <div class="toggle-desc">Master switch for the same-day pacing engine. Off = exactly today's behavior (nothing is paced or auto-released). On = capacity-sized release + drip run automatically, and the controls below take effect.</div>
+      </div>
+      <button class="switch" type="button" role="switch" aria-checked="false" id="swEngine" aria-label="Toggle the automation engine"><span class="knob"></span></button>
+    </div>
+    <div class="toggle-row" data-flag="CAPACITY_PACING_ENABLED">
+      <div class="toggle-meta">
+        <div class="toggle-name">Capacity pacing <span class="ovr-badge" style="display:none">override</span></div>
+        <div class="toggle-desc">Throttle outbound sends to live agent capacity per state.</div>
+      </div>
+      <button class="switch" type="button" role="switch" aria-checked="false" id="swCapacity" aria-label="Toggle capacity pacing"><span class="knob"></span></button>
+    </div>
+    <div class="toggle-row" data-flag="FATIGUE_ENABLED">
+      <div class="toggle-meta">
+        <div class="toggle-name">Fatigue <span class="ovr-badge" style="display:none">override</span></div>
+        <div class="toggle-desc">Suppress messaging leads that have been contacted too often.</div>
+      </div>
+      <button class="switch" type="button" role="switch" aria-checked="false" id="swFatigue" aria-label="Toggle fatigue"><span class="knob"></span></button>
+    </div>
+    <div class="toggle-row" data-flag="CARRIER_CAPS_ENFORCE">
+      <div class="toggle-meta">
+        <div class="toggle-name">Carrier caps <span class="ovr-badge" style="display:none">override</span></div>
+        <div class="toggle-desc">Enforce the per-provider caps (4,000/day total · T-Mobile 2,000/day) — block over-cap sends instead of only counting them. Off = observe-only.</div>
+      </div>
+      <button class="switch" type="button" role="switch" aria-checked="false" id="swCaps" aria-label="Toggle carrier-cap enforcement"><span class="knob"></span></button>
+    </div>
+    <div class="toggle-row" data-flag="TMOBILE_DEDUP_ENFORCE">
+      <div class="toggle-meta">
+        <div class="toggle-name">T-Mobile dedup <span class="ovr-badge" style="display:none">override</span></div>
+        <div class="toggle-desc">Block a second text to the same T-Mobile number across providers (no double-sends). Off = observe-only.</div>
+      </div>
+      <button class="switch" type="button" role="switch" aria-checked="false" id="swDedup" aria-label="Toggle T-Mobile dedup enforcement"><span class="knob"></span></button>
+    </div>
+    <div class="toggle-row" data-flag="WORKING_HOURS_ENFORCE">
+      <div class="toggle-meta">
+        <div class="toggle-name">Working hours <span class="ovr-badge" style="display:none">override</span></div>
+        <div class="toggle-desc">Only send during 10 AM–7 PM Eastern, Mon–Fri — hold texts outside the window. Off = observe-only.</div>
+      </div>
+      <button class="switch" type="button" role="switch" aria-checked="false" id="swHours" aria-label="Toggle working-hours enforcement"><span class="knob"></span></button>
+    </div>
+  </div>
+</main>
+
+<script>
+// Sidebar interactivity — matches the other portal pages: the mobile menu-toggle opens the
+// drawer, and the "Workspaces" group collapses/expands (auto-open when its active item is
+// inside, persisted via ebSbWorkspaces). Self-contained so it doesn't touch the dashboard IIFE.
+(function(){
+  var sb = document.getElementById('sidebar'), sbo = document.getElementById('sbOverlay');
+  var mt = document.getElementById('menuToggle');
+  if(mt) mt.addEventListener('click', function(){ if(sb) sb.classList.add('open'); if(sbo) sbo.classList.add('open'); });
+  if(sbo) sbo.addEventListener('click', function(){ if(sb) sb.classList.remove('open'); if(sbo) sbo.classList.remove('open'); });
+  var wkGroup = document.getElementById('sbWorkspaces');
+  if(wkGroup){
+    var hasActiveInside = !!wkGroup.querySelector('.sb-item.active');
+    var savedOpen = localStorage.getItem('ebSbWorkspaces');
+    if(hasActiveInside || savedOpen === 'open'){ wkGroup.classList.add('open'); }
+    var wkHead = wkGroup.querySelector('.sb-group-head');
+    if(wkHead) wkHead.addEventListener('click', function(){
+      wkGroup.classList.toggle('open');
+      try { localStorage.setItem('ebSbWorkspaces', wkGroup.classList.contains('open') ? 'open' : 'closed'); } catch(e){}
+    });
+  }
+})();
+</script>
+
+<script>
+(function(){
+  var API = window.__ebAPI;
+  var POLL_MS = 6000;
+  var inFlight = false;       // don't let a slow tick stack onto the next interval
+  var togglePending = false;  // skip the engine-status read while a toggle POST is in flight
+  var pollTimer = null;
+  var lastEngine = null;      // last good engine-status (for revert on a failed flip)
+  var didOpen = {};           // carrier name -> per-DID drill-down expanded (survives re-render)
+  var didShowAll = {};        // carrier name -> show all numbers vs top N
+  var TOP_N = 5;
+
+  var $ = function(id){ return document.getElementById(id); };
+  function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
+  function clampPct(v){ v = Number(v); if(isNaN(v)) return 0; return v<0?0:v>100?100:v; }
+  function num(n){ return (n==null||isNaN(Number(n))) ? '—' : Number(n).toLocaleString(); }
+  function pct(v){ return (v==null||isNaN(Number(v))) ? '—' : v + '%'; }
+  function plural(n,w){ return n + ' ' + w + (Number(n)===1?'':'s'); }
+
+  // ---- standardize limit/remaining/usage/status across all 3 levels ----
+  // Prefer backend-provided values; derive per the documented conventions when absent
+  // (so the UI works before AND after the backend ships the fields). A null `limit` means
+  // UNLIMITED — usage_pct & remaining are null and status is "ok" (never NaN%/full/broken bar).
+  var NEAR_PCT = 80;     // near_limit threshold: usage_pct >= 80
+  function toNum(v){ if(v === null || v === undefined || v === '') return null; var n = Number(v); return isNaN(n) ? null : n; }
+  function lvlLimit(row){                                   // null => unlimited; absent key => legacy fallback
+    if('limit' in row) return row.limit == null ? null : toNum(row.limit);
+    return row.daily_capacity == null ? null : toNum(row.daily_capacity);
+  }
+  function lvlRemaining(row, limit){
+    if(limit === null) return null;                         // unlimited
+    if(row.remaining != null) return toNum(row.remaining);
+    if(row.remaining_today != null) return toNum(row.remaining_today);
+    var s = toNum(row.sent_today); return (s != null) ? Math.max(0, limit - s) : null;
+  }
+  function lvlUsage(row, limit){
+    if(limit === null) return null;                         // unlimited
+    var p = toNum(row.usage_pct); if(p != null) return p;
+    var s = toNum(row.sent_today); return (s != null && limit > 0) ? Math.round(1000*s/limit)/10 : null;
+  }
+  function lvlNear(usage, provided){
+    if(typeof provided === 'boolean') return provided;
+    var u = toNum(usage); return u != null && u >= NEAR_PCT;
+  }
+  function lvlStatus(row, limit, rem, near){
+    if(row.status === 'ok' || row.status === 'near_limit' || row.status === 'exhausted') return row.status;  // backend authoritative
+    if(limit != null && limit > 0 && rem === 0) return 'exhausted';   // remaining==0 && limit>0
+    return near ? 'near_limit' : 'ok';
+  }
+  function stCls(s){ return s === 'exhausted' ? 'st-crit' : s === 'near_limit' ? 'st-warn' : 'st-ok'; }
+  function chipCls(s){ return s === 'exhausted' ? 'fc-chip-crit' : s === 'near_limit' ? 'fc-chip-warn' : 'fc-chip-ok'; }
+  function statusLabel(s){ return s === 'exhausted' ? 'Exhausted' : s === 'near_limit' ? 'Near limit' : 'OK'; }
+  function healthClass(h){ h = toNum(h); if(h == null) return 'h-unk'; return h >= 0.7 ? 'h-ok' : h >= 0.4 ? 'h-warn' : 'h-crit'; }  // health is 0–1
+  function healthTitle(h){ h = toNum(h); return h == null ? 'health —' : 'health ' + Math.round(h*100) + '%'; }
+  function fmtDid(s){ s = String(s||''); var m = s.match(/^\+1(\d{3})(\d{3})(\d{4})$/); return m ? '+1 (' + m[1] + ') ' + m[2] + '-' + m[3] : (s || '—'); }
+  function fmtTime(iso){ if(!iso) return ''; var d = new Date(iso); return isNaN(d.getTime()) ? String(iso) : d.toLocaleString([], {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'}); }
+  // limit-aware display (handle the unlimited/null case cleanly — no NaN, no full bar)
+  function usageText(u, limit){ return limit === null ? 'No limit' : (u == null ? '—' : u + '%'); }
+  function limitText(limit){ return limit === null ? '∞' : num(limit); }
+  function remainText(rem, limit){ return limit === null ? 'No limit' : num(rem); }
+  function bigBar(u, limit, marker){       // carrier usage bar
+    if(limit === null) return '<div class="usage-track unlimited"></div>';
+    return '<div class="usage-track"><div class="usage-fill" style="width:' + clampPct(u) + '%"></div>' + (marker ? '<div class="usage-marker" style="left:' + NEAR_PCT + '%" title="near-limit threshold ' + NEAR_PCT + '%"></div>' : '') + '</div>';
+  }
+  function miniBar(u, limit, st){          // per-DID / per-campaign mini bar
+    if(limit === null) return '<div class="mini-track unlimited"></div>';
+    return '<div class="mini-track"><div class="mini-fill ' + st + '" style="width:' + clampPct(u) + '%"></div></div>';
+  }
+  var nearFlag = '<span class="near-flag" title="Near limit">⚠</span>';
+
+  // ---- enforcement: PER-DIMENSION (provider/did enforcing, carrier observe-only in Phase 1) ----
+  function renderEnforcement(enf){
+    enf = enf || {};
+    setEnfDim('enfProvider', 'Providers', enf.provider);
+    setEnfDim('enfDid', 'DIDs', enf.did);
+    setEnfDim('enfTmobile', 'T-Mobile', enf.tmobile_pair);   // T-Mobile pair cap is the only carrier-specific cap
+    setEnfDim('enfDedup', 'Dedup', enf.dedup);
+    var w = $('enfWrap'); if(w) w.title = enf.flag ? ('Flag: ' + enf.flag) : '';
+  }
+  // ---- daily-reset indicator (caps reset at midnight Pacific) ----
+  function tzLabel(tz, iso){
+    if(/Los_Angeles|Pacific/.test(tz || '')) return 'PT';
+    try{ var parts = new Intl.DateTimeFormat('en-US', {timeZone: tz, timeZoneName: 'short'}).formatToParts(new Date(iso || Date.now())); var z = parts.filter(function(p){return p.type === 'timeZoneName';})[0]; return z ? z.value : (tz || ''); }catch(e){ return tz || ''; }
+  }
+  function to12h(hhmm){ var m = String(hhmm||'').match(/^(\d{1,2}):(\d{2})$/); if(!m) return hhmm || '12:00 AM'; var h = +m[1], ap = h < 12 ? 'AM' : 'PM', h12 = h % 12; if(h12 === 0) h12 = 12; return h12 + ':' + m[2] + ' ' + ap; }
+  function fmtInTz(iso, tz){ try{ return new Date(iso).toLocaleString('en-US', {timeZone: tz, month:'short', day:'numeric', hour:'numeric', minute:'2-digit'}); }catch(e){ return fmtTime(iso); } }
+  function renderReset(data){
+    var tz = data.reset_tz || 'America/Los_Angeles';
+    var lab = tzLabel(tz, data.generated_at);
+    // static prefix in its own node so "Daily caps · resets" / "as of" translate (the time stays as data)
+    var rt = $('resetText'); if(rt) rt.innerHTML = '<span>Daily caps · resets</span> ' + esc(to12h(data.reset_time || '00:00')) + ' ' + esc(lab);
+    $('asOf').innerHTML = data.generated_at ? (' · <span>as of</span> ' + esc(fmtInTz(data.generated_at, tz)) + ' ' + esc(lab)) : '';   // window shown in Pacific time
+  }
+  function setEnfDim(id, label, on){
+    var el = $(id); if(!el) return;
+    var enforcing = on === true;
+    el.className = 'enf-dim ' + (enforcing ? 'enf-on' : 'enf-off');
+    // label + status in separate text nodes so each translates via the portal i18n observer
+    el.innerHTML = '<span>' + esc(label) + '</span>: <span>' + (enforcing ? 'enforcing' : 'observe-only') + '</span>';
+  }
+
+  // ---- render header total + alert banner + near-summary + providers + carriers + dids ----
+  function renderFleet(data){
+    if(!data) return;
+    renderEnforcement(data.enforcement);
+    var providers = Array.isArray(data.providers) ? data.providers : [];
+    var carriers  = Array.isArray(data.carriers)  ? data.carriers  : [];
+    var dids      = Array.isArray(data.dids)       ? data.dids      : [];
+    var tmoPairs  = Array.isArray(data.tmobile_pair_caps) ? data.tmobile_pair_caps : [];
+    renderReset(data);
+    renderDispatch(data.dispatch_stats);
+    renderTmobile(tmoPairs);
+
+    // Header total derived from providers (the send-side infra) — no "totals" object in this shape.
+    var tSent = 0, tLimit = 0, anyLimit = false;
+    providers.forEach(function(p){ tSent += (toNum(p.sent_today)||0); var l = lvlLimit(p); if(l != null){ tLimit += l; anyLimit = true; } });
+    var hLimit = anyLimit ? tLimit : null;
+    var hUsage = (hLimit && hLimit > 0) ? Math.round(1000*tSent/hLimit)/10 : null;
+    var hNear = (hUsage != null && hUsage >= NEAR_PCT);
+    $('fleetCap').innerHTML = num(tSent) + ' <small>/ ' + limitText(hLimit) + '</small>';   // "today" lives in the "Sent today" label above (avoids a mixed-node, untranslatable string)
+    $('fleetPct').textContent = usageText(hUsage, hLimit);
+    $('fleetTrack').className = 'usage-track' + (hLimit === null ? ' unlimited' : '');
+    $('fleetBar').style.width = (hLimit === null ? 0 : clampPct(hUsage)) + '%';
+    $('fleetBar').style.display = (hLimit === null ? 'none' : '');
+    $('fleetNear').style.display = hNear ? '' : 'none';
+
+    // Alert banner kept: fires only if soonest_provision_days is present (not in this shape → stays hidden).
+    var spd = data.soonest_provision_days;
+    var banner = $('alertBanner');
+    if(spd != null){ $('alertText').textContent = 'New DIDs needed in ' + plural(spd,'day'); banner.style.display = ''; }
+    else { banner.style.display = 'none'; }
+
+    $('providerGrid').innerHTML = providers.length
+      ? providers.map(providerCard).join('')
+      : '<div class="empty-note">No provider data yet.</div>';
+    renderCarriers(carriers);
+    renderDids(dids);
+    renderNearSummary(providers, carriers, dids, tmoPairs);
+  }
+
+  // ---- dispatch / dedup stats strip (the router preventing double-sends) ----
+  function renderDispatch(s){
+    var el = $('dispatchStrip'); if(!el) return;
+    s = s || {};
+    function tile(v, label, cls){ return '<div class="dstat' + (cls ? ' ' + cls : '') + '"><div class="dstat-v">' + num(v) + '</div><div class="dstat-l">' + label + '</div></div>'; }
+    el.innerHTML =
+      tile(s.recipients_total, 'recipients') +
+      tile(s.sent, 'sent') +
+      tile(s.skipped_duplicate, 'skipped · duplicate', 'dstat-dup') +
+      tile(s.held_by_cap, 'held by cap', 'dstat-held');
+  }
+
+  // ---- T-MOBILE per-provider caps — T-Mobile is the ONLY carrier with a per-(provider×carrier) cap ----
+  function renderTmobile(pairs){
+    var grid = $('tmobileGrid'); if(!grid) return;
+    if(!pairs.length){ grid.innerHTML = '<div class="empty-note">No T-Mobile cap data yet.</div>'; return; }
+    grid.innerHTML = pairs.slice().sort(function(a,b){ return (lvlUsage(b, lvlLimit(b))||0) - (lvlUsage(a, lvlLimit(a))||0); }).map(function(p){
+      var limit = lvlLimit(p), rem = lvlRemaining(p, limit), u = lvlUsage(p, limit);
+      var near = lvlNear(u, p.near_limit);
+      var status = lvlStatus(p, limit, rem, near), st = stCls(status);
+      return '' +
+        '<div class="carrier-card ' + st + '">' +
+          '<div class="cc-head">' +
+            '<span class="cc-name">' + esc(p.provider) + ' <span class="tmo-arrow">→ ' + esc(p.carrier || 'T-Mobile') + '</span></span>' +
+            (near ? nearFlag : '') +
+            '<span class="cc-status-dot" title="' + esc(status) + '"></span>' +
+          '</div>' +
+          '<div class="cc-usage">' +
+            bigBar(u, limit, true) +
+            '<div class="cc-usage-meta"><span><strong>' + num(p.sent_today) + '</strong> / ' + limitText(limit) + ' sent</span><span>' + usageText(u, limit) + '</span></div>' +
+          '</div>' +
+          '<div class="cc-stats">' +
+            '<div><span class="cc-stat-v">' + remainText(rem, limit) + '</span><span class="cc-stat-l">remaining today</span></div>' +
+          '</div>' +
+          '<div class="cc-foot">' +
+            '<span class="fc-chip ' + chipCls(status) + '">' + statusLabel(status) + '</span>' +
+          '</div>' +
+        '</div>';
+    }).join('');
+  }
+
+  // ---- PROVIDER card (send-side infra). Flat — DIDs live in their own section now. ----
+  function providerCard(p){
+    var limit = lvlLimit(p), rem = lvlRemaining(p, limit), u = lvlUsage(p, limit);
+    var near = lvlNear(u, p.near_limit);
+    var status = lvlStatus(p, limit, rem, near);
+    var st = stCls(status);
+    return '' +
+      '<div class="carrier-card ' + st + '">' +
+        '<div class="cc-head">' +
+          '<span class="cc-name">' + esc(p.provider) + '</span>' +
+          (near ? nearFlag : '') +
+          '<span class="cc-status-dot" title="' + esc(status) + '"></span>' +
+        '</div>' +
+        '<div class="cc-usage">' +
+          bigBar(u, limit, true) +
+          '<div class="cc-usage-meta"><span><strong>' + num(p.sent_today) + '</strong> / ' + limitText(limit) + ' sent</span><span>' + usageText(u, limit) + '</span></div>' +
+        '</div>' +
+        '<div class="cc-stats">' +
+          '<div><span class="cc-stat-v">' + num(p.numbers) + '</span><span class="cc-stat-l">numbers</span></div>' +
+          '<div><span class="cc-stat-v">' + remainText(rem, limit) + '</span><span class="cc-stat-l">remaining</span></div>' +
+        '</div>' +
+        '<div class="cc-foot">' +
+          '<span class="fc-chip ' + chipCls(status) + '">' + statusLabel(status) + '</span>' +
+        '</div>' +
+      '</div>';
+  }
+
+  function didRow(d, extraCls){
+    var limit = lvlLimit(d), rem = lvlRemaining(d, limit), u = lvlUsage(d, limit);
+    var near = lvlNear(u, d.near_limit);
+    var st = stCls(lvlStatus(d, limit, rem, near));
+    var figures = (limit === null) ? (num(d.sent_today) + ' · No limit') : (num(d.sent_today) + '/' + num(limit) + ' · ' + num(rem) + ' left');
+    return '' +
+      '<div class="num-row ' + st + (extraCls || '') + '">' +
+        '<div class="num-row-top">' +
+          '<span class="num-id">' + esc(fmtDid(d.did)) + (near ? ' ' + nearFlag : '') + '</span>' +
+          '<span class="num-health ' + healthClass(d.health) + '" title="' + healthTitle(d.health) + '"></span>' +
+        '</div>' +
+        '<div class="num-row-bot">' +
+          miniBar(u, limit, st) +
+          '<span class="num-figures">' + figures + '</span>' +
+        '</div>' +
+      '</div>';
+  }
+
+  // ---- RECIPIENT CARRIERS — flat table (destination networks; observe-only in Phase 1) ----
+  function renderCarriers(carriers){
+    var body = $('carrierBody'); if(!body) return;
+    if(!carriers.length){ body.innerHTML = '<tr><td colspan="5" class="empty-note" style="padding:14px 16px">No carrier data yet.</td></tr>'; return; }
+    var rows = carriers.slice().sort(function(a,b){ return (lvlUsage(b, lvlLimit(b))||0) - (lvlUsage(a, lvlLimit(a))||0); });   // highest usage first
+    body.innerHTML = rows.map(function(c){
+      var limit = lvlLimit(c), rem = lvlRemaining(c, limit), u = lvlUsage(c, limit);
+      var near = lvlNear(u, c.near_limit);
+      var status = lvlStatus(c, limit, rem, near), st = stCls(status);
+      var unk = (limit === null) ? ' <span class="unk-note">Unknown — not yet resolved</span>' : '';   // the "unknown" carrier
+      return '' +
+        '<tr class="camp-row ' + st + '">' +
+          '<td><div class="camp-name">' + esc(c.carrier) + (near ? ' ' + nearFlag : '') + unk + '</div></td>' +
+          '<td class="camp-meta">' + num(c.sent_today) + ' / ' + limitText(limit) + '</td>' +
+          '<td><div class="camp-usage">' + miniBar(u, limit, st) + '<span>' + usageText(u, limit) + '</span></div></td>' +
+          '<td class="camp-meta">' + remainText(rem, limit) + '</td>' +
+          '<td><span class="fc-chip ' + chipCls(status) + '">' + statusLabel(status) + '</span></td>' +
+        '</tr>';
+    }).join('');
+  }
+
+  // ---- DIDs — flat array grouped CLIENT-SIDE by dids[].provider (backend does NOT nest) ----
+  function renderDids(dids){
+    var area = $('didArea'); if(!area) return;
+    if(!dids.length){ area.innerHTML = '<div class="empty-note" style="padding:18px 0">No DID data yet.</div>'; return; }
+    var groups = {};
+    dids.forEach(function(d){ var p = d.provider || 'unknown'; (groups[p] = groups[p] || []).push(d); });
+    area.innerHTML = Object.keys(groups).sort().map(function(p){
+      var list = groups[p].slice().sort(function(a,b){ return (toNum(b.sent_today)||0) - (toNum(a.sent_today)||0); });   // most-used first
+      var nearCount = list.filter(function(d){ var l = lvlLimit(d); return lvlNear(lvlUsage(d,l), d.near_limit); }).length;
+      var open = didOpen[p] !== false;   // provider groups default OPEN
+      var showAll = !!didShowAll[p];
+      var rows = list.map(function(d, i){ return didRow(d, i >= TOP_N ? ' num-extra' : ''); }).join('');
+      var showAllBtn = list.length > TOP_N
+        ? '<button type="button" class="show-all-btn">' + (showAll ? ('Show top ' + TOP_N) : ('Show all ' + list.length)) + '</button>'
+        : '';
+      return '' +
+        '<div class="cc-numbers did-group' + (open ? ' open' : '') + (showAll ? ' show-all' : '') + '" data-group="' + esc(p) + '">' +
+          '<button type="button" class="cc-num-head">' +
+            '<svg class="cc-num-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg>' +
+            '<span>' + esc(p) + ' · ' + list.length + ' ' + (list.length === 1 ? 'DID' : 'DIDs') + '</span>' +
+            (nearCount ? '<span class="cc-num-near">⚠ ' + nearCount + ' near limit</span>' : '') +
+          '</button>' +
+          '<div class="cc-num-body"><div class="cc-num-list">' + rows + '</div>' + showAllBtn + '</div>' +
+        '</div>';
+    }).join('');
+  }
+
+  // ---- near-limit roll-up across the three flat levels (so the user sees what's about to cap) ----
+  function nearOf(row){ return lvlNear(lvlUsage(row, lvlLimit(row)), row.near_limit); }
+  function renderNearSummary(providers, carriers, dids, pairs){
+    var el = $('nearSummary'); if(!el) return;
+    var nPair = (pairs || []).filter(nearOf).length;
+    var nProv = providers.filter(nearOf).length;
+    var nCarr = carriers.filter(nearOf).length;
+    var nDids = dids.filter(nearOf).length;
+    var parts = [];
+    if(nPair) parts.push(plural(nPair, 'T-Mobile pair'));
+    if(nProv) parts.push(plural(nProv, 'provider'));
+    if(nCarr) parts.push(plural(nCarr, 'carrier'));
+    if(nDids) parts.push(plural(nDids, 'DID'));
+    if(!parts.length){ el.style.display = 'none'; return; }
+    el.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4M12 17h.01"/></svg><span>' + parts.join(' · ') + ' near limit</span>';
+    el.style.display = '';
+  }
+
+  // ---- engine toggles ----
+  function renderEngine(data){
+    if(!data) return;
+    lastEngine = data;
+    var flags = data.flags || {};
+    applyToggle('swEngine',   flags.same_day_pacing_enabled, flags.same_day_pacing_source);
+    applyToggle('swCapacity', flags.capacity_pacing_enabled, flags.capacity_pacing_source);
+    applyToggle('swFatigue',  flags.fatigue_enabled,         flags.fatigue_source);
+    applyToggle('swCaps',     flags.carrier_caps_enforce,    flags.carrier_caps_enforce_source);
+    applyToggle('swDedup',    flags.tmobile_dedup_enforce,   flags.tmobile_dedup_enforce_source);
+    applyToggle('swHours',    flags.working_hours_enforce,   flags.working_hours_enforce_source);
+  }
+  function applyToggle(swId, enabled, source){
+    var sw = $(swId); if(!sw) return;
+    sw.setAttribute('aria-checked', enabled ? 'true' : 'false');
+    var row = sw.closest('.toggle-row');
+    var badge = row ? row.querySelector('.ovr-badge') : null;
+    if(badge) badge.style.display = (source === 'override') ? '' : 'none';
+  }
+  function bindToggle(swId, name){
+    var sw = $(swId); if(!sw) return;
+    sw.addEventListener('click', function(){
+      if(sw.disabled) return;
+      onFlip(sw, name, sw.getAttribute('aria-checked') !== 'true');
+    });
+  }
+  async function onFlip(sw, name, enabled){
+    togglePending = true;
+    sw.disabled = true;                                  // lock this toggle while the write is in flight
+    sw.setAttribute('aria-checked', enabled ? 'true' : 'false');  // optimistic
+    try{
+      await API.post('/sms/manager/engine-flag', { name: name, enabled: enabled });
+      var es = await API.get('/sms/manager/engine-status', { _t: Date.now() });  // re-read truth
+      renderEngine(es);
+    }catch(e){
+      if(lastEngine) renderEngine(lastEngine);           // revert on failure
+    }finally{
+      togglePending = false;
+      sw.disabled = false;
+    }
+  }
+
+  // ---- single polling refresh: both GETs in parallel, cache-busted ----
+  async function refresh(){
+    if(inFlight) return;
+    inFlight = true;
+    try{
+      var fleetP  = API.get('/sms/manager/fleet-dashboard', { _t: Date.now() });
+      var engineP = togglePending ? Promise.resolve(null) : API.get('/sms/manager/engine-status', { _t: Date.now() });
+      var res = await Promise.all([fleetP, engineP]);
+      renderFleet(res[0]);
+      if(res[1]) renderEngine(res[1]);
+    }catch(e){
+      /* leave the last render in place; layout stays intact when the API is unreachable */
+    }finally{
+      inFlight = false;
+    }
+  }
+
+  // Per-DID drill-down toggles — delegated (bound once) so they survive the 6s re-render;
+  // state lives in didOpen/didShowAll, which renderDids reads back on every render.
+  function bindDrillDown(){
+    var area = $('didArea'); if(!area) return;     // DID drill-down now lives in the DIDs section (grouped by provider)
+    area.addEventListener('click', function(e){
+      var head = e.target.closest('.cc-num-head');
+      if(head){
+        var box = head.closest('.cc-numbers'); if(!box) return;
+        var key = box.getAttribute('data-group');
+        didOpen[key] = !box.classList.contains('open');
+        box.classList.toggle('open', didOpen[key]);
+        return;
+      }
+      var sa = e.target.closest('.show-all-btn');
+      if(sa){
+        var box2 = sa.closest('.cc-numbers'); if(!box2) return;
+        var key2 = box2.getAttribute('data-group');
+        didShowAll[key2] = !box2.classList.contains('show-all');
+        box2.classList.toggle('show-all', didShowAll[key2]);
+        sa.textContent = didShowAll[key2] ? ('Show top ' + TOP_N) : ('Show all ' + box2.querySelectorAll('.num-row').length);
+      }
+    });
+  }
+
+  function start(){
+    if(!API){ return; }
+    bindToggle('swEngine',   'SAME_DAY_PACING_ENABLED');
+    bindToggle('swCapacity', 'CAPACITY_PACING_ENABLED');
+    bindToggle('swFatigue',  'FATIGUE_ENABLED');
+    bindToggle('swCaps',     'CARRIER_CAPS_ENFORCE');
+    bindToggle('swDedup',    'TMOBILE_DEDUP_ENFORCE');
+    bindToggle('swHours',    'WORKING_HOURS_ENFORCE');
+    bindDrillDown();
+    refresh();
+    pollTimer = setInterval(function(){ if(!document.hidden) refresh(); }, POLL_MS);  // pause while tab hidden
+  }
+  window.addEventListener('beforeunload', function(){ if(pollTimer) clearInterval(pollTimer); });
+  document.addEventListener('visibilitychange', function(){ if(!document.hidden) refresh(); });  // resume on focus
+
+  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
+  else start();
+})();
+</script>
+</body>
+</html>

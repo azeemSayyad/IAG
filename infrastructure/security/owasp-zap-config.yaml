@@ -1,0 +1,122 @@
+# OWASP ZAP Configuration (Step 24.4)
+# Automated security scanning
+
+---
+# ZAP Configuration for Launchpad Call Center
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: zap-config
+  namespace: launchpad
+data:
+  zap-config.yaml: |
+    # OWASP ZAP Configuration
+    env:
+      contexts:
+        - name: "launchpad-api"
+          urls:
+            - "http://backend-api:8000"
+            - "https://api.launchpad.com"
+          includePaths:
+            - "http://backend-api:8000/api/v1/.*"
+            - "https://api.launchpad.com/api/v1/.*"
+          excludePaths:
+            - ".*\\.js"
+            - ".*\\.css"
+            - ".*\\.png"
+            - ".*\\.jpg"
+            - ".*\\.gif"
+          authentication:
+            method: "json"
+            parameters:
+              loginUrl: "http://backend-api:8000/api/v1/auth/login"
+              loginRequestData: '{"email":"{%username%}","password":"{%password%}"}'
+            verification:
+              method: "response"
+              loggedInRegex: "\\Qaccess_token\\E"
+
+    # Scan Policy
+    policies:
+      - name: "standard"
+        rules:
+          # SQL Injection
+          - id: 40018
+            strength: "high"
+            threshold: "low"
+
+          # XSS
+          - id: 40012
+            strength: "high"
+            threshold: "low"
+
+          # Path Traversal
+          - id: 6
+            strength: "high"
+            threshold: "low"
+
+          # Remote File Inclusion
+          - id: 7
+            strength: "high"
+            threshold: "low"
+
+          # Command Injection
+          - id: 90020
+            strength: "high"
+            threshold: "low"
+
+          # CRLF Injection
+          - id: 40003
+            strength: "medium"
+            threshold: "low"
+
+          # Source Code Disclosure
+          - id: 10045
+            strength: "medium"
+            threshold: "low"
+
+          # Session Fixation
+          - id: 40013
+            strength: "medium"
+            threshold: "low"
+
+          # Information Disclosure
+          - id: 10096
+            strength: "low"
+            threshold: "low"
+
+          # Missing Security Headers
+          - id: 10036
+            strength: "low"
+            threshold: "low"
+
+          # Cookie without Secure flag
+          - id: 10010
+            strength: "low"
+            threshold: "low"
+
+          # Cookie without HttpOnly flag
+          - id: 10011
+            strength: "low"
+            threshold: "low"
+
+    # Spider Configuration
+    spider:
+      maxDuration: 30
+      maxDepth: 5
+      maxChildren: 20
+
+    # Active Scan Configuration
+    activeScan:
+      maxDuration: 60
+      maxRuleDuration: 5
+
+    # Report Configuration
+    reports:
+      - name: "launchpad-security-report"
+        format: "HTML"
+        description: "Launchpad Call Center Security Report"
+        sections:
+          - "alert-count"
+          - "instance-count"
+          - "alerts"
+        includeChart: true

@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Add Deal · Auto · Step 3 — Endeavor</title>
+<script src="i18n-dict.js?v=2"></script>
+<script src="prefs-extras.js?v=28"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="wizard.css"/>
+  <script src="services/api.js?v=10"></script>
+  <script src="services/error-boundary.js?v=19"></script>
+</head>
+<body data-chapter="auto">
+
+<div class="wiz-shell">
+  <a class="ch-brand" href="appointments.html" aria-label="Endeavor">
+    <span class="ch-brand-dot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/><path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/></svg></span>
+    Endeavor
+  </a>
+
+  <header class="ch-head">
+    <div class="ch-row">
+      <div class="ch-titlewrap">
+        <h1 class="ch-title"><span class="ch-num">03.</span> Auto Insurance</h1>
+        <p class="ch-sub">Quote the household policy. Personal info already on file.</p>
+      </div>
+      <div class="ch-prog">
+        <div class="ch-step"><strong>3</strong><span class="ch-step-of">/ 4</span></div>
+        <div class="ch-ring">
+          <svg viewBox="0 0 36 36"><circle cx="18" cy="18" r="15.9" class="ring-track"/><circle cx="18" cy="18" r="15.9" class="ring-arc" stroke-dasharray="75,100"/></svg>
+          <span class="ch-ring-num">75%</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <div class="wiz-card">
+    <div class="wiz-num">03</div>
+    <div class="wiz-eyebrow">Vehicle &amp; usage</div>
+    <h2 class="wiz-title">What's insured?</h2>
+    <p class="wiz-sub">VIN preferred; falls back to year/make/model lookup.</p>
+
+    <form id="step3" class="form-stack" autocomplete="off" novalidate>
+      <div class="field">
+        <label class="field-label" for="auVin">VIN</label>
+        <input class="ctl" id="auVin" type="text" placeholder="1HGCV1F30LA123456" maxlength="17" style="text-transform:uppercase"/>
+      </div>
+      <div class="form-grid-3">
+        <div class="field">
+          <label class="field-label" for="auYear">Year</label>
+          <input class="ctl" id="auYear" type="number" min="1980" max="2027" placeholder="2022"/>
+        </div>
+        <div class="field">
+          <label class="field-label" for="auMake">Make</label>
+          <input class="ctl" id="auMake" type="text" placeholder="Honda"/>
+        </div>
+        <div class="field">
+          <label class="field-label" for="auModel">Model</label>
+          <input class="ctl" id="auModel" type="text" placeholder="Accord"/>
+        </div>
+      </div>
+      <div class="form-grid-3">
+        <div class="field">
+          <label class="field-label" for="auTrim">Trim</label>
+          <input class="ctl" id="auTrim" type="text" placeholder="Sport"/>
+        </div>
+        <div class="field">
+          <label class="field-label" for="auMiles">Annual mileage</label>
+          <input class="ctl" id="auMiles" type="text" inputmode="numeric" placeholder="12,000"/>
+        </div>
+        <div class="field">
+          <label class="field-label" for="auUse">Primary use</label>
+          <select class="ctl ctl-select placeholder" id="auUse">
+            <option value="" disabled selected hidden>Select…</option>
+            <option>Commute</option><option>Pleasure</option>
+            <option>Business</option><option>Rideshare</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-grid-3">
+        <div class="field">
+          <label class="field-label" for="auOwn">Ownership</label>
+          <select class="ctl ctl-select placeholder" id="auOwn">
+            <option value="" disabled selected hidden>Select…</option>
+            <option>Owned</option><option>Financed</option><option>Leased</option>
+          </select>
+        </div>
+        <div class="field">
+          <label class="field-label" for="auPark">Parking</label>
+          <select class="ctl ctl-select placeholder" id="auPark">
+            <option value="" disabled selected hidden>Select…</option>
+            <option>Garage</option><option>Driveway</option>
+            <option>Street</option><option>Lot</option>
+          </select>
+        </div>
+        <div class="field">
+          <label class="field-label" for="auAcc">Accidents (3 yrs)</label>
+          <input class="ctl" id="auAcc" type="number" min="0" max="10" placeholder="0"/>
+        </div>
+      </div>
+      <div class="form-grid-3">
+        <div class="field">
+          <label class="field-label" for="auViol">Violations (3 yrs)</label>
+          <input class="ctl" id="auViol" type="number" min="0" max="10" placeholder="0"/>
+        </div>
+        <div></div><div></div>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="wiz-foot">
+  <button class="btn-step back" id="btnBack" type="button">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+    Back
+  </button>
+  <button class="btn-step next" id="btnNext" type="button">
+    Next
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
+  </button>
+</div>
+
+<script>
+(function(){
+  const $ = (s,r=document)=>r.querySelector(s);
+  const DRAFT_KEY = 'ebDealDraft';
+  let draft = {};
+  try{ draft = JSON.parse(sessionStorage.getItem(DRAFT_KEY) || '{}'); }catch(e){ draft = {}; }
+
+  ['auVin','auYear','auMake','auModel','auTrim','auMiles','auUse','auOwn','auPark','auAcc','auViol'].forEach(k=>{
+    if(draft[k]!==undefined) {
+      const el = document.getElementById(k);
+      if(el){ el.value = draft[k]; if(el.tagName==='SELECT' && draft[k]) el.classList.remove('placeholder'); }
+    }
+  });
+
+  $('#auVin').addEventListener('input', function(e){
+    e.target.value = e.target.value.replace(/[^a-zA-Z0-9]/g,'').toUpperCase().slice(0,17);
+    if (e.target.value.length === 17) {
+      // Try VIN decode via API
+      window.__ebAPI.get('/calls/transcripts', { page: 1, size: 1 }).catch(function(){ return null; }).then(function(){
+        // VIN decode endpoint not available yet — use built-in lookup
+        var knownVins = {
+          '1HGCV1F34JA012345': { year: '2018', make: 'Honda', model: 'Accord', trim: 'LX' },
+          '5YJSA1E26MF123456': { year: '2021', make: 'Tesla', model: 'Model S', trim: 'Long Range' },
+          '1FA6P8CF0L0123456': { year: '2020', make: 'Ford', model: 'Mustang', trim: 'GT' },
+          '3VWLL7AJXBM123456': { year: '2019', make: 'Volkswagen', model: 'Jetta', trim: 'S' },
+          'WBA8E1C56JA123456': { year: '2018', make: 'BMW', model: '3 Series', trim: '330i' },
+        };
+        var vin = e.target.value;
+        var info = knownVins[vin];
+        if (!info) {
+          // Extract WMI (first 3 chars) for manufacturer guess
+          var wmi = vin.slice(0, 3);
+          var makeMap = { '1HG':'Honda','1HG':'Honda','2HG':'Honda','1FA':'Ford','1FT':'Ford','3FA':'Ford',
+            '1GC':'Chevrolet','2GC':'Chevrolet','1G1':'Chevrolet','1G2':'Chevrolet',
+            '1C3':'Chrysler','2C3':'Chrysler','1D3':'Dodge','2D3':'Dodge',
+            '4S3':'Subaru','4S4':'Subaru','5YJ':'Tesla','7SA':'Tesla',
+            'WBA':'BMW','WBS':'BMW','WDD':'Mercedes','4JG':'Mercedes',
+            'WAU':'Audi','TRU':'Audi','3VW':'Volkswagen','3VW':'Volkswagen' };
+          var guessedMake = makeMap[wmi] || '';
+          if (guessedMake) {
+            var yearCode = vin.slice(9, 10);
+            var yearMap = { 'L':'2020','M':'2021','N':'2022','P':'2023','R':'2024','S':'2025','T':'2026' };
+            var guessedYear = yearMap[yearCode] || '20' + (parseInt(yearCode, 36) + 20);
+            document.getElementById('auYear').value = guessedYear;
+            document.getElementById('auMake').value = guessedMake;
+          }
+        } else {
+          document.getElementById('auYear').value = info.year;
+          document.getElementById('auMake').value = info.make;
+          document.getElementById('auModel').value = info.model;
+          document.getElementById('auTrim').value = info.trim;
+        }
+        persist();
+      });
+    }
+  });
+  $('#auMiles').addEventListener('input', e=>{
+    const raw = e.target.value.replace(/\D/g,'').slice(0,7);
+    e.target.value = raw ? Number(raw).toLocaleString() : '';
+  });
+  ['auUse','auOwn','auPark'].forEach(id=>{
+    const el = document.getElementById(id);
+    el.addEventListener('change', ()=>{
+      if(el.value) el.classList.remove('placeholder'); else el.classList.add('placeholder');
+    });
+  });
+
+  function persist(){
+    ['auVin','auYear','auMake','auModel','auTrim','auMiles','auUse','auOwn','auPark','auAcc','auViol'].forEach(k=>{
+      draft[k] = document.getElementById(k).value;
+    });
+    sessionStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+  }
+  document.querySelectorAll('#step3 .ctl').forEach(el=>{
+    el.addEventListener('input', persist); el.addEventListener('change', persist);
+  });
+
+  $('#btnNext').addEventListener('click', ()=>{ persist(); window.location.href = 'auto-4.html'; });
+  $('#btnBack').addEventListener('click', ()=>{ persist(); window.location.href = 'auto-2.html'; });
+})();
+</script>
+
+</body>
+</html>

@@ -1,0 +1,182 @@
+# Microservices Configuration
+
+services:
+  # API Gateway
+  api-gateway:
+    port: 8000
+    replicas: 2
+    resources:
+      cpu: "500m"
+      memory: "512Mi"
+    dependencies:
+      - auth-service
+      - lead-service
+      - booking-service
+      - ai-service
+      - messaging-service
+      - analytics-service
+      - notification-service
+
+  # Auth Service
+  auth-service:
+    port: 8001
+    replicas: 2
+    resources:
+      cpu: "250m"
+      memory: "256Mi"
+    dependencies:
+      - postgres
+      - redis
+    endpoints:
+      - POST /auth/login
+      - POST /auth/register
+      - POST /auth/refresh
+      - GET /auth/me
+      - POST /auth/logout
+
+  # Lead Service
+  lead-service:
+    port: 8002
+    replicas: 2
+    resources:
+      cpu: "500m"
+      memory: "512Mi"
+    dependencies:
+      - postgres
+      - redis
+      - ai-service
+    endpoints:
+      - GET /leads
+      - POST /leads
+      - GET /leads/{id}
+      - PATCH /leads/{id}
+      - DELETE /leads/{id}
+      - POST /ingestion/csv
+      - POST /ingestion/webhook
+      - POST /ingestion/api
+
+  # Booking Service
+  booking-service:
+    port: 8003
+    replicas: 2
+    resources:
+      cpu: "500m"
+      memory: "512Mi"
+    dependencies:
+      - postgres
+      - redis
+      - notification-service
+    endpoints:
+      - POST /booking/start
+      - POST /booking/select
+      - POST /booking/cancel
+      - POST /booking/reschedule
+      - GET /booking/slots
+      - GET /booking/reminders
+
+  # AI Service
+  ai-service:
+    port: 8004
+    replicas: 2
+    resources:
+      cpu: "1000m"
+      memory: "1Gi"
+    dependencies:
+      - postgres
+      - redis
+      - ollama
+      - messaging-service
+    endpoints:
+      - POST /intent/detect
+      - POST /intent/objection/handle
+      - GET /intent/classes
+      - POST /ai/generate
+      - POST /ai/chat
+
+  # Messaging Service
+  messaging-service:
+    port: 8005
+    replicas: 2
+    resources:
+      cpu: "500m"
+      memory: "512Mi"
+    dependencies:
+      - redis
+      - engage-clouds
+    endpoints:
+      - POST /sms/send
+      - POST /sms/bulk
+      - POST /webhooks/engage-clouds
+
+  # Analytics Service
+  analytics-service:
+    port: 8006
+    replicas: 1
+    resources:
+      cpu: "500m"
+      memory: "1Gi"
+    dependencies:
+      - postgres
+      - clickhouse
+      - redis
+    endpoints:
+      - GET /analytics/overview
+      - GET /analytics/agents
+      - GET /analytics/campaigns
+      - GET /analytics/trends
+      - GET /analytics/ai
+
+  # Notification Service
+  notification-service:
+    port: 8007
+    replicas: 2
+    resources:
+      cpu: "250m"
+      memory: "256Mi"
+    dependencies:
+      - redis
+    endpoints:
+      - WebSocket /ws
+      - GET /realtime/online
+      - POST /realtime/notify
+
+# Shared Infrastructure
+infrastructure:
+  postgres:
+    port: 5432
+    replicas: 1
+    resources:
+      cpu: "1000m"
+      memory: "2Gi"
+    storage: "100Gi"
+
+  redis:
+    port: 6379
+    replicas: 1
+    resources:
+      cpu: "500m"
+      memory: "1Gi"
+
+  clickhouse:
+    port: 8123
+    replicas: 1
+    resources:
+      cpu: "1000m"
+      memory: "4Gi"
+    storage: "500Gi"
+
+  qdrant:
+    port: 6333
+    replicas: 1
+    resources:
+      cpu: "500m"
+      memory: "2Gi"
+    storage: "100Gi"
+
+  ollama:
+    port: 11434
+    replicas: 1
+    resources:
+      cpu: "2000m"
+      memory: "8Gi"
+    gpu: true

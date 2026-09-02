@@ -1,0 +1,1067 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>My Team — Endeavor</title>
+<script>
+(function(){try{
+const FM={sm:'14px',md:'16px',lg:'18px',xl:'20px'};
+const TM={
+warm:{a:'#C97B3A',a2:'#E0995E',ah:'#B26A2D',b1:'rgba(224,153,94,.40)',b2:'rgba(201,123,58,.32)',b3:'rgba(255,200,150,.22)',g:'linear-gradient(135deg,#FFFBF5 0%,#FFEFDC 50%,#FFF6E9 100%)',gl:'rgba(178,106,45,.08)'},
+forest:{a:'#4F8268',a2:'#6B9F86',ah:'#3D6651',b1:'rgba(107,159,134,.40)',b2:'rgba(79,130,104,.32)',b3:'rgba(180,220,200,.22)',g:'linear-gradient(135deg,#F5FBF7 0%,#E0F1E6 50%,#E8F4ED 100%)',gl:'rgba(63,109,84,.08)'},
+indigo:{a:'#5E7BA8',a2:'#7B96BD',ah:'#4A6488',b1:'rgba(123,150,189,.40)',b2:'rgba(94,123,168,.32)',b3:'rgba(180,200,230,.22)',g:'linear-gradient(135deg,#F5F7FB 0%,#DCE4F1 50%,#E5EBF4 100%)',gl:'rgba(74,100,136,.08)'},
+rose:{a:'#A3525C',a2:'#B97077',ah:'#82414B',b1:'rgba(185,112,119,.40)',b2:'rgba(163,82,92,.32)',b3:'rgba(230,180,190,.22)',g:'linear-gradient(135deg,#FBF5F6 0%,#F1DCDF 50%,#F4E5E8 100%)',gl:'rgba(130,65,75,.08)'},
+slate:{a:'#2D3340',a2:'#5A6275',ah:'#1A1F2A',b1:'rgba(90,98,117,.45)',b2:'rgba(45,51,64,.38)',b3:'rgba(150,156,170,.28)',g:'linear-gradient(135deg,#B8BCC5 0%,#9DA3AD 50%,#ABB0BA 100%)',gl:'rgba(26,31,42,.14)'},
+amber:{a:'#9C7842',a2:'#B89058',ah:'#7C5E2F',b1:'rgba(184,144,88,.40)',b2:'rgba(156,120,66,.32)',b3:'rgba(245,220,180,.22)',g:'linear-gradient(135deg,#FBF7F0 0%,#F0E5D0 50%,#F4EBDB 100%)',gl:'rgba(124,94,47,.08)'}
+};
+window.__ebApplyFont=function(v){document.documentElement.style.fontSize=FM[v]||'16px';};
+window.__ebApplyTheme=function(v){
+var t=TM[v]||TM.warm,D=document.documentElement;
+D.style.setProperty('--accent',t.a);
+D.style.setProperty('--accent-2',t.a2);
+D.style.setProperty('--accent-hover',t.ah);
+var st=document.getElementById('ebPrefsTheme');
+if(!st){st=document.createElement('style');st.id='ebPrefsTheme';document.head.appendChild(st);}
+st.textContent='body::before{background:'+t.g+' !important}body::after{background:radial-gradient(ellipse 95% 85% at 50% 50%,transparent 55%,'+t.gl+' 100%) !important}.sb-brand-dot{background:linear-gradient(135deg,'+t.a+','+t.a2+') !important}.usage-fill{background:linear-gradient(90deg,'+t.a+','+t.a2+') !important}.av-circle{background:linear-gradient(135deg,'+t.a+','+t.a2+') !important}';
+};
+window.__ebApplyFont(localStorage.getItem('ebFontSize')||'md');
+window.__ebApplyTheme(localStorage.getItem('ebTheme')||'warm');
+}catch(e){}})();
+</script>
+<script src="i18n-dict.js?v=2"></script>
+<script src="prefs-extras.js?v=28"></script>
+<script src="coach.js" defer></script>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#DDD8CE;
+  --border:rgba(26,31,42,0.07);--border-hover:rgba(26,31,42,0.14);--border-soft:rgba(26,31,42,0.06);
+  --text-strong:#1A1F2A;--text:#2D3340;--text-muted:rgba(26,31,42,0.60);--text-faint:rgba(26,31,42,0.42);
+  --accent:#C97B3A;--accent-2:#E0995E;--accent-hover:#B26A2D;
+  --up:#4F8268;--down:#A3525C;--pending:#9C7842;
+  --sidebar-w:220px;--topbar-h:64px;
+  --ease:cubic-bezier(0.4,0,0.2,1);
+}
+html,body{height:100%}
+body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;position:relative;overflow-x:hidden;-webkit-font-smoothing:antialiased}
+body::before{content:'';position:fixed;inset:-15%;z-index:-3;background:linear-gradient(135deg, #FFFBF5 0%, #FFEFDC 50%, #FFF6E9 100%);animation:bgDrift 22s ease-in-out infinite;transform-origin:center;will-change:transform}
+body::after{content:'';position:fixed;inset:-10%;z-index:-2;pointer-events:none;background:radial-gradient(ellipse 95% 85% at 50% 50%, transparent 55%, rgba(178,106,45,0.08) 100%);animation:bgFloat 28s ease-in-out infinite reverse;transform-origin:center;will-change:transform}
+@keyframes bgDrift{0%{transform:scale(1) translate(0,0) rotate(0deg)}20%{transform:scale(1.10) translate(-3.5%,2.5%) rotate(0.6deg)}40%{transform:scale(1.06) translate(3%,-3%) rotate(-0.5deg)}60%{transform:scale(1.12) translate(-2.5%,-3.5%) rotate(0.7deg)}80%{transform:scale(1.08) translate(3%,2%) rotate(-0.4deg)}100%{transform:scale(1) translate(0,0) rotate(0deg)}}
+@keyframes bgFloat{0%,100%{transform:scale(1) translate(0,0)}50%{transform:scale(1.08) translate(2%,-2%)}}
+@media (prefers-reduced-motion:reduce){body::before,body::after{animation:none}}
+
+.sidebar{position:fixed;top:0;left:0;width:var(--sidebar-w);height:100vh;background:rgba(255,255,255,0.55);backdrop-filter:blur(22px) saturate(160%);-webkit-backdrop-filter:blur(22px) saturate(160%);border-right:1px solid var(--border);display:flex;flex-direction:column;padding:0 12px 12px;z-index:40}
+.sb-brand{height:var(--topbar-h);display:flex;align-items:center;gap:10px;padding:0 10px;font-weight:600;font-size:1.0625rem;letter-spacing:-0.015em;color:var(--text);border-bottom:1px solid var(--border-soft);margin:0 -12px 12px}
+.sb-brand-dot{width:26px;height:26px;border-radius:8px;background:linear-gradient(135deg,#C97B3A,#E0995E);box-shadow:0 1px 2px rgba(178,106,45,0.30),inset 0 1px 0 rgba(255,255,255,0.22);flex-shrink:0;display:flex;align-items:center;justify-content:center}
+.sb-brand-dot svg{width:14px;height:14px;color:#fff;stroke-width:1.8}
+.sb-nav{display:flex;flex-direction:column;gap:2px;flex:1;width:100%}
+.sb-item{width:100%;height:38px;border-radius:8px;padding:0 10px;display:flex;align-items:center;gap:10px;color:var(--text-muted);font-family:inherit;font-size:.875rem;font-weight:500;cursor:pointer;text-decoration:none;transition:color 160ms var(--ease),background 160ms var(--ease);position:relative}
+.sb-item:hover{color:var(--text);background:rgba(26,31,42,0.05)}
+.sb-item.active{background:rgba(201,123,58,0.10);color:var(--text)}
+.sb-item.active svg{color:var(--accent)}
+.sb-item svg{width:17px;height:17px;stroke-width:1.7;flex-shrink:0}
+.sb-tip{font-size:.875rem;font-weight:500}
+.sb-badge{margin-left:auto;min-width:20px;height:18px;padding:0 6px;border-radius:9px;background:var(--accent);color:#fff;font-size:.6875rem;font-weight:600;display:inline-flex;align-items:center;justify-content:center;font-variant-numeric:tabular-nums}
+.sb-lock{margin-left:auto;font-size:.625rem;font-weight:700;color:var(--text-faint);letter-spacing:.06em;text-transform:uppercase}
+.sb-featured{background:linear-gradient(135deg,rgba(201,123,58,0.10),rgba(224,153,94,0.04));border:1px solid rgba(201,123,58,0.20);margin-bottom:6px}
+.sb-featured:hover{background:linear-gradient(135deg,rgba(201,123,58,0.16),rgba(224,153,94,0.08))}
+.sb-featured svg{color:var(--accent)}
+.sb-featured .sb-tip{font-weight:600;color:var(--text)}
+.sb-group{display:flex;flex-direction:column;width:100%;margin-top:6px}
+.sb-group-head{width:100%;height:32px;display:flex;align-items:center;gap:8px;padding:0 10px;background:transparent;border:none;font-family:inherit;font-size:.6875rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-faint);cursor:pointer;border-radius:6px;transition:color 120ms var(--ease)}
+.sb-group-head:hover{color:var(--text-muted)}
+.sb-group-head .sb-chev{margin-left:auto;width:11px;height:11px;transition:transform 220ms var(--ease);stroke-width:2}
+.sb-group.open .sb-group-head .sb-chev{transform:rotate(90deg)}
+.sb-group-body{display:flex;flex-direction:column;gap:2px;max-height:0;overflow:hidden;transition:max-height 280ms var(--ease)}
+.sb-group.open .sb-group-body{max-height:600px}
+.sb-bottom{display:flex;flex-direction:column;gap:2px;padding-top:10px;margin-top:8px;border-top:1px solid var(--border);width:100%}
+.sb-item.locked{opacity:.55;cursor:not-allowed}
+.sb-item.locked:hover{background:transparent;color:var(--text-muted)}
+.sb-hide{display:none !important}
+
+.topbar{position:fixed;top:0;left:var(--sidebar-w);right:0;height:var(--topbar-h);background:rgba(255,255,255,0.55);backdrop-filter:blur(22px) saturate(160%);-webkit-backdrop-filter:blur(22px) saturate(160%);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 22px;gap:18px;z-index:30}
+.menu-toggle{display:none;width:36px;height:36px;border-radius:9px;background:transparent;border:1px solid var(--border);color:var(--text);cursor:pointer;align-items:center;justify-content:center;margin-right:4px}
+.menu-toggle svg{width:18px;height:18px}
+.sb-overlay{display:none;position:fixed;inset:0;background:rgba(26,31,42,0.35);z-index:35}
+.sb-overlay.open{display:block}
+.search{flex:1;max-width:520px;display:flex;align-items:center;gap:10px;height:38px;padding:0 14px;background:rgba(255,255,255,0.65);border:none;border-radius:10px;color:var(--text-muted)}
+.search svg{width:16px;height:16px;flex-shrink:0;stroke-width:1.6}
+.search input{flex:1;background:transparent;border:none;outline:none;color:var(--text);font-family:inherit;font-size:.8125rem}
+.search input::placeholder{color:var(--text-faint)}
+.search kbd{font-family:inherit;font-size:.6875rem;color:var(--text-muted);background:rgba(255,255,255,0.85);border:none;border-radius:4px;padding:2px 6px}
+.tb-right{display:flex;align-items:center;gap:10px;margin-left:auto}
+.icon-btn{width:36px;height:36px;border-radius:9px;background:rgba(255,255,255,0.6);border:none;color:var(--text-muted);display:inline-flex;align-items:center;justify-content:center;cursor:pointer;position:relative}
+.icon-btn:hover{color:var(--text);background:rgba(255,255,255,0.85)}
+.icon-btn svg{width:16px;height:16px;stroke-width:1.6}
+.icon-btn .dot{position:absolute;top:8px;right:8px;width:7px;height:7px;border-radius:50%;background:var(--accent);border:2px solid #E7E9EE}
+.avatar{width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#2A2F3A,#1A1F2A);display:inline-flex;align-items:center;justify-content:center;color:#fff;border:1px solid rgba(0,0,0,0.18);cursor:pointer;box-shadow:0 4px 12px rgba(26,31,42,0.22)}
+.avatar svg{width:18px;height:18px;stroke-width:1.7}
+
+.main{margin-left:var(--sidebar-w);padding:calc(var(--topbar-h) + 22px) 22px 28px;min-height:100vh;display:flex;flex-direction:column;gap:18px}
+.page-hdr{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap}
+.page-hdr h1{font-size:1.625rem;font-weight:600;letter-spacing:-0.015em;line-height:1.15;color:var(--text-strong)}
+.hdr-meta{font-size:.8125rem;color:var(--text-muted);margin-top:4px}
+.hdr-meta strong{color:var(--text-strong);font-weight:600}
+
+/* Role switcher (demo) */
+.role-switch{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.role-switch .rs-label{font-size:.6875rem;font-weight:700;color:var(--text-faint);letter-spacing:.06em;text-transform:uppercase}
+.seg{display:inline-flex;background:rgba(255,255,255,0.65);backdrop-filter:blur(12px);border:1px solid var(--border);border-radius:9px;padding:3px;gap:2px}
+.seg button{height:30px;padding:0 12px;background:transparent;border:none;border-radius:7px;font-family:inherit;font-size:.75rem;font-weight:600;color:var(--text-muted);cursor:pointer;letter-spacing:-0.005em;transition:background 130ms var(--ease),color 130ms var(--ease)}
+.seg button.active{background:#FFFFFF;color:var(--text-strong);box-shadow:0 1px 2px rgba(26,31,42,0.08)}
+
+/* Access denied banner (Agent view) */
+.locked-card{background:#FFFFFF;border:1px solid var(--border);border-radius:16px;padding:36px 28px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:10px;box-shadow:0 1px 2px rgba(26,31,42,0.04),0 2px 8px rgba(26,31,42,0.04)}
+.locked-card .lk-icon{width:48px;height:48px;border-radius:14px;background:#F2EEE6;display:flex;align-items:center;justify-content:center;color:var(--text-muted);margin-bottom:4px}
+.locked-card .lk-icon svg{width:22px;height:22px;stroke-width:1.6}
+.locked-card h2{font-size:1.125rem;font-weight:600;color:var(--text-strong);letter-spacing:-0.01em}
+.locked-card p{font-size:.875rem;color:var(--text-muted);max-width:46ch;line-height:1.55}
+.locked-card .btn{margin-top:6px}
+
+/* KPI strip */
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+.kpi{background:#FFFFFF;border:1px solid var(--border);border-radius:14px;padding:14px 16px;display:flex;flex-direction:column;gap:4px;box-shadow:0 1px 2px rgba(26,31,42,0.04),0 2px 8px rgba(26,31,42,0.04)}
+.k-k{font-size:.6875rem;color:var(--text-muted);font-weight:600;letter-spacing:.04em;text-transform:uppercase}
+.k-v{font-size:1.375rem;font-weight:600;color:var(--text-strong);letter-spacing:-0.015em;font-variant-numeric:tabular-nums}
+.k-d{font-size:.75rem;color:var(--text-muted)}
+.k-d .up{color:var(--up);font-weight:600}
+.k-d .down{color:var(--down);font-weight:600}
+
+/* Card */
+.card{background:#FFFFFF;border:1px solid var(--border);border-radius:16px;box-shadow:0 1px 2px rgba(26,31,42,0.04),0 2px 8px rgba(26,31,42,0.04);overflow:hidden}
+.card-head{padding:16px 20px;border-bottom:1px solid var(--border-soft);display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.card-head h2{font-size:1rem;font-weight:600;color:var(--text-strong);letter-spacing:-0.01em}
+.card-head .ch-sub{font-size:.75rem;color:var(--text-muted)}
+.card-body{padding:14px 18px 18px}
+
+/* Search/filter strip */
+.tools{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.tools .lt-search{flex:1;min-width:200px;display:flex;align-items:center;gap:8px;height:32px;padding:0 11px;background:#FBFAF7;border:1px solid var(--border-soft);border-radius:8px}
+.tools .lt-search svg{width:13px;height:13px;color:var(--text-muted);stroke-width:1.8}
+.tools .lt-search input{flex:1;border:none;background:transparent;outline:none;font-family:inherit;font-size:.75rem;color:var(--text)}
+.tools .lt-search input::placeholder{color:var(--text-faint)}
+.tab{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 12px;border:1px solid var(--border);border-radius:999px;background:#FFFFFF;font-family:inherit;font-size:.75rem;font-weight:600;color:var(--text-muted);cursor:pointer;transition:color 130ms var(--ease),background 130ms var(--ease),border-color 130ms var(--ease)}
+.tab:hover{color:var(--text);background:#F6F4EF}
+.tab.active{background:#1A1F2A;color:#FFFFFF;border-color:#1A1F2A}
+
+/* Team-member grid */
+.team-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+.mate{background:#FBFAF7;border:1px solid var(--border-soft);border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:10px;transition:border-color 130ms var(--ease),box-shadow 130ms var(--ease)}
+.mate:hover{border-color:var(--border-hover);box-shadow:0 4px 14px rgba(26,31,42,0.06)}
+.mate-row1{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.mate-name{font-size:.9375rem;font-weight:600;color:var(--text-strong);letter-spacing:-0.005em;line-height:1.25}
+.mate-role{font-size:.75rem;color:var(--text-muted);margin-top:2px;line-height:1.4}
+.mate-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding-top:8px;border-top:1px dashed var(--border-soft)}
+.ms-tile{display:flex;flex-direction:column;gap:1px}
+.ms-k{font-size:.625rem;color:var(--text-muted);font-weight:600;letter-spacing:.04em;text-transform:uppercase}
+.ms-v{font-size:.9375rem;font-weight:600;color:var(--text-strong);font-variant-numeric:tabular-nums;letter-spacing:-0.005em}
+.ms-v.up{color:var(--up)}
+.ms-v.down{color:var(--down)}
+.mate-foot{display:flex;justify-content:space-between;align-items:center;gap:8px;padding-top:8px;border-top:1px dashed var(--border-soft)}
+.mate-actions{display:flex;gap:6px;flex-wrap:wrap}
+
+/* Pill */
+.pill{display:inline-flex;align-items:center;gap:5px;height:22px;padding:0 10px;border-radius:11px;font-size:.6875rem;font-weight:700;letter-spacing:.04em;white-space:nowrap}
+.pill .pd{width:6px;height:6px;border-radius:50%}
+.pill.ok{background:rgba(79,130,104,0.12);color:#3D6651}
+.pill.ok .pd{background:var(--up)}
+.pill.warn{background:rgba(156,120,66,0.14);color:#7C5E2F}
+.pill.warn .pd{background:var(--pending)}
+.pill.off{background:#F2EEE6;color:var(--text-muted)}
+.pill.off .pd{background:#B9B2A1}
+.pill.role{background:rgba(94,123,168,0.12);color:#3F557E}
+.pill.role.lead{background:rgba(201,123,58,0.14);color:#A35E26}
+.pill.role.head{background:rgba(163,82,92,0.14);color:#7B3A45}
+.pill.role.admin{background:rgba(26,31,42,0.10);color:var(--text-strong)}
+
+/* Button */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:30px;padding:0 12px;background:#FFFFFF;border:1px solid var(--border);border-radius:8px;font-family:inherit;font-size:.75rem;font-weight:600;color:var(--text);cursor:pointer;transition:background 130ms var(--ease),border-color 130ms var(--ease);white-space:nowrap}
+.btn:hover{background:#F6F4EF;border-color:var(--border-hover)}
+.btn.primary{background:var(--accent);color:#FFFFFF;border-color:var(--accent);box-shadow:0 1px 2px rgba(178,106,45,0.18)}
+.btn.primary:hover{background:var(--accent-hover);border-color:var(--accent-hover)}
+.btn.ghost{background:transparent}
+.btn.lg{height:36px;padding:0 16px;font-size:.8125rem}
+
+/* Team-table (Head Manager all-teams view) */
+.teams-list{display:flex;flex-direction:column;gap:12px}
+.team-block{background:#FBFAF7;border:1px solid var(--border-soft);border-radius:12px;overflow:hidden}
+.tb-head{display:grid;grid-template-columns:1fr auto;gap:12px;align-items:center;padding:14px 16px;background:#FFFFFF;border-bottom:1px solid var(--border-soft)}
+.tb-l{display:flex;flex-direction:column;gap:3px;min-width:0}
+.tb-name{font-size:.9375rem;font-weight:600;color:var(--text-strong);letter-spacing:-0.005em;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.tb-meta{font-size:.75rem;color:var(--text-muted);display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.tb-meta strong{color:var(--text-strong);font-weight:600}
+.tb-r{display:flex;align-items:center;gap:14px}
+.tb-kpi{display:flex;flex-direction:column;align-items:flex-end}
+.tb-kk{font-size:.625rem;color:var(--text-muted);font-weight:600;letter-spacing:.04em;text-transform:uppercase}
+.tb-vv{font-size:.9375rem;font-weight:600;color:var(--text-strong);font-variant-numeric:tabular-nums}
+.tb-body{padding:10px 16px 14px}
+.tb-mates{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:8px}
+.tbm{display:flex;flex-direction:column;gap:1px;padding:8px 10px;background:#FFFFFF;border:1px solid var(--border-soft);border-radius:9px}
+.tbm-name{font-size:.8125rem;font-weight:600;color:var(--text-strong);letter-spacing:-0.005em;line-height:1.3}
+.tbm-meta{font-size:.6875rem;color:var(--text-muted);display:flex;gap:6px;flex-wrap:wrap}
+.tbm-meta strong{color:var(--text-strong);font-weight:600}
+
+/* Leaders (Head Manager) */
+.leaders-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+.lead-card{background:#FBFAF7;border:1px solid var(--border-soft);border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:8px}
+.lead-top{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+.lead-name{font-size:.9375rem;font-weight:600;color:var(--text-strong);letter-spacing:-0.005em}
+.lead-team{font-size:.75rem;color:var(--text-muted)}
+.lead-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;padding-top:8px;border-top:1px dashed var(--border-soft)}
+
+/* Floating AI Assistant */
+.fab-wrap{position:fixed;bottom:22px;right:22px;display:flex;align-items:center;gap:10px;z-index:50}
+.fab-quote{font-size:.8125rem;color:var(--text);font-weight:500;background:#FFFFFF;border:1px solid var(--border);border-radius:999px;padding:8px 14px;box-shadow:0 4px 14px rgba(26,31,42,0.10);animation:fadeShift 5s ease-in-out infinite;white-space:nowrap}
+@keyframes fadeShift{0%,100%{opacity:.7;transform:translateY(0)}50%{opacity:1;transform:translateY(-1px)}}
+.fab{width:56px;height:56px;border-radius:50%;background:var(--accent);color:#fff;border:none;cursor:pointer;box-shadow:0 1px 2px rgba(178,106,45,0.30),0 8px 24px rgba(201,123,58,0.40),inset 0 1px 0 rgba(255,255,255,0.18);display:flex;align-items:center;justify-content:center;transition:transform 150ms var(--ease),background 200ms var(--ease)}
+.fab:hover{background:var(--accent-hover);transform:translateY(-2px) scale(1.04)}
+.fab svg{width:22px;height:22px;stroke-width:1.8}
+
+/* Toast */
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);background:#1A1F2A;color:#fff;padding:12px 18px;border-radius:10px;font-size:.8125rem;font-weight:500;box-shadow:0 10px 30px rgba(26,31,42,0.30);opacity:0;pointer-events:none;transition:opacity 200ms var(--ease),transform 200ms var(--ease);z-index:80}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* Role-view containers */
+.view{display:none}
+.view.active{display:flex;flex-direction:column;gap:18px}
+
+@media (max-width:1100px){
+  .kpis{grid-template-columns:repeat(2,1fr)}
+  .team-grid{grid-template-columns:1fr}
+  .tb-mates{grid-template-columns:repeat(2,1fr)}
+  .leaders-grid{grid-template-columns:1fr}
+}
+@media (max-width:820px){
+  :root{--sidebar-w:0px}
+  .sidebar{transform:translateX(-100%);transition:transform 200ms var(--ease);width:220px}
+  .sidebar.open{transform:translateX(0)}
+  .topbar{left:0;padding:0 14px;gap:10px}
+  .menu-toggle{display:inline-flex}
+  .main{margin-left:0;padding:calc(var(--topbar-h) + 12px) 12px 80px;gap:14px}
+  .search{display:none}
+  .page-hdr h1{font-size:1.375rem}
+  .kpis{gap:10px}
+  .kpi{padding:12px 14px}
+  .k-v{font-size:1.125rem}
+  .card-head{padding:14px}
+  .card-body{padding:12px 14px 14px}
+  .tools{gap:8px}
+  .tools .lt-search{height:30px}
+  .tools .lt-search input{font-size:.6875rem}
+  .mate-stats{grid-template-columns:repeat(3,1fr);gap:6px}
+  .ms-v{font-size:.875rem}
+  .tb-head{grid-template-columns:1fr;gap:8px;padding:12px 14px}
+  .tb-r{justify-content:space-between;width:100%;gap:10px}
+  .tb-mates{grid-template-columns:1fr}
+  .tb-body{padding:10px 14px 14px}
+  .lead-stats{grid-template-columns:repeat(2,1fr)}
+}
+@media (max-width:520px){
+  .main{padding:calc(var(--topbar-h) + 10px) 10px 80px}
+  .page-hdr h1{font-size:1.25rem}
+  .kpis{grid-template-columns:1fr}
+  .role-switch{width:100%}
+  .seg{width:100%}
+  .seg button{flex:1;font-size:.6875rem;padding:0 8px}
+  .mate{padding:12px}
+  .mate-name{font-size:.875rem}
+  .mate-actions{width:100%}
+  .mate-actions .btn{flex:1;min-width:0}
+  .lead-stats{grid-template-columns:repeat(2,1fr)}
+  .locked-card{padding:28px 18px}
+  .locked-card h2{font-size:1rem}
+  .locked-card p{font-size:.8125rem}
+}
+@media (max-width:420px){
+  .fab-wrap{bottom:16px;right:16px;gap:8px}
+  .fab{width:50px;height:50px}
+  .fab svg{width:20px;height:20px}
+  .fab-quote{font-size:.75rem;padding:6px 12px;max-width:55vw;white-space:normal;line-height:1.3}
+}
+</style>
+  <script src="services/api.js?v=10"></script>
+  <script src="services/error-boundary.js?v=19"></script>
+</head>
+<body>
+
+<div class="sb-overlay" id="sbOverlay"></div>
+
+<aside class="sidebar" id="sidebar">
+  <a class="sb-brand" href="ask-the-brain.html" style="text-decoration:none">
+    <span class="sb-brand-dot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/><path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/></svg></span>
+    <span>Endeavor</span>
+  </a>
+  <nav class="sb-nav">
+    <a class="sb-item sb-featured" href="ask-the-brain.html" aria-label="Ask the Brain">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/><path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/></svg>
+      <span class="sb-tip">Ask the Brain</span>
+    </a>
+    <a class="sb-item" id="navCeo" href="ceo-dashboard.html" aria-label="CEO Dashboard">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 1 18 0"/><path d="M12 12l4-2"/><circle cx="12" cy="12" r="1.6"/></svg>
+      <span class="sb-tip">CEO Dashboard</span>
+
+    </a>
+    <a class="sb-item" id="navUpload" href="upload-leads.html" aria-label="Upload leads">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 8 5-5 5 5"/><path d="M5 17v2a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-2"/></svg>
+      <span class="sb-tip">Upload Leads</span>
+    </a>
+    <a class="sb-item" href="notifications.html" aria-label="Notifications">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 7 3 9H3c0-2 3-2 3-9Z"/><path d="M10 21a2 2 0 0 0 4 0"/></svg>
+      <span class="sb-tip">Notifications</span>
+      <span class="sb-badge" style="display:none">0</span>
+    </a>
+    <div class="sb-group" id="sbWorkspaces">
+      <button class="sb-group-head" type="button">
+        Workspaces
+        <svg class="sb-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg>
+      </button>
+      <div class="sb-group-body">
+        <a class="sb-item active" href="my-team.html" aria-label="My Team">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="7" r="4"/><path d="M3 21c0-3.5 3-6 6-6s6 2.5 6 6"/><path d="M16 3.5a4 4 0 0 1 0 7.5"/><path d="M22 21c0-3-2-5-5-5.5"/></svg>
+          <span class="sb-tip">My Team</span>
+        </a>
+        <a class="sb-item" href="inbox.html" aria-label="Inbox">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h6l2 3h2l2-3h6"/><path d="M3 7l2 12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2l2-12"/><path d="M5 7l2-3h10l2 3"/></svg>
+          <span class="sb-tip">Inbox</span>
+          <span class="sb-badge" style="display:none">0</span>
+        </a>
+        <a class="sb-item" href="deals.html" aria-label="Deals">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 3 7v6c0 5 4 8 9 9 5-1 9-4 9-9V7Z"/><path d="M9 12l2 2 4-4"/></svg>
+          <span class="sb-tip">Deals</span>
+        </a>
+        <a class="sb-item" href="appointments.html" aria-label="Appointments">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 11h18"/></svg>
+          <span class="sb-tip">Appointments</span>
+        </a>
+        <a class="sb-item" href="analytics.html" aria-label="Analytics">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 15l4-6 4 4 5-7"/></svg>
+          <span class="sb-tip">Analytics</span>
+        </a>
+        <a class="sb-item" href="qa-review.html" aria-label="QA Review">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9 12l2 2 4-4"/><path d="M21 12c0 5-4 8.5-9 9-5-.5-9-4-9-9V5l9-3 9 3v7Z"/></svg>
+          <span class="sb-tip">QA Review</span>
+        </a>
+      </div>
+    </div>
+  </nav>
+  <div class="sb-bottom">
+    <a class="sb-item" href="settings.html" aria-label="Settings">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.8-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1A1.6 1.6 0 0 0 9 19.4a1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.8 1.6 1.6 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1A1.6 1.6 0 0 0 4.6 9a1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3H9a1.6 1.6 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1c0 .6.4 1.2 1 1.5a1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8V9c.3.6.9 1 1.5 1H21a2 2 0 1 1 0 4h-.1c-.6 0-1.2.4-1.5 1Z"/></svg>
+      <span class="sb-tip">Settings</span>
+    </a>
+    <a class="sb-item sb-logout" href="login.html" aria-label="Log out" title="Log out">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></svg>
+      <span class="sb-tip">Log out</span>
+    </a>
+  </div>
+</aside>
+
+<header class="topbar">
+  <button class="menu-toggle" id="menuToggle" aria-label="Open menu">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+  </button>
+  <div class="search">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+    <input placeholder="Search team, agents, leaders…"/>
+    <kbd>⌘K</kbd>
+  </div>
+  <div class="tb-right">
+    <button class="icon-btn" aria-label="Notifications" type="button">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 7 3 9H3c0-2 3-2 3-9Z"/><path d="M10 21a2 2 0 0 0 4 0"/></svg>
+      <span class="dot"></span>
+    </button>
+    <button class="avatar" type="button" aria-label="Account">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-7 8-7s8 3 8 7"/></svg>
+    </button>
+  </div>
+</header>
+
+<main class="main">
+
+  <div class="page-hdr">
+    <div>
+      <h1 id="pageTitle">My Team</h1>
+      <div class="hdr-meta" id="pageMeta">Houston HQ · 6 teammates · led by <strong id="leaderName">Sarah Chen</strong></div>
+    </div>
+  </div>
+
+  <!-- AGENT VIEW (no access) -->
+  <div class="view" id="view-agent">
+    <div class="locked-card">
+      <div class="lk-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
+      </div>
+      <h2>My Team is for Team Leaders and above</h2>
+      <p>You&rsquo;re signed in as an Agent. To see roster-level performance and coaching across your team, your role needs to be Team Leader or higher. Reach out to your manager if you think this is wrong.</p>
+      <button class="btn lg primary" type="button" onclick="window.location.href='dashboard.html'">Back to dashboard</button>
+    </div>
+  </div>
+
+  <!-- TEAM LEADER VIEW -->
+  <div class="view active" id="view-lead">
+    <section class="kpis">
+      <div class="kpi"><span class="k-k">Team size</span><span class="k-v">6</span><span class="k-d">5 active · 1 invite pending</span></div>
+      <div class="kpi"><span class="k-k">Team close rate</span><span class="k-v">29.2%</span><span class="k-d"><span class="up">&uarr; 2.1pp</span> vs last week</span></div>
+      <div class="kpi"><span class="k-k">Coaching tasks</span><span class="k-v">3</span><span class="k-d">2 overdue · 1 due Friday</span></div>
+    </section>
+
+    <section class="card">
+      <div class="card-head">
+        <div>
+          <h2>Teammates</h2>
+          <div class="ch-sub">Click a teammate to open their performance detail.</div>
+        </div>
+        <div class="tools">
+          <div class="lt-search">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+            <input placeholder="Filter teammates…"/>
+          </div>
+          <button class="tab active" type="button">All</button>
+          <button class="tab" type="button">On call</button>
+          <button class="tab" type="button">Needs coaching</button>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="team-grid">
+
+          <div class="mate">
+            <div class="mate-row1">
+              <div>
+                <div class="mate-name">Marcus Webb</div>
+                <div class="mate-role">Senior Agent · Auto &amp; Home</div>
+              </div>
+              <span class="pill warn"><span class="pd"></span>Coaching due</span>
+            </div>
+            <div class="mate-stats">
+              <div class="ms-tile"><span class="ms-k">Close rate</span><span class="ms-v down">24.1%</span></div>
+              <div class="ms-tile"><span class="ms-k">Response time</span><span class="ms-v down">4h 12m</span></div>
+            </div>
+            <div class="mate-foot">
+              <span class="hdr-meta">Last active <strong>14 min ago</strong></span>
+              <div class="mate-actions">
+                <button class="btn" type="button">Message</button>
+                <button class="btn primary" type="button">Open coaching</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="mate">
+            <div class="mate-row1">
+              <div>
+                <div class="mate-name">Priya Shah</div>
+                <div class="mate-role">Agent · Health</div>
+              </div>
+              <span class="pill ok"><span class="pd"></span>On track</span>
+            </div>
+            <div class="mate-stats">
+              <div class="ms-tile"><span class="ms-k">Close rate</span><span class="ms-v up">32.4%</span></div>
+              <div class="ms-tile"><span class="ms-k">Response time</span><span class="ms-v up">28m</span></div>
+            </div>
+            <div class="mate-foot">
+              <span class="hdr-meta">Last active <strong>3 min ago</strong></span>
+              <div class="mate-actions">
+                <button class="btn" type="button">Message</button>
+                <button class="btn" type="button">View detail</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="mate">
+            <div class="mate-row1">
+              <div>
+                <div class="mate-name">Ana Torres</div>
+                <div class="mate-role">Senior Agent · Multi-line</div>
+              </div>
+              <span class="pill ok"><span class="pd"></span>Top performer</span>
+            </div>
+            <div class="mate-stats">
+              <div class="ms-tile"><span class="ms-k">Close rate</span><span class="ms-v up">38.9%</span></div>
+              <div class="ms-tile"><span class="ms-k">Response time</span><span class="ms-v up">19m</span></div>
+            </div>
+            <div class="mate-foot">
+              <span class="hdr-meta">Last active <strong>just now</strong></span>
+              <div class="mate-actions">
+                <button class="btn" type="button">Message</button>
+                <button class="btn" type="button">View detail</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="mate">
+            <div class="mate-row1">
+              <div>
+                <div class="mate-name">Daniel Reyes</div>
+                <div class="mate-role">Agent · Auto</div>
+              </div>
+              <span class="pill warn"><span class="pd"></span>Pending sig</span>
+            </div>
+            <div class="mate-stats">
+              <div class="ms-tile"><span class="ms-k">Close rate</span><span class="ms-v">28.6%</span></div>
+              <div class="ms-tile"><span class="ms-k">Response time</span><span class="ms-v">1h 8m</span></div>
+            </div>
+            <div class="mate-foot">
+              <span class="hdr-meta">Last active <strong>22 min ago</strong></span>
+              <div class="mate-actions">
+                <button class="btn" type="button">Message</button>
+                <button class="btn" type="button">View detail</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="mate">
+            <div class="mate-row1">
+              <div>
+                <div class="mate-name">Whitney Marsh</div>
+                <div class="mate-role">Agent · Health</div>
+              </div>
+              <span class="pill ok"><span class="pd"></span>On track</span>
+            </div>
+            <div class="mate-stats">
+              <div class="ms-tile"><span class="ms-k">Close rate</span><span class="ms-v">30.2%</span></div>
+              <div class="ms-tile"><span class="ms-k">Response time</span><span class="ms-v">42m</span></div>
+            </div>
+            <div class="mate-foot">
+              <span class="hdr-meta">Last active <strong>1h ago</strong></span>
+              <div class="mate-actions">
+                <button class="btn" type="button">Message</button>
+                <button class="btn" type="button">View detail</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="mate">
+            <div class="mate-row1">
+              <div>
+                <div class="mate-name">James Park</div>
+                <div class="mate-role">Agent · Auto &amp; Home</div>
+              </div>
+              <span class="pill off"><span class="pd"></span>Invite pending</span>
+            </div>
+            <div class="mate-stats">
+              <div class="ms-tile"><span class="ms-k">Close rate</span><span class="ms-v">—</span></div>
+              <div class="ms-tile"><span class="ms-k">Response time</span><span class="ms-v">—</span></div>
+            </div>
+            <div class="mate-foot">
+              <span class="hdr-meta">Joined queue <strong>2 days ago</strong></span>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- HEAD MANAGER VIEW -->
+  <div class="view" id="view-head">
+    <section class="kpis">
+      <div class="kpi"><span class="k-k">Teams</span><span class="k-v">4</span><span class="k-d">3 healthy · 1 needs attention</span></div>
+      <div class="kpi"><span class="k-k">Total agents</span><span class="k-v">26</span><span class="k-d">24 active · 2 invite pending</span></div>
+      <div class="kpi"><span class="k-k">Avg close rate</span><span class="k-v">28.4%</span><span class="k-d"><span class="up">&uarr; 1.4pp</span> this week</span></div>
+    </section>
+
+    <section class="card">
+      <div class="card-head">
+        <div>
+          <h2>Team Leaders</h2>
+          <div class="ch-sub">Every team leader reporting to you.</div>
+        </div>
+        <div class="tools">
+          <button class="tab active" type="button">All</button>
+          <button class="tab" type="button">Needs attention</button>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="leaders-grid">
+
+          <div class="lead-card">
+            <div class="lead-top">
+              <div>
+                <div class="lead-name">Sarah Chen</div>
+                <div class="lead-team">Houston HQ · Auto &amp; Home</div>
+              </div>
+              <span class="pill role lead">Team Leader</span>
+            </div>
+            <div class="lead-stats">
+              <div class="ms-tile"><span class="ms-k">Team size</span><span class="ms-v">6</span></div>
+              <div class="ms-tile"><span class="ms-k">Close rate</span><span class="ms-v up">29.2%</span></div>
+              <div class="ms-tile"><span class="ms-k">Coaching open</span><span class="ms-v">3</span></div>
+            </div>
+            <div class="mate-actions" style="margin-top:8px"><button class="btn" type="button">Open team</button><button class="btn" type="button">Message</button></div>
+          </div>
+
+          <div class="lead-card">
+            <div class="lead-top">
+              <div>
+                <div class="lead-name">Marcus Lee</div>
+                <div class="lead-team">Austin · Health</div>
+              </div>
+              <span class="pill role lead">Team Leader</span>
+            </div>
+            <div class="lead-stats">
+              <div class="ms-tile"><span class="ms-k">Team size</span><span class="ms-v">7</span></div>
+              <div class="ms-tile"><span class="ms-k">Close rate</span><span class="ms-v up">31.4%</span></div>
+              <div class="ms-tile"><span class="ms-k">Coaching open</span><span class="ms-v">1</span></div>
+            </div>
+            <div class="mate-actions" style="margin-top:8px"><button class="btn" type="button">Open team</button><button class="btn" type="button">Message</button></div>
+          </div>
+
+          <div class="lead-card">
+            <div class="lead-top">
+              <div>
+                <div class="lead-name">David Kim</div>
+                <div class="lead-team">Dallas · Commercial</div>
+              </div>
+              <span class="pill warn"><span class="pd"></span>Below target</span>
+            </div>
+            <div class="lead-stats">
+              <div class="ms-tile"><span class="ms-k">Team size</span><span class="ms-v">5</span></div>
+              <div class="ms-tile"><span class="ms-k">Close rate</span><span class="ms-v down">21.8%</span></div>
+              <div class="ms-tile"><span class="ms-k">Coaching open</span><span class="ms-v">5</span></div>
+            </div>
+            <div class="mate-actions" style="margin-top:8px"><button class="btn" type="button">Open team</button><button class="btn primary" type="button">Review</button></div>
+          </div>
+
+          <div class="lead-card">
+            <div class="lead-top">
+              <div>
+                <div class="lead-name">Priya Mehta</div>
+                <div class="lead-team">San Antonio · Multi-line</div>
+              </div>
+              <span class="pill role lead">Team Leader</span>
+            </div>
+            <div class="lead-stats">
+              <div class="ms-tile"><span class="ms-k">Team size</span><span class="ms-v">8</span></div>
+              <div class="ms-tile"><span class="ms-k">Close rate</span><span class="ms-v up">30.8%</span></div>
+              <div class="ms-tile"><span class="ms-k">Coaching open</span><span class="ms-v">2</span></div>
+            </div>
+            <div class="mate-actions" style="margin-top:8px"><button class="btn" type="button">Open team</button><button class="btn" type="button">Message</button></div>
+          </div>
+
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-head">
+        <div>
+          <h2>All teams</h2>
+          <div class="ch-sub">Drill into a team to see every agent.</div>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="teams-list">
+
+          <div class="team-block">
+            <div class="tb-head">
+              <div class="tb-l">
+                <div class="tb-name">Houston HQ · Auto &amp; Home <span class="pill ok"><span class="pd"></span>Healthy</span></div>
+                <div class="tb-meta"><span>Led by <strong>Sarah Chen</strong></span><span>&bull;</span><span>6 agents</span></div>
+              </div>
+              <div class="tb-r">
+                <div class="tb-kpi"><span class="tb-kk">Close</span><span class="tb-vv">29.2%</span></div>
+                <button class="btn" type="button">Open</button>
+              </div>
+            </div>
+            <div class="tb-body">
+              <div class="tb-mates">
+                <div class="tbm"><span class="tbm-name">Marcus Webb</span><div class="tbm-meta"><span>Close <strong>24.1%</strong></span></div></div>
+                <div class="tbm"><span class="tbm-name">Priya Shah</span><div class="tbm-meta"><span>Close <strong>32.4%</strong></span></div></div>
+                <div class="tbm"><span class="tbm-name">Ana Torres</span><div class="tbm-meta"><span>Close <strong>38.9%</strong></span></div></div>
+                <div class="tbm"><span class="tbm-name">Daniel Reyes</span><div class="tbm-meta"><span>Close <strong>28.6%</strong></span></div></div>
+                <div class="tbm"><span class="tbm-name">Whitney Marsh</span><div class="tbm-meta"><span>Close <strong>30.2%</strong></span></div></div>
+                <div class="tbm"><span class="tbm-name">James Park</span><div class="tbm-meta"><span class="pill off"><span class="pd"></span>Invite pending</span></div></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="team-block">
+            <div class="tb-head">
+              <div class="tb-l">
+                <div class="tb-name">Austin · Health <span class="pill ok"><span class="pd"></span>Healthy</span></div>
+                <div class="tb-meta"><span>Led by <strong>Marcus Lee</strong></span><span>&bull;</span><span>7 agents</span></div>
+              </div>
+              <div class="tb-r">
+                <div class="tb-kpi"><span class="tb-kk">Close</span><span class="tb-vv">31.4%</span></div>
+                <button class="btn" type="button">Open</button>
+              </div>
+            </div>
+            <div class="tb-body">
+              <div class="tb-mates">
+                <div class="tbm"><span class="tbm-name">Emma Liu</span><div class="tbm-meta"><span>Close <strong>34.2%</strong></span></div></div>
+                <div class="tbm"><span class="tbm-name">Carlos Mendez</span><div class="tbm-meta"><span>Close <strong>29.7%</strong></span></div></div>
+                <div class="tbm"><span class="tbm-name">Riley Brooks</span><div class="tbm-meta"><span>Close <strong>33.5%</strong></span></div></div>
+                <div class="tbm"><span class="tbm-name">Hannah Cole</span><div class="tbm-meta"><span>Close <strong>27.4%</strong></span></div></div>
+                <div class="tbm"><span class="tbm-name">Devin Ray</span><div class="tbm-meta"><span>Close <strong>30.1%</strong></span></div></div>
+                <div class="tbm"><span class="tbm-name">Maya Patel</span><div class="tbm-meta"><span>Close <strong>32.8%</strong></span></div></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="team-block">
+            <div class="tb-head">
+              <div class="tb-l">
+                <div class="tb-name">Dallas · Commercial <span class="pill warn"><span class="pd"></span>Needs attention</span></div>
+                <div class="tb-meta"><span>Led by <strong>David Kim</strong></span><span>&bull;</span><span>5 agents</span></div>
+              </div>
+              <div class="tb-r">
+                <div class="tb-kpi"><span class="tb-kk">Close</span><span class="tb-vv">21.8%</span></div>
+                <button class="btn primary" type="button">Review</button>
+              </div>
+            </div>
+            <div class="tb-body">
+              <div class="tb-mates">
+                <div class="tbm"><span class="tbm-name">Jordan Hayes</span><div class="tbm-meta"><span>Close <strong>18.4%</strong></span></div></div>
+                <div class="tbm"><span class="tbm-name">Tasha Wills</span><div class="tbm-meta"><span>Close <strong>22.7%</strong></span></div></div>
+                <div class="tbm"><span class="tbm-name">Owen Park</span><div class="tbm-meta"><span>Close <strong>23.1%</strong></span></div></div>
+                <div class="tbm"><span class="tbm-name">Lia Romero</span><div class="tbm-meta"><span>Close <strong>20.8%</strong></span></div></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="team-block">
+            <div class="tb-head">
+              <div class="tb-l">
+                <div class="tb-name">San Antonio · Multi-line <span class="pill ok"><span class="pd"></span>Healthy</span></div>
+                <div class="tb-meta"><span>Led by <strong>Priya Mehta</strong></span><span>&bull;</span><span>8 agents</span></div>
+              </div>
+              <div class="tb-r">
+                <div class="tb-kpi"><span class="tb-kk">Close</span><span class="tb-vv">30.8%</span></div>
+                <button class="btn" type="button">Open</button>
+              </div>
+            </div>
+            <div class="tb-body">
+              <div class="tb-mates">
+                <div class="tbm"><span class="tbm-name">Noah Stevens</span><div class="tbm-meta"><span>Close <strong>33.1%</strong></span></div></div>
+                <div class="tbm"><span class="tbm-name">Ivy Chen</span><div class="tbm-meta"><span>Close <strong>29.7%</strong></span></div></div>
+                <div class="tbm"><span class="tbm-name">Diego Ortega</span><div class="tbm-meta"><span>Close <strong>31.5%</strong></span></div></div>
+                <div class="tbm"><span class="tbm-name">Bella Ross</span><div class="tbm-meta"><span>Close <strong>28.9%</strong></span></div></div>
+                <div class="tbm"><span class="tbm-name">Theo Vance</span><div class="tbm-meta"><span>Close <strong>32.2%</strong></span></div></div>
+                <div class="tbm"><span class="tbm-name">Lena Pham</span><div class="tbm-meta"><span>Close <strong>27.6%</strong></span></div></div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- ADMIN VIEW (same as Head Manager but with role pills & extra) -->
+  <div class="view" id="view-admin">
+    <section class="kpis">
+      <div class="kpi"><span class="k-k">Org-wide teams</span><span class="k-v">4</span><span class="k-d">4 leaders · 1 head manager</span></div>
+      <div class="kpi"><span class="k-k">Total headcount</span><span class="k-v">31</span><span class="k-d">26 agents · 4 leads · 1 head</span></div>
+      <div class="kpi"><span class="k-k">Active sessions</span><span class="k-v">24</span><span class="k-d">2 idle · 0 flagged</span></div>
+    </section>
+
+    <section class="card">
+      <div class="card-head">
+        <div>
+          <h2>Org structure</h2>
+          <div class="ch-sub">Every team, leader, and reporting line. Admin-only.</div>
+        </div>
+        <div class="tools">
+          <button class="btn primary" type="button">Add team</button>
+          <button class="btn" type="button">Export</button>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="leaders-grid">
+          <div class="lead-card">
+            <div class="lead-top"><div><div class="lead-name">Jenna Cole</div><div class="lead-team">Region South · reports to CEO</div></div><span class="pill role head">Head Manager</span></div>
+            <div class="lead-stats">
+              <div class="ms-tile"><span class="ms-k">Teams</span><span class="ms-v">4</span></div>
+              <div class="ms-tile"><span class="ms-k">Agents</span><span class="ms-v">26</span></div>
+              <div class="ms-tile"><span class="ms-k">Avg close</span><span class="ms-v up">28.4%</span></div>
+            </div>
+          </div>
+          <div class="lead-card">
+            <div class="lead-top"><div><div class="lead-name">Alex Webber</div><div class="lead-team">Owner · full org access</div></div><span class="pill role admin">Admin</span></div>
+            <div class="lead-stats">
+              <div class="ms-tile"><span class="ms-k">Role</span><span class="ms-v">Owner</span></div>
+              <div class="ms-tile"><span class="ms-k">2FA</span><span class="ms-v up">On</span></div>
+              <div class="ms-tile"><span class="ms-k">Last active</span><span class="ms-v">Just now</span></div>
+              <div class="ms-tile"><span class="ms-k">Sessions</span><span class="ms-v">3</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+</main>
+
+<div class="toast" id="toast"></div>
+
+<div class="fab-wrap">
+  <div class="fab-quote" id="fabQuote">Ask the brain</div>
+  <button class="fab" id="fabAssistant" type="button" aria-label="AI Assistant — Ask">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/>
+      <path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/>
+      <path d="M9 12h.01M15 12h.01"/>
+    </svg>
+  </button>
+</div>
+
+<script>
+(function(){
+  const $=q=>document.querySelector(q);
+  const $$=q=>document.querySelectorAll(q);
+  const sb=$('#sidebar'),sbo=$('#sbOverlay');
+  $('#menuToggle')?.addEventListener('click',()=>{sb.classList.add('open');sbo.classList.add('open')});
+
+  // Workspaces collapsible (auto-open if active item is inside)
+  const wkGroup = document.getElementById('sbWorkspaces');
+  if(wkGroup){
+    const hasActiveInside = !!wkGroup.querySelector('.sb-item.active');
+    const savedOpen = localStorage.getItem('ebSbWorkspaces');
+    if(hasActiveInside || savedOpen === 'open'){ wkGroup.classList.add('open'); }
+    const wkHead = wkGroup.querySelector('.sb-group-head');
+    wkHead?.addEventListener('click', ()=>{
+      wkGroup.classList.toggle('open');
+      localStorage.setItem('ebSbWorkspaces', wkGroup.classList.contains('open') ? 'open' : 'closed');
+    });
+  }
+  sbo?.addEventListener('click',()=>{sb.classList.remove('open');sbo.classList.remove('open')});
+
+  // ===== My Team: search + tab filters (All / On call / Needs coaching) =====
+  // Cards may render dynamically after this runs, so we query .mate LIVE on each
+  // apply() instead of caching (the search/tabs themselves are static).
+  (function teamFilters(){
+    var search = document.querySelector('.lt-search input');
+    var tabs = Array.prototype.slice.call(document.querySelectorAll('.tools .tab'));
+    if(!search && !tabs.length) return;
+    var activeTab = 'all';
+    function matchTab(m){
+      if(activeTab === 'all') return true;
+      var pill = m.querySelector('.pill');
+      if(activeTab === 'oncall')   return !!(pill && pill.classList.contains('ok'));
+      if(activeTab === 'coaching') return !!(pill && pill.classList.contains('warn'));
+      return true;
+    }
+    function apply(){
+      var q = ((search && search.value) || '').trim().toLowerCase();
+      document.querySelectorAll('.mate').forEach(function(m){
+        var nameEl = m.querySelector('.mate-name');
+        var name = (nameEl && nameEl.textContent) || '';
+        var show = matchTab(m) && (!q || name.toLowerCase().indexOf(q) >= 0);
+        m.style.display = show ? '' : 'none';
+      });
+    }
+    if(search) search.addEventListener('input', apply);
+    tabs.forEach(function(t){
+      t.addEventListener('click', function(){
+        tabs.forEach(function(x){ x.classList.remove('active'); });
+        t.classList.add('active');
+        var txt = (t.textContent || '').trim().toLowerCase();
+        activeTab = txt.indexOf('on call') >= 0 ? 'oncall' : (txt.indexOf('coach') >= 0 ? 'coaching' : 'all');
+        apply();
+      });
+    });
+  })();
+
+  // Role is set at login time and is NOT switchable from here — the page shows
+  // only what the logged-in user is allowed to see.
+  const validRoles = ['agent','lead','head','admin'];
+  let role = localStorage.getItem('ebRole');
+  if(!validRoles.includes(role)) role = 'lead';
+
+  const titles = {
+    agent: { h:'My Team', sub:'Restricted view — agents do not have team access.' },
+    lead:  { h:'My Team', sub:'Live team metrics from backend' },
+    head:  { h:'My Teams', sub:'Live region metrics from backend' },
+    admin: { h:'Org structure', sub:'Full organization view · owner access' }
+  };
+
+  // Activate only the view for the logged-in role; remove all others from DOM
+  // so other roles' content is never even present in the page.
+  $$('.view').forEach(v => {
+    if(v.id === 'view-' + role) v.classList.add('active');
+    else v.remove();
+  });
+  $('#pageTitle').innerHTML = titles[role].h;
+  $('#pageMeta').innerHTML = titles[role].sub;
+
+  // Gate CEO Dashboard link in the sidebar — admins only
+  const ceo = $('#navCeo');
+  if(ceo && role !== 'admin' && role !== 'dev'){ ceo.style.display = 'none'; }
+
+  // FAB rotating quotes
+  const quotes = ['Ask','Who needs coaching this week?','Why is Dallas under target?','Show my team’s biggest win','Summarize the day for me','Where are we losing deals?'];
+  let qi = 0; const fq = $('#fabQuote');
+  setInterval(()=>{ qi=(qi+1)%quotes.length; if(fq) fq.textContent = quotes[qi]; }, 5000);
+  $('#fabAssistant')?.addEventListener('click',()=>{ window.location.href = 'ask-the-brain.html'; });
+  $('#fabQuote')?.addEventListener('click',()=>{ window.location.href = 'ask-the-brain.html'; });
+
+  // ===== Toast helper + member-action wiring =====
+  let toastT;
+  function toast(msg, kind){
+    const t = $('#toast');
+    if(!t) return;
+    t.textContent = msg;
+    t.classList.remove('accent','danger');
+    if(kind) t.classList.add(kind);
+    t.classList.add('show');
+    clearTimeout(toastT);
+    toastT = setTimeout(()=>t.classList.remove('show'), 2200);
+  }
+  // Inject a tiny base style so toast can show text directly
+  const tt = $('#toast');
+  if(tt && !tt.dataset.ready){ tt.dataset.ready = '1'; }
+
+  function memberName(btn){
+    const row = btn.closest('.member-card, .tm-row, .list-row, .lead-card, .team-card, .tcard, .person-card, [data-person]');
+    if(!row) return 'this member';
+    const t = row.querySelector('.member-name, .tm-name, .lr-title, .person-name, .lead-name, h3, h4, strong');
+    return t ? (t.textContent||'').trim() : 'this member';
+  }
+
+  // Wire every button on the My Team page by its visible label.
+  $$('button.btn').forEach(btn=>{
+    if(btn._wired) return;
+    const label = (btn.textContent||'').trim();
+    if(!label || label.toLowerCase() === 'back to dashboard') return; // already wired or N/A
+    btn._wired = true;
+    btn.addEventListener('click', ()=>{
+      const name = memberName(btn);
+      switch(label){
+        case 'Message':
+          window.location.href = 'inbox.html';
+          break;
+        case 'View detail':
+        case 'View':
+          window.location.href = 'agent-performance.html';
+          break;
+        case 'Open coaching':
+        case 'Coaching':
+          toast('Opening coaching session for ' + name + '…','accent');
+          setTimeout(()=>window.location.href = 'agent-performance.html', 600);
+          break;
+        case 'Open team':
+          toast('Opening team roster…','accent');
+          setTimeout(()=>window.location.href = 'team-performance.html', 600);
+          break;
+        case 'Review':
+          window.location.href = 'qa-review.html';
+          break;
+        case 'Add team':
+          const teamName = prompt('Team name:');
+          if(teamName) toast('Team "' + teamName + '" created','accent');
+          break;
+        case 'Export':
+          // Build a CSV from any visible team/member rows
+          const rows = [['Name','Role','Status']];
+          $$('.member-card, .tm-row, .list-row, .person-card, .lead-card').forEach(r=>{
+            const n = (r.querySelector('.member-name, .tm-name, .lr-title, .person-name, .lead-name')||{}).textContent||'';
+            const ro = (r.querySelector('.member-role, .tm-role, .person-role, .lead-role')||{}).textContent||'';
+            const st = (r.querySelector('.pill, .status, .tag')||{}).textContent||'';
+            if(n) rows.push([n.trim(), ro.trim(), st.trim()]);
+          });
+          const csv = rows.map(r=>r.map(c=>'"'+(c||'').replace(/"/g,'""')+'"').join(',')).join('\n');
+          const blob = new Blob([csv],{type:'text/csv'});
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url; a.download = 'team-roster.csv';
+          document.body.appendChild(a); a.click(); a.remove();
+          setTimeout(()=>URL.revokeObjectURL(url), 1000);
+          toast('Roster exported','accent');
+          break;
+        default:
+          toast(label + '…','accent');
+      }
+    });
+  });
+
+  // === API data population ===
+  async function initMyTeam() {
+    function clearStaticTeamData(){
+      $$('.kpi .k-v').forEach(function(el){ el.innerHTML = '—'; });
+      $$('.kpi .k-d').forEach(function(el){ el.innerHTML = 'Awaiting live data'; });
+      var empty = '<div style="padding:30px 12px;text-align:center;color:var(--text-faint);font-size:.8125rem">No live team data available yet.</div>';
+      var teamGrid = document.querySelector('#view-lead .team-grid');
+      if(teamGrid) teamGrid.innerHTML = empty;
+      var headGrid = document.querySelector('#view-head .team-grid');
+      if(headGrid) headGrid.innerHTML = empty;
+      var teamsList = document.querySelector('#view-head .teams-list');
+      if(teamsList) teamsList.innerHTML = empty;
+      var adminGrid = document.querySelector('#view-admin .team-grid');
+      if(adminGrid) adminGrid.innerHTML = empty;
+    }
+    clearStaticTeamData();
+    try {
+      var agentsRes = await window.__ebAPI.get('/admin/analytics/agents').catch(function(){ return null; });
+      var overviewRes = await window.__ebAPI.get('/admin/analytics/overview').catch(function(){ return null; });
+      var agents = (agentsRes && agentsRes.agents) || (agentsRes && Array.isArray(agentsRes) ? agentsRes : []);
+      var overview = overviewRes || {};
+
+      // Populate KPI cards by finding them within each active view
+      function setKpi(container, idx, value, detail) {
+        var section = document.querySelector(container);
+        if (!section) return;
+        var cards = section.querySelectorAll('.kpi');
+        if (!cards[idx]) return;
+        var v = cards[idx].querySelector('.k-v');
+        var d = cards[idx].querySelector('.k-d');
+        if (v) v.textContent = value || v.textContent;
+        if (d && detail) d.innerHTML = detail;
+      }
+
+      // Lead view KPIs
+      var leadAgents = agents.filter(function(a){ return a.role === 'agent' || !a.role; });
+      var leadClose = leadAgents.length ? (leadAgents.reduce(function(s,a){ return s + (a.close_rate||0); }, 0) / leadAgents.length).toFixed(1) : '—';
+      if (role === 'lead') {
+        setKpi('#view-lead', 0, leadAgents.length || '—', (leadAgents.length || 0) + ' active');
+        setKpi('#view-lead', 1, leadClose !== '—' ? leadClose + '%' : '—%', '<span class="up">&uarr; tracking</span> vs last week');
+      }
+
+      // Head view KPIs
+      var teams = overview.teams || [];
+      var allAgents = agents.length || 0;
+      if (role === 'head') {
+        setKpi('#view-head', 0, teams.length || '—', (teams.length || 0) + ' teams');
+        setKpi('#view-head', 1, allAgents || '—', allAgents + ' active');
+        setKpi('#view-head', 2, overview.close_rate ? overview.close_rate + '%' : '—%', '<span class="up">&uarr;</span> this week');
+      }
+
+      // Admin view KPIs
+      if (role === 'admin') {
+        setKpi('#view-admin', 0, teams.length || '—', teams.length + ' teams');
+        setKpi('#view-admin', 1, allAgents || '—', allAgents + ' active');
+      }
+
+      // Replace team member cards in leader view
+      var teamGrid = document.querySelector('#view-lead .team-grid');
+      if (teamGrid && leadAgents.length > 0) {
+        teamGrid.innerHTML = leadAgents.slice(0, 8).map(function(a){
+          var close = a.close_rate || 0;
+          var resp = a.avg_response_time_minutes || a.resp || 0;
+          var respStr = resp >= 60 ? Math.round(resp/60) + 'h ' + (resp%60) + 'm' : resp + 'm';
+          var closeClass = close >= 30 ? 'up' : 'down';
+          var respClass = resp <= 30 ? 'up' : 'down';
+          var pill = close >= 32 ? '<span class="pill ok"><span class="pd"></span>Top performer</span>' : (close < 22 ? '<span class="pill warn"><span class="pd"></span>Coaching due</span>' : '<span class="pill"><span class="pd"></span>On track</span>');
+          return '<div class="mate">' +
+            '<div class="mate-row1"><div><div class="mate-name">' + (a.full_name || a.name || 'Agent') + '</div><div class="mate-role">' + (a.title || 'Agent') + '</div></div>' + pill + '</div>' +
+            '<div class="mate-stats">' +
+              '<div class="ms-tile"><span class="ms-k">Close rate</span><span class="ms-v ' + closeClass + '">' + close + '%</span></div>' +
+              '<div class="ms-tile"><span class="ms-k">Response time</span><span class="ms-v ' + respClass + '">' + respStr + '</span></div>' +
+            '</div>' +
+            '<div class="mate-foot">' +
+              '<span class="hdr-meta">Last active <strong>' + (a.last_active_at ? timeAgo(a.last_active_at) : 'today') + '</strong></span>' +
+              '<div class="mate-actions"><button class="btn" type="button">Message</button><button class="btn primary" type="button">Open coaching</button></div>' +
+            '</div></div>';
+        }).join('');
+      }
+    } catch(e) {
+      console.warn('Failed to fetch team data:', e);
+    }
+  }
+  __ebSafeInit(function(){ return initMyTeam(); });
+})();
+</script>
+</body>
+</html>

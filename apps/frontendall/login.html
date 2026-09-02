@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Sign in — Endeavor</title>
+<!-- Mobile hard gate: on phones the whole login page is replaced by a compulsory
+     "install the app" screen. Loaded directly (not just via prefs-extras) so it
+     fires early and reliably on the login page too. -->
+<script src="/app-gate.js" defer></script>
+<script>
+(function(){try{
+const FM={sm:'14px',md:'16px',lg:'18px',xl:'20px'};
+const TM={
+warm:{a:'#C97B3A',a2:'#E0995E',ah:'#B26A2D',b1:'rgba(224,153,94,.40)',b2:'rgba(201,123,58,.32)',b3:'rgba(255,200,150,.22)',g:'linear-gradient(135deg,#FFFBF5 0%,#FFEFDC 50%,#FFF6E9 100%)',gl:'rgba(178,106,45,.08)'},
+forest:{a:'#4F8268',a2:'#6B9F86',ah:'#3D6651',b1:'rgba(107,159,134,.40)',b2:'rgba(79,130,104,.32)',b3:'rgba(180,220,200,.22)',g:'linear-gradient(135deg,#F5FBF7 0%,#E0F1E6 50%,#E8F4ED 100%)',gl:'rgba(63,109,84,.08)'},
+indigo:{a:'#5E7BA8',a2:'#7B96BD',ah:'#4A6488',b1:'rgba(123,150,189,.40)',b2:'rgba(94,123,168,.32)',b3:'rgba(180,200,230,.22)',g:'linear-gradient(135deg,#F5F7FB 0%,#DCE4F1 50%,#E5EBF4 100%)',gl:'rgba(74,100,136,.08)'},
+rose:{a:'#A3525C',a2:'#B97077',ah:'#82414B',b1:'rgba(185,112,119,.40)',b2:'rgba(163,82,92,.32)',b3:'rgba(230,180,190,.22)',g:'linear-gradient(135deg,#FBF5F6 0%,#F1DCDF 50%,#F4E5E8 100%)',gl:'rgba(130,65,75,.08)'},
+slate:{a:'#2D3340',a2:'#5A6275',ah:'#1A1F2A',b1:'rgba(90,98,117,.45)',b2:'rgba(45,51,64,.38)',b3:'rgba(150,156,170,.28)',g:'linear-gradient(135deg,#B8BCC5 0%,#9DA3AD 50%,#ABB0BA 100%)',gl:'rgba(26,31,42,.14)'},
+amber:{a:'#9C7842',a2:'#B89058',ah:'#7C5E2F',b1:'rgba(184,144,88,.40)',b2:'rgba(156,120,66,.32)',b3:'rgba(245,220,180,.22)',g:'linear-gradient(135deg,#FBF7F0 0%,#F0E5D0 50%,#F4EBDB 100%)',gl:'rgba(124,94,47,.08)'}
+};
+window.__ebApplyFont=function(v){document.documentElement.style.fontSize=FM[v]||'16px';};
+window.__ebApplyTheme=function(v){
+var t=TM[v]||TM.warm,D=document.documentElement;
+D.style.setProperty('--accent',t.a);
+D.style.setProperty('--accent-2',t.a2);
+D.style.setProperty('--accent-hover',t.ah);
+var st=document.getElementById('ebPrefsTheme');
+if(!st){st=document.createElement('style');st.id='ebPrefsTheme';document.head.appendChild(st);}
+st.textContent='body::before{background:'+t.g+' !important}body::after{background:radial-gradient(ellipse 95% 85% at 50% 50%,transparent 55%,'+t.gl+' 100%) !important}.sb-brand-dot{background:linear-gradient(135deg,'+t.a+','+t.a2+') !important}.usage-fill{background:linear-gradient(90deg,'+t.a+','+t.a2+') !important}.av-circle{background:linear-gradient(135deg,'+t.a+','+t.a2+') !important}';
+};
+window.__ebApplyFont(localStorage.getItem('ebFontSize')||'md');
+window.__ebApplyTheme(localStorage.getItem('ebTheme')||'warm');
+}catch(e){}})();
+</script>
+<script src="i18n-dict.js?v=2"></script>
+<script src="prefs-extras.js?v=28"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+:root{
+  /* Background */
+  --bg:#FFF8EE;
+  /* Glass */
+  --glass:rgba(255,255,255,0.55);
+  --glass-hover:rgba(255,255,255,0.75);
+  --border:rgba(26,31,42,0.10);
+  --border-hover:rgba(26,31,42,0.20);
+  --border-soft:rgba(26,31,42,0.06);
+  /* Typography */
+  --text-strong:#1A1F2A;
+  --text:#2D3340;
+  --text-muted:rgba(26,31,42,0.60);
+  --text-faint:rgba(26,31,42,0.42);
+  /* Accent — warm amber */
+  --accent:#C97B3A;
+  --accent-2:#E0995E;
+  --accent-hover:#B26A2D;
+  --accent-glow:rgba(201,123,58,0.32);
+  /* Status */
+  --error:#A3525C;
+  --success:#4F8268;
+  --ease:cubic-bezier(0.4,0,0.2,1);
+}
+html,body{height:100%}
+body{
+  font-family:'Inter',system-ui,-apple-system,sans-serif;
+  background:var(--bg);
+  color:var(--text);
+  min-height:100vh;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  position:relative;
+  overflow:hidden;
+  padding:24px;
+  -webkit-font-smoothing:antialiased;
+}
+
+/* === Background — light white→orange radial gradient with slow drift === */
+body::before{
+  content:'';position:fixed;inset:-15%;z-index:-3;
+  background:linear-gradient(135deg, #FFFBF5 0%, #FFEFDC 50%, #FFF6E9 100%);
+  animation:bgDrift 22s ease-in-out infinite;transform-origin:center;will-change:transform;
+}
+body::after{
+  content:'';position:fixed;inset:-10%;z-index:-2;pointer-events:none;
+  background:radial-gradient(ellipse 95% 85% at 50% 50%, transparent 55%, rgba(178,106,45,0.08) 100%);
+  animation:bgFloat 28s ease-in-out infinite reverse;transform-origin:center;will-change:transform;
+}
+@keyframes bgDrift{0%{transform:scale(1) translate(0,0) rotate(0deg)}20%{transform:scale(1.10) translate(-3.5%,2.5%) rotate(0.6deg)}40%{transform:scale(1.06) translate(3%,-3%) rotate(-0.5deg)}60%{transform:scale(1.12) translate(-2.5%,-3.5%) rotate(0.7deg)}80%{transform:scale(1.08) translate(3%,2%) rotate(-0.4deg)}100%{transform:scale(1) translate(0,0) rotate(0deg)}}
+@keyframes bgFloat{0%,100%{transform:scale(1) translate(0,0)}50%{transform:scale(1.08) translate(2%,-2%)}}
+@media (prefers-reduced-motion:reduce){body::before,body::after{animation:none}}
+.orb,.spline-bg,.spline-mask{display:none}
+
+/* === Glass card (light) === */
+.login-card{
+  position:relative;
+  z-index:1;
+  width:100%;
+  max-width:640px;
+  background:var(--glass);
+  backdrop-filter:blur(22px) saturate(160%);
+  -webkit-backdrop-filter:blur(22px) saturate(160%);
+  border:1px solid var(--border);
+  border-radius:22px;
+  padding:56px 64px 52px;
+  box-shadow:
+    0 1px 2px rgba(26,31,42,0.04),
+    0 30px 80px rgba(178,106,45,0.16),
+    0 12px 28px rgba(26,31,42,0.10),
+    inset 0 1px 0 rgba(255,255,255,0.55);
+  overflow:hidden;
+  animation:fadeUp 600ms var(--ease) both;
+}
+.login-card::before{
+  content:'';
+  position:absolute;
+  top:0;left:10%;right:10%;height:1px;
+  background:linear-gradient(90deg,transparent,rgba(201,123,58,0.40),transparent);
+  pointer-events:none;
+}
+.login-card>*{position:relative;z-index:1}
+
+/* Brand mark at the top of the card */
+.brand-mark{
+  display:flex;align-items:center;gap:12px;
+  margin-bottom:28px;
+}
+.brand-dot{
+  width:40px;height:40px;border-radius:11px;
+  background:linear-gradient(135deg,var(--accent),var(--accent-2));
+  display:inline-flex;align-items:center;justify-content:center;
+  box-shadow:0 1px 2px rgba(178,106,45,0.30),0 6px 18px rgba(201,123,58,0.32),inset 0 1px 0 rgba(255,255,255,0.30);
+  flex-shrink:0;
+}
+.brand-dot svg{width:21px;height:21px;color:#fff;stroke-width:1.8}
+.brand-name{font-size:1.1875rem;font-weight:600;letter-spacing:-0.015em;color:var(--text-strong)}
+
+.login-title{
+  font-size:2.125rem;
+  font-weight:600;
+  color:var(--text-strong);
+  letter-spacing:-0.02em;
+  margin-bottom:10px;
+  line-height:1.15;
+}
+.login-sub{
+  font-size:1rem;
+  color:var(--text-muted);
+  margin-bottom:36px;
+  line-height:1.5;
+}
+
+form{display:flex;flex-direction:column;gap:18px}
+
+.field{display:flex;flex-direction:column;gap:8px;position:relative}
+.label{
+  font-size:.8125rem;
+  font-weight:500;
+  color:var(--text-muted);
+  letter-spacing:.005em;
+}
+.input-wrap{position:relative}
+.input{
+  width:100%;
+  height:50px;
+  padding:0 16px;
+  background:rgba(255,255,255,0.72);
+  border:1px solid var(--border);
+  border-radius:11px;
+  color:var(--text-strong);
+  font-size:.9375rem;
+  font-family:inherit;
+  outline:none;
+  transition:border-color 180ms var(--ease),box-shadow 220ms var(--ease),background 180ms var(--ease);
+}
+.input::placeholder{color:var(--text-faint);font-weight:400}
+.input:hover{border-color:var(--border-hover);background:rgba(255,255,255,0.86)}
+.input:focus{
+  border-color:var(--accent);
+  background:#FFFFFF;
+  box-shadow:0 0 0 3px rgba(201,123,58,0.18),0 0 28px rgba(201,123,58,0.12);
+}
+.input.has-icon{padding-right:46px}
+
+/* Eye toggle is hidden by default; revealed only when the password field
+   has at least one character. */
+.toggle-eye{
+  position:absolute;
+  top:50%;right:7px;transform:translateY(-50%);
+  width:36px;height:36px;
+  background:transparent;
+  border:none;
+  border-radius:9px;
+  cursor:pointer;
+  color:var(--text-muted);
+  display:none;align-items:center;justify-content:center;
+  transition:color 150ms var(--ease),background 150ms var(--ease),opacity 180ms var(--ease);
+  opacity:0;
+}
+.input-wrap.has-content .toggle-eye{display:flex;opacity:1}
+.toggle-eye:hover{color:var(--text-strong);background:rgba(26,31,42,0.06)}
+.toggle-eye svg{width:18px;height:18px}
+
+.field.error .input{
+  border-color:var(--error);
+  background:rgba(163,82,92,0.06);
+  box-shadow:0 0 0 3px rgba(163,82,92,0.16);
+}
+.field-err{
+  font-size:.75rem;
+  color:var(--error);
+  font-weight:500;
+  margin-top:2px;
+  display:none;
+  letter-spacing:.01em;
+}
+.field.error .field-err{display:block}
+
+/* Error info banner — shown on a failed sign-in instead of reloading. */
+.login-banner{
+  display:none;align-items:center;gap:10px;margin:0 0 18px;padding:11px 14px;
+  border-radius:12px;background:rgba(229,72,77,0.12);border:1px solid rgba(229,72,77,0.32);
+  color:#FCA5A5;font-size:.8125rem;font-weight:500;line-height:1.35;
+}
+.login-banner.show{display:flex;animation:bannerIn .22s ease-out}
+.login-banner svg{width:18px;height:18px;flex-shrink:0;stroke:#F87171}
+@keyframes bannerIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
+/* Subtle red outline on the inputs after a bad sign-in (message lives in banner). */
+form.auth-error #emailField .input,form.auth-error #passwordField .input{border-color:rgba(229,72,77,0.55)}
+
+/* Row that holds Remember + Forgot — laid out side-by-side. Both children
+   are individually revealed via JS-applied classes on the form. */
+.row-meta{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  min-height:22px;
+  margin-top:-2px;
+}
+.remember{
+  display:none;align-items:center;gap:8px;
+  font-size:.8438rem;color:var(--text-muted);
+  cursor:pointer;user-select:none;
+  opacity:0;transform:translateY(-3px);
+  transition:opacity 220ms var(--ease),transform 220ms var(--ease);
+}
+form.both-filled .remember{display:inline-flex;opacity:1;transform:translateY(0)}
+.remember input{
+  appearance:none;-webkit-appearance:none;
+  width:16px;height:16px;
+  background:rgba(255,255,255,0.72);
+  border:1px solid var(--border-hover);
+  border-radius:4px;
+  cursor:pointer;
+  display:inline-flex;align-items:center;justify-content:center;
+  transition:background 150ms var(--ease),border-color 150ms var(--ease);
+}
+.remember input:checked{
+  background:var(--accent);
+  border-color:var(--accent);
+}
+.remember input:checked::after{
+  content:'';
+  width:9px;height:5px;
+  border:2px solid #fff;
+  border-top:none;border-right:none;
+  transform:translateY(-1px) rotate(-45deg);
+}
+.forgot{
+  display:none;
+  font-size:.8438rem;
+  color:var(--accent);
+  font-weight:500;
+  text-decoration:none;
+  transition:color 150ms var(--ease),opacity 220ms var(--ease),transform 220ms var(--ease);
+  opacity:0;transform:translateY(-3px);
+  margin-left:auto;
+}
+form.has-failed .forgot{display:inline-block;opacity:1;transform:translateY(0)}
+.forgot:hover{color:var(--accent-hover)}
+
+.btn-primary{
+  width:100%;
+  height:46px;
+  margin-top:6px;
+  display:inline-flex;align-items:center;justify-content:center;gap:8px;
+  background:linear-gradient(180deg,#E0995E 0%,#C97B3A 50%,#B26A2D 100%);
+  color:#fff;
+  border:none;
+  border-radius:10px;
+  font-family:inherit;
+  font-size:.9375rem;
+  font-weight:600;
+  letter-spacing:.005em;
+  cursor:pointer;
+  transition:background 150ms var(--ease),box-shadow 200ms var(--ease),transform 150ms var(--ease);
+  box-shadow:
+    0 6px 18px rgba(201,123,58,0.32),
+    inset 0 1px 0 rgba(255,255,255,0.22),
+    inset 0 -1px 0 rgba(0,0,0,0.06);
+}
+.btn-primary:hover{
+  background:linear-gradient(180deg,#E8A572 0%,#D58646 50%,#BC7330 100%);
+  box-shadow:
+    0 8px 24px rgba(201,123,58,0.42),
+    0 0 32px rgba(201,123,58,0.22),
+    inset 0 1px 0 rgba(255,255,255,0.28);
+  transform:translateY(-1px);
+}
+.btn-primary:active{transform:translateY(0)}
+.btn-primary[disabled]{cursor:wait;opacity:0.92}
+
+/* "New here? Create agent login" — sends prospective agents to the public
+   onboarding form (hosted separately at careers.getquotedtoday.com). */
+.alt-divider{display:flex;align-items:center;gap:12px;margin:20px 0 14px;color:var(--text-faint,rgba(26,31,42,0.42));font-size:.8125rem}
+.alt-divider::before,.alt-divider::after{content:'';flex:1;height:1px;background:var(--border,rgba(26,31,42,0.12))}
+.btn-secondary{
+  width:100%;height:46px;
+  display:inline-flex;align-items:center;justify-content:center;gap:8px;
+  background:transparent;color:#B26A2D;
+  border:1px solid rgba(201,123,58,0.45);
+  border-radius:10px;
+  font-family:inherit;font-size:.9375rem;font-weight:600;letter-spacing:.005em;
+  text-decoration:none;cursor:pointer;
+  transition:background 150ms var(--ease),border-color 150ms var(--ease),transform 150ms var(--ease);
+}
+.btn-secondary:hover{background:rgba(201,123,58,0.08);border-color:rgba(201,123,58,0.7);transform:translateY(-1px)}
+.btn-secondary:active{transform:translateY(0)}
+.btn-secondary svg{width:16px;height:16px}
+
+.spinner{
+  width:16px;height:16px;border-radius:50%;
+  border:2px solid rgba(255,255,255,0.35);
+  border-top-color:#fff;
+  animation:spin 720ms linear infinite;
+  display:none;
+}
+.btn-primary.loading .spinner{display:inline-block}
+.btn-primary.loading .btn-label{display:none}
+.btn-primary.loading::after{content:'Signing in…';font-size:.9375rem}
+
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes fadeUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
+
+@media (max-width:720px) and (min-width:521px){
+  .login-card{padding:44px 40px 40px}
+  .login-title{font-size:1.875rem}
+  .login-sub{font-size:.9375rem;margin-bottom:30px}
+}
+@media (max-width:520px){
+  .login-card{padding:30px 22px 26px;border-radius:16px}
+  .login-title{font-size:1.5rem}
+  .login-sub{font-size:.875rem;margin-bottom:24px}
+  .brand-mark{margin-bottom:18px}
+  .brand-dot{width:34px;height:34px;border-radius:10px}
+  .brand-dot svg{width:18px;height:18px}
+  .brand-name{font-size:1.0625rem}
+  .input{height:46px}
+  form{gap:14px}
+}
+
+@media (prefers-reduced-motion: reduce){
+  .orb{animation:none}
+  .login-card{animation:none}
+}
+</style>
+  <script src="services/error-boundary.js?v=19"></script>
+</head>
+<body>
+
+<!-- Spline 3D background -->
+
+<div class="login-card">
+  <div class="brand-mark">
+    <span class="brand-dot">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/>
+        <path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/>
+      </svg>
+    </span>
+    <span class="brand-name">Endeavor</span>
+  </div>
+
+  <h1 class="login-title">Welcome back</h1>
+  <p class="login-sub">Sign in to continue to your workspace.</p>
+
+  <form id="loginForm" novalidate>
+    <div class="login-banner" id="loginBanner" role="alert" aria-live="assertive">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
+      <span id="loginBannerMsg">Incorrect username or password.</span>
+    </div>
+    <div class="field" id="emailField">
+      <label class="label" for="email">Username</label>
+      <div class="input-wrap">
+        <input class="input" type="text" id="email" name="username" placeholder="Agent, Team Leader, Head Manager, or Admin" autocomplete="username" required/>
+      </div>
+      <div class="field-err">Please enter your username.</div>
+    </div>
+
+    <div class="field" id="passwordField">
+      <label class="label" for="password">Password</label>
+      <div class="input-wrap" id="passwordWrap">
+        <input class="input has-icon" type="password" id="password" name="password" placeholder="Enter your password" autocomplete="current-password" required/>
+        <button type="button" class="toggle-eye" id="toggleEye" aria-label="Show password">
+          <svg id="eyeIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M1.5 12s4-7.5 10.5-7.5S22.5 12 22.5 12s-4 7.5-10.5 7.5S1.5 12 1.5 12Z"/>
+            <circle cx="12" cy="12" r="3"/>
+          </svg>
+        </button>
+      </div>
+      <div class="field-err" id="passwordErr">Invalid username or password.</div>
+    </div>
+
+    <div class="row-meta">
+      <label class="remember">
+        <input type="checkbox" id="remember"/>
+        Remember me
+      </label>
+      <a class="forgot" href="#" id="forgotLink" style="display:none">Forgot password?</a>
+    </div>
+
+    <button class="btn-primary" id="signinBtn" type="submit">
+      <span class="spinner" aria-hidden="true"></span>
+      <span class="btn-label">Sign in</span>
+    </button>
+  </form>
+
+  <div class="alt-divider">New here?</div>
+  <a class="btn-secondary" href="https://careers.getquotedtoday.com">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/></svg>
+    Create agent login
+  </a>
+
+</div>
+
+<script src="services/api.js?v=10"></script>
+<script>
+(function(){
+  const form = document.getElementById('loginForm');
+  const email = document.getElementById('email');
+  const password = document.getElementById('password');
+  const emailField = document.getElementById('emailField');
+  const passwordField = document.getElementById('passwordField');
+  const passwordErr = document.getElementById('passwordErr');
+  const passwordWrap = document.getElementById('passwordWrap');
+  const btn = document.getElementById('signinBtn');
+  const btnLabel = document.querySelector('.btn-label');
+  const eyeBtn = document.getElementById('toggleEye');
+  const eyeIcon = document.getElementById('eyeIcon');
+  const forgotLink = document.getElementById('forgotLink');
+  const remember = document.getElementById('remember');
+  const loginBanner = document.getElementById('loginBanner');
+  const loginBannerMsg = document.getElementById('loginBannerMsg');
+
+  function showBanner(msg){ loginBannerMsg.textContent = msg; loginBanner.classList.add('show'); }
+  function hideBanner(){ loginBanner.classList.remove('show'); form.classList.remove('auth-error'); }
+
+  // Remember me: pre-fill the saved username on load.
+  (function restoreRemembered(){
+    try {
+      const saved = localStorage.getItem('ebRememberedEmail');
+      if (saved) { email.value = saved; if (remember) remember.checked = true; }
+    } catch (_) {}
+  })();
+
+  function syncRevealState(){
+    if(password.value.length > 0) passwordWrap.classList.add('has-content');
+    else passwordWrap.classList.remove('has-content');
+    const both = email.value.trim().length > 0 && password.value.length > 0;
+    form.classList.toggle('both-filled', both);
+  }
+
+  [email,password].forEach(inp=>{
+    inp.addEventListener('input',()=>{
+      inp.closest('.field').classList.remove('error');
+      syncRevealState();
+    });
+  });
+
+  eyeBtn.addEventListener('click',()=>{
+    const isPw = password.type === 'password';
+    password.type = isPw ? 'text' : 'password';
+    eyeBtn.setAttribute('aria-label', isPw ? 'Hide password' : 'Show password');
+    eyeIcon.innerHTML = isPw
+      ? '<path d="M3 3l18 18"/><path d="M10.58 10.58a3 3 0 0 0 4.24 4.24"/><path d="M9.88 5.09A10.94 10.94 0 0 1 12 4.5c6.5 0 10.5 7.5 10.5 7.5a17.06 17.06 0 0 1-3.11 4.13"/><path d="M6.6 6.6A17.06 17.06 0 0 0 1.5 12s4 7.5 10.5 7.5a10.94 10.94 0 0 0 5.4-1.42"/>'
+      : '<path d="M1.5 12s4-7.5 10.5-7.5S22.5 12 22.5 12s-4 7.5-10.5 7.5S1.5 12 1.5 12Z"/><circle cx="12" cy="12" r="3"/>';
+  });
+
+  function setLoading(isLoading) {
+    btn.classList.toggle('loading', isLoading);
+    btn.disabled = isLoading;
+    btnLabel.textContent = isLoading ? 'Signing in...' : 'Sign in';
+  }
+
+  form.addEventListener('submit', async (e)=>{
+    e.preventDefault();
+    const userVal = (email.value || '').trim();
+    const pwVal = password.value || '';
+
+    hideBanner();
+    emailField.classList.remove('error');
+
+    if(!userVal){
+      emailField.classList.add('error');
+      showBanner('Please enter your username.');
+      return;
+    }
+
+    setLoading(true);
+    form.classList.remove('has-failed');
+
+    try {
+      const data = await window.__ebAPI.post('/auth/login', {
+        email: userVal,
+        password: pwVal,
+      });
+
+      // Remember me: persist (or clear) the username for next visit.
+      try {
+        if (remember && remember.checked) localStorage.setItem('ebRememberedEmail', userVal);
+        else localStorage.removeItem('ebRememberedEmail');
+      } catch (_) {}
+
+      // Store JWT tokens
+      localStorage.setItem('access_token', data.access_token);
+      localStorage.setItem('refresh_token', data.refresh_token);
+
+      // Fetch user profile to get role
+      const user = await window.__ebAPI.get('/auth/me');
+      const role = user.role || 'agent';
+      localStorage.setItem('ebRole', role);
+
+      // Redirect based on role
+      const dest = role === 'agent' ? 'appointments.html' : 'ask-the-brain.html';
+      window.location.href = dest;
+    } catch (err) {
+      var status = err && err.status;
+      var msg;
+      if (status === 401) msg = 'Incorrect username or password. Please try again.';
+      else if (status === 403) msg = (err && err.message) || 'Your account is inactive. Please contact your administrator.';
+      else if (status === 429) msg = 'Too many attempts. Please wait a moment and try again.';
+      else if (status >= 500) msg = 'Server error. Please try again in a moment.';
+      else msg = 'Unable to sign in. Check your connection and try again.';
+      showBanner(msg);
+      form.classList.add('auth-error');
+      form.classList.add('has-failed');
+      setLoading(false);
+    }
+  });
+
+  forgotLink.addEventListener('click', async (e)=>{
+    e.preventDefault();
+    const userVal = (email.value || '').trim();
+    if (!userVal) {
+      emailField.classList.add('error');
+      return;
+    }
+    forgotLink.textContent = 'Sending reset link...';
+    forgotLink.style.pointerEvents = 'none';
+    try {
+      await window.__ebAPI.post('/auth/password-reset-request', { email: userVal });
+      forgotLink.textContent = 'Reset link sent! Check your email.';
+    } catch {
+      forgotLink.textContent = 'Failed to send. Try again.';
+      setTimeout(() => {
+        forgotLink.textContent = 'Forgot password?';
+        forgotLink.style.pointerEvents = '';
+      }, 2400);
+    }
+  });
+})();
+</script>
+
+</body>
+</html>

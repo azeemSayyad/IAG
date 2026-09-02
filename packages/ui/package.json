@@ -1,0 +1,11 @@
+{
+  "name": "@launchpad/ui",
+  "version": "1.0.0",
+  "private": true,
+  "main": "index.tsx",
+  "types": "index.tsx",
+  "peerDependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  }
+}

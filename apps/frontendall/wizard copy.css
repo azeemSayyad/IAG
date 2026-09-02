@@ -1,0 +1,247 @@
+/* ============================================================
+   Wizard shell — shared across all Add-Deal pages.
+   Per-chapter accent: set on <body data-chapter="aca|dv|auto|done">.
+   ============================================================ */
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --border:rgba(26,31,42,0.07);
+  --border-hover:rgba(26,31,42,0.14);
+  --border-soft:rgba(26,31,42,0.06);
+  --text-strong:#1A1F2A;
+  --text:#2D3340;
+  --text-muted:rgba(26,31,42,0.60);
+  --text-faint:rgba(26,31,42,0.42);
+  --field-bg:#F2EEE6;
+  --field-bg-hover:#EBE6DC;
+  --field-bg-focus:#FFFFFF;
+  --ease:cubic-bezier(0.4,0,0.2,1);
+}
+
+/* Chapter palettes — assigned via [data-chapter] on <body>. */
+body[data-chapter="aca"]{
+  --c:#1A8F6B;            /* green */
+  --c2:#2EB389;
+  --ch:#126650;
+  --c-soft:rgba(26,143,107,0.10);
+  --c-border:rgba(26,143,107,0.28);
+  --c-num:rgba(26,143,107,0.16);
+  --bg1:rgba(94,180,140,0.30);
+  --bg2:rgba(46,130,90,0.22);
+  --bg3:rgba(160,220,200,0.20);
+  --bgg:linear-gradient(135deg,#F4FAF6 0%,#E1F0E8 50%,#EBF5EF 100%);
+}
+body[data-chapter="dv"]{
+  --c:#7438D6;            /* purple */
+  --c2:#9460E8;
+  --ch:#5A26B0;
+  --c-soft:rgba(116,56,214,0.10);
+  --c-border:rgba(116,56,214,0.28);
+  --c-num:rgba(116,56,214,0.16);
+  --bg1:rgba(146,90,224,0.26);
+  --bg2:rgba(110,52,200,0.20);
+  --bg3:rgba(200,180,235,0.20);
+  --bgg:linear-gradient(135deg,#F8F5FD 0%,#ECE2F8 50%,#F1EAF9 100%);
+}
+body[data-chapter="auto"]{
+  --c:#D85E20;            /* orange/red */
+  --c2:#E87B45;
+  --ch:#B24817;
+  --c-soft:rgba(216,94,32,0.10);
+  --c-border:rgba(216,94,32,0.28);
+  --c-num:rgba(216,94,32,0.16);
+  --bg1:rgba(232,123,69,0.34);
+  --bg2:rgba(216,94,32,0.26);
+  --bg3:rgba(255,200,160,0.20);
+  --bgg:linear-gradient(135deg,#FFF8F3 0%,#FCEADC 50%,#FEEFE3 100%);
+}
+body[data-chapter="done"]{
+  --c:#1A8F6B;
+  --c2:#2EB389;
+  --ch:#126650;
+  --c-soft:rgba(26,143,107,0.10);
+  --c-border:rgba(26,143,107,0.28);
+  --c-num:rgba(26,143,107,0.16);
+  --bg1:rgba(94,180,140,0.26);
+  --bg2:rgba(46,130,90,0.20);
+  --bg3:rgba(160,220,200,0.20);
+  --bgg:linear-gradient(135deg,#F4FAF6 0%,#E1F0E8 50%,#EBF5EF 100%);
+}
+
+html,body{height:100%}
+body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#DDD8CE;color:var(--text);min-height:100vh;position:relative;overflow-x:hidden;-webkit-font-smoothing:antialiased}
+body::before{content:'';position:fixed;inset:-15%;z-index:-3;background:radial-gradient(ellipse 60% 55% at 18% 28%, var(--bg1), transparent 62%),radial-gradient(ellipse 58% 52% at 82% 75%, var(--bg2), transparent 62%),radial-gradient(ellipse 42% 45% at 50% 50%, var(--bg3), transparent 70%),var(--bgg);animation:bgDrift 22s ease-in-out infinite;will-change:transform}
+body::after{content:'';position:fixed;inset:-10%;z-index:-2;pointer-events:none;background:radial-gradient(ellipse 95% 85% at 50% 50%, transparent 55%, rgba(26,31,42,0.06) 100%);animation:bgFloat 28s ease-in-out infinite reverse}
+@keyframes bgDrift{0%{transform:scale(1) translate(0,0) rotate(0deg)}20%{transform:scale(1.10) translate(-3.5%,2.5%) rotate(0.6deg)}40%{transform:scale(1.06) translate(3%,-3%) rotate(-0.5deg)}60%{transform:scale(1.12) translate(-2.5%,-3.5%) rotate(0.7deg)}80%{transform:scale(1.08) translate(3%,2%) rotate(-0.4deg)}100%{transform:scale(1) translate(0,0) rotate(0deg)}}
+@keyframes bgFloat{0%,100%{transform:scale(1) translate(0,0)}50%{transform:scale(1.08) translate(2%,-2%)}}
+@media (prefers-reduced-motion:reduce){body::before,body::after{animation:none}}
+
+/* ─── Shell ─── */
+.wiz-shell{min-height:100vh;display:flex;flex-direction:column;padding:28px 32px 110px;max-width:1240px;margin:0 auto}
+
+/* ─── Brand bug (top-left) ─── */
+.ch-brand{display:inline-flex;align-items:center;gap:9px;color:var(--text-strong);font-weight:600;font-size:.9375rem;letter-spacing:-0.01em;text-decoration:none;margin-bottom:22px}
+.ch-brand-dot{width:26px;height:26px;border-radius:8px;background:linear-gradient(135deg,var(--c),var(--c2));box-shadow:0 1px 2px rgba(0,0,0,0.20),inset 0 1px 0 rgba(255,255,255,0.22);flex-shrink:0;display:inline-flex;align-items:center;justify-content:center}
+.ch-brand-dot svg{width:14px;height:14px;color:#fff;stroke-width:1.8}
+
+/* ─── Chapter header (above the card) ─── */
+.ch-head{margin-bottom:22px}
+.ch-row{display:flex;align-items:flex-start;justify-content:space-between;gap:24px;flex-wrap:wrap}
+.ch-titlewrap{flex:1;min-width:0}
+.ch-title{font-size:2.6rem;font-weight:800;line-height:1.05;letter-spacing:-0.025em;color:var(--text-strong)}
+.ch-title .ch-num{color:var(--c);margin-right:6px}
+.ch-sub{margin-top:8px;font-size:.875rem;color:var(--text-muted);line-height:1.5;max-width:62ch}
+.ch-prog{display:flex;align-items:center;gap:14px;flex-shrink:0;padding-top:6px}
+.ch-step{font-size:.9375rem;color:var(--text-muted);font-weight:500;font-variant-numeric:tabular-nums;display:inline-flex;align-items:baseline;gap:2px}
+.ch-step strong{color:var(--c);font-weight:700;font-size:1rem;margin-right:2px}
+.ch-step-of{margin-left:4px}
+
+.ch-ring{position:relative;width:54px;height:54px;display:inline-flex;align-items:center;justify-content:center}
+.ch-ring svg{position:absolute;inset:0;width:100%;height:100%;transform:rotate(-90deg)}
+.ch-ring .ring-track{fill:none;stroke:rgba(26,31,42,0.10);stroke-width:2.6}
+.ch-ring .ring-arc{fill:none;stroke:var(--c);stroke-width:2.6;stroke-linecap:round;transition:stroke-dasharray 380ms var(--ease)}
+.ch-ring-num{font-size:.75rem;font-weight:700;color:var(--text-strong);letter-spacing:-0.01em;font-variant-numeric:tabular-nums;position:relative;z-index:1}
+
+/* ─── Card ─── */
+.wiz-card{background:#FFFFFF;border:1px solid var(--border);border-radius:18px;box-shadow:0 1px 2px rgba(26,31,42,0.04),0 8px 28px rgba(26,31,42,0.06);padding:44px 48px 48px;width:100%;position:relative;overflow:hidden}
+.wiz-num{position:absolute;top:24px;right:38px;font-size:4.5rem;font-weight:800;letter-spacing:-0.04em;line-height:1;color:var(--c-num);font-variant-numeric:tabular-nums;pointer-events:none;user-select:none}
+
+.wiz-eyebrow{display:inline-flex;align-items:center;gap:10px;color:var(--c);font-size:.6875rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;margin-bottom:14px}
+.wiz-eyebrow::before{content:'';width:22px;height:2px;background:var(--c);border-radius:1px}
+
+.wiz-title{font-size:2.125rem;font-weight:700;line-height:1.1;letter-spacing:-0.02em;color:var(--text-strong);margin-bottom:8px}
+.wiz-sub{font-size:.9375rem;color:var(--text-muted);line-height:1.55;max-width:62ch;margin-bottom:30px}
+
+/* ─── Form layout ─── */
+.form-stack{display:flex;flex-direction:column;gap:22px}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:22px 28px}
+.form-grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:22px 28px}
+.row-csz{display:grid;grid-template-columns:1.7fr 0.6fr 0.7fr;gap:22px 28px}
+.field{display:flex;flex-direction:column;gap:8px;min-width:0}
+.field-row{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+.field-label{font-size:.6875rem;font-weight:600;color:var(--text-muted);letter-spacing:.10em;text-transform:uppercase}
+.field-tag{display:inline-flex;align-items:center;gap:5px;color:var(--c);font-size:.6875rem;font-weight:700;letter-spacing:.10em;text-transform:uppercase}
+.field-tag::before{content:'*';font-size:1em;font-weight:700}
+
+/* SYNCED field appearance: tinted bg + accent border to flag autofill. */
+.field.synced .ctl{background:var(--c-soft);border-color:var(--c-border)}
+.field.synced .ctl:hover{background:var(--c-soft);filter:brightness(0.98)}
+.field.synced .ctl:focus{background:#FFFFFF;border-color:var(--c);box-shadow:0 0 0 3px var(--c-soft)}
+
+.ctl{width:100%;height:46px;padding:0 16px;background:var(--field-bg);border:1px solid transparent;border-radius:10px;font-family:inherit;font-size:.9375rem;color:var(--text-strong);outline:none;transition:background 140ms var(--ease),border-color 140ms var(--ease),box-shadow 220ms var(--ease)}
+.ctl::placeholder{color:var(--text-faint)}
+.ctl:hover{background:var(--field-bg-hover)}
+.ctl:focus{background:var(--field-bg-focus);border-color:var(--c);box-shadow:0 0 0 3px var(--c-soft)}
+.ctl-select{appearance:none;-webkit-appearance:none;-moz-appearance:none;padding-right:42px;background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%231A1F2A' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='m6 9 6 6 6-6'/></svg>");background-repeat:no-repeat;background-position:right 14px center;background-size:16px 16px;cursor:pointer}
+.ctl-select.placeholder{color:var(--text-faint)}
+.ctl-textarea{min-height:128px;padding:14px 16px;resize:vertical;line-height:1.5;height:auto}
+
+/* Yes/No segmented inside a field row (used on Tobacco / Currently insured / Orthodontia). */
+.seg-yn{display:flex;align-items:center;gap:0;background:var(--field-bg);border-radius:10px;padding:4px;height:46px}
+.seg-yn button{flex:1;height:100%;background:transparent;border:none;border-radius:7px;font-family:inherit;font-size:.875rem;font-weight:600;color:var(--text-muted);cursor:pointer;transition:background 140ms var(--ease),color 140ms var(--ease),box-shadow 200ms var(--ease)}
+.seg-yn button:hover{color:var(--text-strong)}
+.seg-yn button.active{background:var(--c);color:#FFFFFF;box-shadow:0 1px 2px rgba(0,0,0,0.10),0 4px 12px var(--c-soft)}
+
+/* ─── Cross-sell Yes / No giant cards ─── */
+.crosssell{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:6px}
+.cs-card{display:flex;flex-direction:column;align-items:center;justify-content:flex-end;text-align:center;padding:38px 24px 28px;background:var(--field-bg);border:1px solid transparent;border-radius:16px;cursor:pointer;font-family:inherit;color:var(--text-strong);transition:transform 200ms var(--ease),background 200ms var(--ease),border-color 200ms var(--ease),box-shadow 220ms var(--ease);min-height:230px}
+.cs-card:hover{transform:translateY(-2px);background:var(--field-bg-hover);border-color:var(--c-border);box-shadow:0 1px 2px rgba(26,31,42,0.04),0 12px 28px rgba(26,31,42,0.06)}
+.cs-word{font-size:4.5rem;font-weight:800;letter-spacing:-0.035em;line-height:1;margin-bottom:22px;color:var(--text-strong)}
+.cs-eyebrow{font-size:.6875rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--text-muted);margin-bottom:8px}
+.cs-desc{font-size:.8125rem;color:var(--text-muted);line-height:1.5;max-width:34ch}
+
+/* ─── Plan banner (accent gradient with Add to Sale / Bind Policy / Log Sale) ─── */
+.banner{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:22px 26px;border-radius:14px;background:linear-gradient(135deg,var(--c) 0%,var(--c2) 100%);color:#FFFFFF;box-shadow:0 1px 2px rgba(0,0,0,0.15),0 12px 32px rgba(0,0,0,0.18);margin-top:22px}
+.banner-l{display:flex;flex-direction:column;gap:4px;min-width:0}
+.banner-eyebrow{font-size:.6875rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:rgba(255,255,255,0.82)}
+.banner-num{font-size:2rem;font-weight:700;line-height:1.05;letter-spacing:-0.02em;font-variant-numeric:tabular-nums;display:inline-flex;align-items:baseline;gap:6px}
+.banner-num .unit{font-size:.9375rem;font-weight:500;color:rgba(255,255,255,0.78)}
+.banner-btn{height:42px;padding:0 22px;display:inline-flex;align-items:center;gap:8px;border-radius:10px;border:1px solid rgba(255,255,255,0.30);background:rgba(255,255,255,0.16);color:#FFFFFF;font-family:inherit;font-size:.875rem;font-weight:600;cursor:pointer;transition:background 160ms var(--ease),transform 150ms var(--ease),border-color 160ms var(--ease);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+.banner-btn:hover{background:rgba(255,255,255,0.24);border-color:rgba(255,255,255,0.42);transform:translateY(-1px)}
+.banner-btn:active{transform:translateY(0)}
+.banner-btn svg{width:14px;height:14px;stroke-width:2.4}
+
+/* ─── Summary mini-card on Lock-the-sale ─── */
+.summary{background:linear-gradient(135deg,#FAF7F1 0%,#F2EEE6 100%);border:1px solid var(--border);border-radius:14px;padding:22px 24px;display:grid;grid-template-columns:1fr 1fr;gap:8px 40px;margin-top:22px}
+.sum-col-eyebrow{color:var(--c);font-size:.6875rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;padding-bottom:6px;border-bottom:1px solid var(--c-border);margin-bottom:6px}
+.sum-row{display:flex;justify-content:space-between;align-items:baseline;gap:14px;padding:6px 0;font-size:.875rem}
+.sum-row .k{color:var(--text-muted)}
+.sum-row .v{color:var(--text-strong);font-weight:500;text-align:right;font-variant-numeric:tabular-nums}
+.sum-row .v.empty{color:var(--text-faint);font-weight:400}
+
+/* ─── Footer (Back · Next) ─── */
+.wiz-foot{position:fixed;left:0;right:0;bottom:0;background:rgba(255,255,255,0.72);backdrop-filter:blur(22px) saturate(160%);-webkit-backdrop-filter:blur(22px) saturate(160%);border-top:1px solid var(--border);padding:14px 28px;display:flex;align-items:center;justify-content:space-between;gap:18px;z-index:5}
+.btn-step{height:42px;padding:0 22px;display:inline-flex;align-items:center;gap:8px;border-radius:10px;border:none;font-family:inherit;font-size:.875rem;font-weight:600;cursor:pointer;transition:transform 150ms var(--ease),background 200ms var(--ease),box-shadow 200ms var(--ease),color 150ms var(--ease)}
+.btn-step.back{background:transparent;color:var(--text-muted);border:1px solid var(--border)}
+.btn-step.back:hover{background:rgba(255,255,255,0.6);color:var(--text-strong);border-color:var(--border-hover)}
+.btn-step.next{background:var(--c);color:#FFFFFF;box-shadow:0 1px 2px rgba(0,0,0,0.12),0 6px 18px var(--c-soft)}
+.btn-step.next:hover{background:var(--ch);transform:translateY(-1px)}
+.btn-step.next:active{transform:translateY(0)}
+.btn-step svg{width:14px;height:14px;stroke-width:2.4}
+
+@media (max-width:760px){
+  .wiz-shell{padding:20px 16px 110px}
+  .wiz-card{padding:30px 22px 32px;border-radius:14px}
+  .wiz-num{font-size:3rem;top:18px;right:22px}
+  .ch-row{gap:14px}
+  .ch-title{font-size:1.75rem}
+  .ch-sub{font-size:.8125rem}
+  .ch-prog{padding-top:2px;gap:10px}
+  .ch-ring{width:46px;height:46px}
+  .wiz-title{font-size:1.5rem}
+  .wiz-sub{font-size:.875rem;margin-bottom:22px}
+  .form-grid,.form-grid-3,.row-csz{grid-template-columns:1fr;gap:16px}
+  .form-grid-3 > div:empty{display:none}
+  .field[style*="grid-column"]{grid-column:auto !important}
+  .crosssell{grid-template-columns:1fr}
+  .cs-card{min-height:160px;padding:30px 18px 22px}
+  .cs-word{font-size:3rem;margin-bottom:14px}
+  .banner{flex-direction:column;align-items:stretch;padding:18px;gap:14px}
+  .banner-btn{align-self:stretch;justify-content:center}
+  .summary{grid-template-columns:1fr;gap:6px;padding:18px}
+  .wiz-foot{padding:12px 16px}
+  .btn-step{height:40px;padding:0 14px;font-size:.8125rem}
+}
+@media (max-width:480px){
+  .wiz-shell{padding:16px 12px 100px}
+  .wiz-card{padding:24px 16px 24px}
+  .wiz-num{font-size:2.25rem;top:14px;right:14px}
+  .ch-brand{margin-bottom:14px;font-size:.875rem;gap:8px}
+  .ch-brand-dot{width:22px;height:22px;border-radius:6px}
+  .ch-brand-dot svg{width:12px;height:12px}
+  .ch-title{font-size:1.375rem;line-height:1.1}
+  .ch-sub{font-size:.75rem;margin-top:6px}
+  /* Keep the chapter row in horizontal direction even at this width so
+     the step counter + percentage ring stays anchored to the right edge
+     instead of dropping below the title on the left. margin-left:auto
+     also forces the right-edge alignment when wrap pushes it to a new
+     line on extra-narrow viewports. */
+  .ch-row{flex-direction:row;align-items:flex-start;gap:10px;flex-wrap:wrap}
+  .ch-prog{margin-left:auto;padding-top:0;gap:8px}
+  .ch-ring{width:42px;height:42px}
+  .ch-ring-num{font-size:.6875rem}
+  .ch-step{font-size:.8125rem}
+  .ch-step strong{font-size:.875rem}
+  .wiz-eyebrow{font-size:.625rem;margin-bottom:10px}
+  .wiz-title{font-size:1.25rem;margin-bottom:6px}
+  .wiz-sub{font-size:.8125rem;line-height:1.5;margin-bottom:18px}
+  .form-stack{gap:14px}
+  .form-grid,.form-grid-3,.row-csz{gap:12px}
+  .field{gap:6px}
+  .field-label{font-size:.625rem}
+  .ctl{height:42px;font-size:.875rem;padding:0 12px}
+  .ctl-textarea{min-height:96px;padding:10px 12px}
+  .seg-yn{height:42px}
+  .seg-yn button{font-size:.8125rem}
+  .cs-card{min-height:130px;padding:22px 14px 18px}
+  .cs-word{font-size:2.25rem;margin-bottom:10px}
+  .cs-eyebrow{font-size:.625rem;letter-spacing:.10em}
+  .cs-desc{font-size:.75rem}
+  .banner{padding:14px}
+  .banner-num{font-size:1.625rem}
+  .banner-num .unit{font-size:.8125rem}
+  .summary{padding:14px;gap:4px}
+  .sum-row{font-size:.8125rem;padding:5px 0}
+  .wiz-foot{padding:10px 12px}
+  .btn-step{height:38px;padding:0 12px;font-size:.75rem;gap:6px}
+  .btn-step svg{width:12px;height:12px}
+}

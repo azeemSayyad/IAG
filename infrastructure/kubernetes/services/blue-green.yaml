@@ -1,0 +1,121 @@
+# Blue-Green Deployment Strategy (Step 25.2)
+# Zero-downtime deployments using two identical environments
+
+# Blue Deployment (Current)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend-api-blue
+  namespace: launchpad
+  labels:
+    app: backend-api
+    version: blue
+    deployment-strategy: blue-green
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: backend-api
+      version: blue
+  template:
+    metadata:
+      labels:
+        app: backend-api
+        version: blue
+    spec:
+      containers:
+        - name: backend-api
+          image: launchpad/backend-api:blue
+          ports:
+            - containerPort: 8000
+          envFrom:
+            - configMapRef:
+                name: launchpad-config
+            - secretRef:
+                name: launchpad-secrets
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "512Mi"
+            limits:
+              cpu: "1000m"
+              memory: "1Gi"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 5
+---
+# Green Deployment (New)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend-api-green
+  namespace: launchpad
+  labels:
+    app: backend-api
+    version: green
+    deployment-strategy: blue-green
+spec:
+  replicas: 0
+  selector:
+    matchLabels:
+      app: backend-api
+      version: green
+  template:
+    metadata:
+      labels:
+        app: backend-api
+        version: green
+    spec:
+      containers:
+        - name: backend-api
+          image: launchpad/backend-api:green
+          ports:
+            - containerPort: 8000
+          envFrom:
+            - configMapRef:
+                name: launchpad-config
+            - secretRef:
+                name: launchpad-secrets
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "512Mi"
+            limits:
+              cpu: "1000m"
+              memory: "1Gi"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 5
+---
+# Service that switches between blue and green
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend-api
+  namespace: launchpad
+spec:
+  selector:
+    app: backend-api
+    version: blue  # Switch to "green" for new version
+  ports:
+    - port: 8000
+      targetPort: 8000
+  type: ClusterIP

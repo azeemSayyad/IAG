@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Add Deal · ACA · Step 2 — Endeavor</title>
+<script src="i18n-dict.js?v=2"></script>
+<script src="prefs-extras.js?v=28"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="wizard.css"/>
+  <script src="services/api.js?v=10"></script>
+  <script src="services/error-boundary.js?v=19"></script>
+</head>
+<body data-chapter="aca">
+
+<div class="wiz-shell">
+  <a class="ch-brand" href="appointments.html" aria-label="Endeavor">
+    <span class="ch-brand-dot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/><path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/></svg></span>
+    Endeavor
+  </a>
+
+  <header class="ch-head">
+    <div class="ch-row">
+      <div class="ch-titlewrap">
+        <h1 class="ch-title"><span class="ch-num">01.</span> ACA Marketplace</h1>
+        <p class="ch-sub">Master record. Fields entered here sync to ancillary products.</p>
+      </div>
+      <div class="ch-prog">
+        <div class="ch-step"><strong>2</strong><span class="ch-step-of">/ 4</span></div>
+        <div class="ch-ring">
+          <svg viewBox="0 0 36 36"><circle cx="18" cy="18" r="15.9" class="ring-track"/><circle cx="18" cy="18" r="15.9" class="ring-arc" stroke-dasharray="50,100"/></svg>
+          <span class="ch-ring-num">50%</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <div class="wiz-card">
+    <div class="wiz-num">02</div>
+    <div class="wiz-eyebrow">Contact &amp; residence</div>
+    <h2 class="wiz-title">Where they live.</h2>
+    <p class="wiz-sub">Residential address determines rating area and plan availability.</p>
+
+    <form id="step2" class="form-stack" autocomplete="off" novalidate>
+      <div class="field">
+        <label class="field-label" for="fAddr">Street address</label>
+        <input class="ctl" id="fAddr" type="text" placeholder="1280 Brickell Ave, Apt 4B" required/>
+      </div>
+      <div class="row-csz">
+        <div class="field">
+          <label class="field-label" for="fCity">City</label>
+          <input class="ctl" id="fCity" type="text" placeholder="Miami" required/>
+        </div>
+        <div class="field">
+          <label class="field-label" for="fState">State</label>
+          <input class="ctl" id="fState" type="text" placeholder="FL" maxlength="2" required style="text-transform:uppercase"/>
+        </div>
+        <div class="field">
+          <label class="field-label" for="fZip">Zip</label>
+          <input class="ctl" id="fZip" type="text" inputmode="numeric" placeholder="33131" maxlength="5" required/>
+        </div>
+      </div>
+      <div class="form-grid">
+        <div class="field">
+          <label class="field-label" for="fPhone">Phone</label>
+          <input class="ctl" id="fPhone" type="tel" placeholder="(305) 555-0144" required/>
+        </div>
+        <div class="field">
+          <label class="field-label" for="fEmail">Email</label>
+          <input class="ctl" id="fEmail" type="email" placeholder="maria@email.com" required/>
+        </div>
+        <div class="field">
+          <label class="field-label" for="fLang">Language</label>
+          <select class="ctl ctl-select" id="fLang" required>
+            <option>English</option><option>Spanish</option><option>Mandarin</option>
+            <option>Vietnamese</option><option>French</option><option>Other</option>
+          </select>
+        </div>
+        <div class="field">
+          <label class="field-label" for="fCounty">County</label>
+          <input class="ctl" id="fCounty" type="text" placeholder="Miami-Dade" required/>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="wiz-foot">
+  <button class="btn-step back" id="btnBack" type="button">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+    Back
+  </button>
+  <button class="btn-step next" id="btnNext" type="button">
+    Next
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
+  </button>
+</div>
+
+<script>
+(function(){
+  const $ = (s,r=document)=>r.querySelector(s);
+  const DRAFT_KEY = 'ebDealDraft';
+  let draft = {};
+  try{ draft = JSON.parse(sessionStorage.getItem(DRAFT_KEY) || '{}'); }catch(e){ draft = {}; }
+
+  const inputs = {
+    addr: $('#fAddr'), city: $('#fCity'), state: $('#fState'), zip: $('#fZip'),
+    phone: $('#fPhone'), email: $('#fEmail'), lang: $('#fLang'), county: $('#fCounty')
+  };
+  Object.entries(inputs).forEach(([k,el])=>{ if(draft[k] && el) el.value = draft[k]; });
+
+  function persist(){
+    Object.assign(draft, {
+      addr: inputs.addr.value.trim(), city: inputs.city.value.trim(),
+      state: inputs.state.value.trim().toUpperCase(), zip: inputs.zip.value.trim(),
+      phone: inputs.phone.value.trim(), email: inputs.email.value.trim(),
+      lang: inputs.lang.value, county: inputs.county.value.trim()
+    });
+    sessionStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+  }
+
+  inputs.phone.addEventListener('input', e=>{
+    const raw = e.target.value.replace(/\D/g,'').slice(0,10);
+    let v = raw;
+    if(raw.length > 6) v = '('+raw.slice(0,3)+') '+raw.slice(3,6)+'-'+raw.slice(6);
+    else if(raw.length > 3) v = '('+raw.slice(0,3)+') '+raw.slice(3);
+    else if(raw.length > 0) v = '('+raw;
+    e.target.value = v;
+  });
+  inputs.zip.addEventListener('input', e=>{ e.target.value = e.target.value.replace(/\D/g,'').slice(0,5); });
+  inputs.state.addEventListener('input', e=>{ e.target.value = e.target.value.replace(/[^a-zA-Z]/g,'').toUpperCase().slice(0,2); });
+
+  Object.values(inputs).forEach(el=> el.addEventListener('input', persist));
+  inputs.lang.addEventListener('change', persist);
+
+  $('#btnNext').addEventListener('click', ()=>{ persist(); window.location.href = 'add-deal-3.html'; });
+  $('#btnBack').addEventListener('click', ()=>{ persist(); window.location.href = 'add-deal.html'; });
+})();
+</script>
+
+</body>
+</html>

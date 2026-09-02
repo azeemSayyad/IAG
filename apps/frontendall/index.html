@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<title>Endeavor</title>
+<meta http-equiv="refresh" content="0; url=login.html"/>
+<script>location.replace('login.html');</script>
+  <script src="services/api.js?v=10"></script>
+  <script src="services/error-boundary.js?v=19"></script>
+<script>
+// If user is already authenticated, skip login
+if (localStorage.getItem('access_token')) {
+  window.__ebAPI.get('/auth/me').then(function(user){
+    if (user && user.email) window.location.replace('dashboard.html');
+  }).catch(function(){
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('refresh_token');
+  });
+}
+</script>
+</head>
+<body></body>
+</html>

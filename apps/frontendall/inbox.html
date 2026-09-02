@@ -1,0 +1,1625 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Inbox — Endeavor</title>
+<script>
+(function(){try{
+const FM={sm:'14px',md:'16px',lg:'18px',xl:'20px'};
+const TM={
+warm:{a:'#C97B3A',a2:'#E0995E',ah:'#B26A2D',b1:'rgba(224,153,94,.40)',b2:'rgba(201,123,58,.32)',b3:'rgba(255,200,150,.22)',g:'linear-gradient(135deg,#FFFBF5 0%,#FFEFDC 50%,#FFF6E9 100%)',gl:'rgba(178,106,45,.08)'},
+forest:{a:'#4F8268',a2:'#6B9F86',ah:'#3D6651',b1:'rgba(107,159,134,.40)',b2:'rgba(79,130,104,.32)',b3:'rgba(180,220,200,.22)',g:'linear-gradient(135deg,#F5FBF7 0%,#E0F1E6 50%,#E8F4ED 100%)',gl:'rgba(63,109,84,.08)'},
+indigo:{a:'#5E7BA8',a2:'#7B96BD',ah:'#4A6488',b1:'rgba(123,150,189,.40)',b2:'rgba(94,123,168,.32)',b3:'rgba(180,200,230,.22)',g:'linear-gradient(135deg,#F5F7FB 0%,#DCE4F1 50%,#E5EBF4 100%)',gl:'rgba(74,100,136,.08)'},
+rose:{a:'#A3525C',a2:'#B97077',ah:'#82414B',b1:'rgba(185,112,119,.40)',b2:'rgba(163,82,92,.32)',b3:'rgba(230,180,190,.22)',g:'linear-gradient(135deg,#FBF5F6 0%,#F1DCDF 50%,#F4E5E8 100%)',gl:'rgba(130,65,75,.08)'},
+slate:{a:'#2D3340',a2:'#5A6275',ah:'#1A1F2A',b1:'rgba(90,98,117,.45)',b2:'rgba(45,51,64,.38)',b3:'rgba(150,156,170,.28)',g:'linear-gradient(135deg,#B8BCC5 0%,#9DA3AD 50%,#ABB0BA 100%)',gl:'rgba(26,31,42,.14)'},
+amber:{a:'#9C7842',a2:'#B89058',ah:'#7C5E2F',b1:'rgba(184,144,88,.40)',b2:'rgba(156,120,66,.32)',b3:'rgba(245,220,180,.22)',g:'linear-gradient(135deg,#FBF7F0 0%,#F0E5D0 50%,#F4EBDB 100%)',gl:'rgba(124,94,47,.08)'}
+};
+window.__ebApplyFont=function(v){document.documentElement.style.fontSize=FM[v]||'16px';};
+window.__ebApplyTheme=function(v){
+var t=TM[v]||TM.warm,D=document.documentElement;
+D.style.setProperty('--accent',t.a);
+D.style.setProperty('--accent-2',t.a2);
+D.style.setProperty('--accent-hover',t.ah);
+var st=document.getElementById('ebPrefsTheme');
+if(!st){st=document.createElement('style');st.id='ebPrefsTheme';document.head.appendChild(st);}
+st.textContent='body::before{background:'+t.g+' !important}body::after{background:radial-gradient(ellipse 95% 85% at 50% 50%,transparent 55%,'+t.gl+' 100%) !important}.sb-brand-dot{background:linear-gradient(135deg,'+t.a+','+t.a2+') !important}.usage-fill{background:linear-gradient(90deg,'+t.a+','+t.a2+') !important}.av-circle{background:linear-gradient(135deg,'+t.a+','+t.a2+') !important}';
+};
+window.__ebApplyFont(localStorage.getItem('ebFontSize')||'md');
+window.__ebApplyTheme(localStorage.getItem('ebTheme')||'warm');
+}catch(e){}})();
+</script>
+<script src="i18n-dict.js?v=2"></script>
+<script src="prefs-extras.js?v=28"></script>
+<script src="coach.js" defer></script>
+<script src="tour.js" defer></script>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#DDD8CE;--bg-grad-1:#E2DCD0;--bg-grad-2:#D2CDC2;
+  --glass:rgba(255,255,255,0.55);--glass-2:rgba(255,255,255,0.55);--glass-hover:rgba(255,255,255,0.75);
+  --border:rgba(26,31,42,0.07);--border-hover:rgba(26,31,42,0.14);--border-soft:rgba(26,31,42,0.06);
+  --text-strong:#1A1F2A;--text:#2D3340;--text-muted:rgba(26,31,42,0.60);--text-faint:rgba(26,31,42,0.42);
+  --accent:#C97B3A;--accent-2:#E0995E;--accent-hover:#B26A2D;--accent-glow:rgba(201,123,58,0.32);
+  --up:#4F8268;--down:#A3525C;--pending:#9C7842;--error:#A3525C;--success:#4F8268;
+  --sidebar-w:220px;--topbar-h:64px;--leadcol-w:320px;--copilot-w:360px;
+  /* Merged Inbox surface (Messages-style): shared header height + faint list tint */
+  --head-h:68px;--list-tint:#F7F5F0;
+  --ease:cubic-bezier(0.4,0,0.2,1);
+}
+html,body{height:100%}
+body{
+  font-family:'Inter',system-ui,-apple-system,sans-serif;
+  background:var(--bg);color:var(--text);
+  min-height:100vh;position:relative;overflow:hidden;
+  -webkit-font-smoothing:antialiased;
+}
+body::before{content:'';position:fixed;inset:-15%;z-index:-3;background:linear-gradient(135deg, #FFFBF5 0%, #FFEFDC 50%, #FFF6E9 100%);animation:bgDrift 22s ease-in-out infinite;transform-origin:center;will-change:transform}
+body::after{content:'';position:fixed;inset:-10%;z-index:-2;pointer-events:none;background:radial-gradient(ellipse 95% 85% at 50% 50%, transparent 55%, rgba(178,106,45,0.08) 100%);animation:bgFloat 28s ease-in-out infinite reverse;transform-origin:center;will-change:transform}
+@keyframes bgDrift{0%{transform:scale(1) translate(0,0) rotate(0deg)}20%{transform:scale(1.10) translate(-3.5%,2.5%) rotate(0.6deg)}40%{transform:scale(1.06) translate(3%,-3%) rotate(-0.5deg)}60%{transform:scale(1.12) translate(-2.5%,-3.5%) rotate(0.7deg)}80%{transform:scale(1.08) translate(3%,2%) rotate(-0.4deg)}100%{transform:scale(1) translate(0,0) rotate(0deg)}}
+@keyframes bgFloat{0%,100%{transform:scale(1) translate(0,0)}50%{transform:scale(1.08) translate(2%,-2%)}}
+@media (prefers-reduced-motion:reduce){body::before,body::after{animation:none}}
+
+/* Sidebar */
+.sidebar{position:fixed;top:0;left:0;width:var(--sidebar-w);height:100vh;background:rgba(255,255,255,0.55);backdrop-filter:blur(22px) saturate(160%);-webkit-backdrop-filter:blur(22px) saturate(160%);border-right:1px solid var(--border);display:flex;flex-direction:column;padding:0 12px 12px;z-index:40}
+.sb-brand{height:var(--topbar-h);display:flex;align-items:center;gap:10px;padding:0 10px;font-weight:600;font-size:1.0625rem;letter-spacing:-0.015em;color:var(--text);border-bottom:1px solid var(--border-soft);margin:0 -12px 12px}
+.sb-brand-dot{width:26px;height:26px;border-radius:8px;background:linear-gradient(135deg,#C97B3A,#E0995E);box-shadow:0 1px 2px rgba(178,106,45,0.30),inset 0 1px 0 rgba(255,255,255,0.22);flex-shrink:0;display:flex;align-items:center;justify-content:center}
+.sb-brand-dot svg{width:14px;height:14px;color:#fff;stroke-width:1.8}
+.sb-nav{display:flex;flex-direction:column;gap:2px;flex:1;width:100%}
+.sb-item{width:100%;height:38px;border-radius:8px;padding:0 10px;display:flex;align-items:center;gap:10px;color:var(--text-muted);font-family:inherit;font-size:.875rem;font-weight:500;cursor:pointer;text-decoration:none;transition:color 160ms var(--ease),background 160ms var(--ease);position:relative}
+.sb-item:hover{color:var(--text);background:rgba(26,31,42,0.05)}
+.sb-item.active{background:rgba(201,123,58,0.10);color:var(--text)}
+.sb-item.active svg{color:var(--accent)}
+.sb-item svg{width:17px;height:17px;stroke-width:1.7;flex-shrink:0}
+.sb-tip{font-size:.875rem;font-weight:500}
+.sb-badge{margin-left:auto;min-width:20px;height:18px;padding:0 6px;border-radius:9px;background:var(--accent);color:#fff;font-size:.6875rem;font-weight:600;display:inline-flex;align-items:center;justify-content:center;font-family:inherit;font-variant-numeric:tabular-nums}
+.sb-lock{margin-left:auto;font-size:.625rem;font-weight:700;color:var(--text-faint);letter-spacing:.06em;text-transform:uppercase}
+.sb-featured{background:linear-gradient(135deg,rgba(201,123,58,0.10),rgba(224,153,94,0.04));border:1px solid rgba(201,123,58,0.20);margin-bottom:6px}
+.sb-featured:hover{background:linear-gradient(135deg,rgba(201,123,58,0.16),rgba(224,153,94,0.08))}
+.sb-featured svg{color:var(--accent)}
+.sb-featured .sb-tip{font-weight:600;color:var(--text)}
+.sb-group{display:flex;flex-direction:column;width:100%;margin-top:6px}
+.sb-group-head{width:100%;height:32px;display:flex;align-items:center;gap:8px;padding:0 10px;background:transparent;border:none;font-family:inherit;font-size:.6875rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-faint);cursor:pointer;border-radius:6px;transition:color 120ms var(--ease)}
+.sb-group-head:hover{color:var(--text-muted)}
+.sb-group-head .sb-chev{margin-left:auto;width:11px;height:11px;transition:transform 220ms var(--ease);stroke-width:2}
+.sb-group.open .sb-group-head .sb-chev{transform:rotate(90deg)}
+.sb-group-body{display:flex;flex-direction:column;gap:2px;max-height:0;overflow:hidden;transition:max-height 280ms var(--ease)}
+.sb-group.open .sb-group-body{max-height:600px}
+.sb-bottom{display:flex;flex-direction:column;gap:2px;padding-top:10px;margin-top:8px;border-top:1px solid var(--border);width:100%}
+
+/* Topbar */
+.topbar{position:fixed;top:0;left:var(--sidebar-w);right:0;height:var(--topbar-h);background:rgba(255,255,255,0.55);backdrop-filter:blur(22px) saturate(160%);-webkit-backdrop-filter:blur(22px) saturate(160%);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 22px;gap:18px;z-index:30}
+.brand{display:flex;align-items:center;gap:10px;font-weight:500;font-size:1rem;letter-spacing:-0.01em;color:var(--text)}
+.menu-toggle{display:none;width:36px;height:36px;border-radius:9px;background:transparent;border:1px solid var(--border);color:var(--text);cursor:pointer;align-items:center;justify-content:center;margin-right:4px}
+.menu-toggle svg{width:18px;height:18px}
+.sb-overlay{display:none;position:fixed;inset:0;background:rgba(26,31,42,0.35);z-index:35}
+.sb-overlay.open{display:block}
+.search{flex:1;max-width:520px;margin-left:24px;display:flex;align-items:center;gap:10px;height:38px;padding:0 14px;background:rgba(255,255,255,0.65);border:none;border-radius:10px;color:var(--text-muted);transition:background 150ms var(--ease),box-shadow 200ms var(--ease);cursor:text}
+.search:hover{background:rgba(255,255,255,0.8)}
+.search:focus-within{background:rgba(255,255,255,0.92);box-shadow:0 0 0 3px rgba(26,31,42,0.08)}
+.search svg{width:16px;height:16px;flex-shrink:0;stroke-width:1.6}
+.search input{flex:1;background:transparent;border:none;outline:none;color:var(--text);font-family:inherit;font-size:.8125rem}
+.search input::placeholder{color:var(--text-faint)}
+.search kbd{font-family:inherit;font-size:.6875rem;color:var(--text-muted);background:rgba(255,255,255,0.85);border:none;border-radius:4px;padding:2px 6px}
+.tb-right{display:flex;align-items:center;gap:10px;margin-left:auto}
+.btn-new{height:36px;padding:0 14px;display:inline-flex;align-items:center;gap:6px;background:var(--accent);color:#fff;border:none;border-radius:9px;font-family:inherit;font-size:.8125rem;font-weight:500;cursor:pointer;box-shadow:0 1px 2px rgba(178,106,45,0.18),0 4px 14px rgba(201,123,58,0.22);transition:transform 150ms var(--ease),background 200ms var(--ease),box-shadow 200ms var(--ease)}
+.btn-new:hover{background:var(--accent-hover);transform:translateY(-1px);box-shadow:0 1px 2px rgba(178,106,45,0.20),0 6px 18px rgba(201,123,58,0.30)}
+.btn-new svg{width:14px;height:14px}
+.icon-btn{width:36px;height:36px;border-radius:9px;background:rgba(255,255,255,0.6);border:none;color:var(--text-muted);display:inline-flex;align-items:center;justify-content:center;cursor:pointer;position:relative;transition:color 150ms var(--ease),background 150ms var(--ease)}
+.icon-btn:hover{color:var(--text);background:rgba(255,255,255,0.85)}
+.icon-btn svg{width:16px;height:16px;stroke-width:1.6}
+.icon-btn .dot{position:absolute;top:8px;right:8px;width:7px;height:7px;border-radius:50%;background:#1A1F2A;border:2px solid #E7E9EE}
+.avatar{width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,0.6);display:inline-flex;align-items:center;justify-content:center;color:var(--text-muted);border:1px solid var(--border);cursor:pointer;transition:color 150ms var(--ease),background 150ms var(--ease),border-color 150ms var(--ease)}
+.avatar:hover{color:var(--text);background:rgba(255,255,255,0.85);border-color:var(--border-hover)}
+.avatar svg{width:18px;height:18px}
+
+/* Inbox shell — merged list+thread surface, then the copilot card */
+.inbox-shell{position:fixed;top:var(--topbar-h);left:var(--sidebar-w);right:0;bottom:0;display:grid;grid-template-columns:minmax(0,1fr) 6px var(--copilot-w);gap:0;padding:0;min-width:0;min-height:0}
+
+/* Merged surface — list pane + thread pane read as ONE card (macOS Messages style):
+   single outer border/shadow/radius, rounded corners clip the panes, no inner divider. */
+.merged-surface{position:relative;display:flex;min-width:0;min-height:0;background:#FFFFFF;border:none;border-radius:0;box-shadow:none;overflow:hidden}
+/* Panes inside the merged surface shed their own card chrome — the wrapper owns it.
+   They are differentiated only by background: list = faint tint, thread = surface white. */
+.merged-surface .panel{border:none;border-radius:0;box-shadow:none;background:transparent}
+.merged-surface .panel.leads{flex:0 0 var(--leadcol-w);background:var(--list-tint)}
+.merged-surface .panel.conv{flex:1 1 auto;min-width:0;background:#FFFFFF}
+/* Copilot reads as a flush right column of the page (no floating-card chrome). */
+.inbox-shell>.panel.copilot{border-radius:0;box-shadow:none;border-top:0;border-right:0;border-bottom:0;border-left:1px solid var(--border)}
+
+/* Drag handle between panes — column resizer (copilot side keeps the visible grip) */
+.col-resize{align-self:stretch;width:6px;background:transparent;cursor:col-resize;position:relative;z-index:5;border-radius:3px;transition:background 130ms var(--ease);display:flex;align-items:center;justify-content:center}
+.col-resize::before{content:'';position:absolute;left:2px;top:0;bottom:0;width:2px;border-radius:2px;background:rgba(26,31,42,0.08);transition:background 130ms var(--ease)}
+.col-resize .cr-grip{position:relative;z-index:1;width:26px;height:26px;border-radius:50%;background:#FFFFFF;border:1px solid rgba(26,31,42,0.12);box-shadow:0 1px 2px rgba(26,31,42,0.06),0 4px 10px rgba(26,31,42,0.06);display:inline-flex;align-items:center;justify-content:center;color:var(--text-muted);transition:color 130ms var(--ease),border-color 130ms var(--ease),box-shadow 130ms var(--ease),transform 130ms var(--ease);pointer-events:none}
+.col-resize .cr-grip svg{width:13px;height:13px;stroke-width:2.2}
+.col-resize:hover .cr-grip,.col-resize.dragging .cr-grip{color:var(--accent);border-color:rgba(201,123,58,0.45);box-shadow:0 1px 2px rgba(26,31,42,0.08),0 6px 14px rgba(201,123,58,0.20);transform:scale(1.06)}
+.col-resize:hover::before,.col-resize.dragging::before{background:var(--accent)}
+.col-resize:hover,.col-resize.dragging{background:rgba(201,123,58,0.06)}
+
+/* Inner splitter (list ↔ thread) — invisible track, hairline only on hover/active.
+   Absolutely positioned on the boundary so the panes sit flush (no gutter, no line). */
+.col-resize--inner{position:absolute;top:0;bottom:0;left:var(--leadcol-w);width:11px;transform:translateX(-50%);align-self:auto;z-index:6;background:transparent}
+.col-resize--inner::before{left:50%;width:1px;transform:translateX(-50%);background:transparent}
+.col-resize--inner .cr-grip{display:none}
+.col-resize--inner:hover,.col-resize--inner.dragging{background:transparent}
+.col-resize--inner:hover::before,.col-resize--inner.dragging::before{background:var(--border-hover)}
+
+.panel{background:#FFFFFF;border:1px solid var(--border);border-radius:14px;box-shadow:0 1px 2px rgba(26,31,42,0.04),0 2px 8px rgba(26,31,42,0.04);display:flex;flex-direction:column;min-width:0;min-height:0;overflow:hidden}
+/* List title bar — same height + bottom border as the thread header so the two
+   line up into one continuous header band across the merged surface. */
+.panel-head{height:var(--head-h);padding:0 16px;border-bottom:1px solid var(--border-soft);display:flex;align-items:center;flex-shrink:0}
+.panel-title-row{width:100%}
+/* List tools (search + filter pills) sit below the shared header band, fixed. */
+.list-tools{display:flex;flex-direction:column;gap:10px;padding:12px;flex-shrink:0}
+.list-tools .hdr-meta:empty{display:none}
+.panel-title-row{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.panel-title{font-size:.9375rem;font-weight:600;letter-spacing:-0.005em}
+.panel-sub{font-size:.75rem;color:var(--text-muted)}
+
+/* Left panel: leads */
+.lead-search{display:flex;align-items:center;gap:8px;height:34px;padding:0 10px;background:#FFFFFF;border:1px solid var(--border-soft);border-radius:9px}
+.lead-search svg{width:14px;height:14px;color:var(--text-muted);stroke-width:1.7}
+.lead-search input{flex:1;background:transparent;border:none;outline:none;font-family:inherit;font-size:.8125rem;color:var(--text)}
+.lead-search input::placeholder{color:var(--text-faint)}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{display:inline-flex;align-items:center;gap:5px;padding:5px 10px;border-radius:999px;background:#F6F4EF;border:1px solid var(--border-soft);font-family:inherit;font-size:.6875rem;font-weight:600;color:var(--text-muted);cursor:pointer;letter-spacing:.01em;transition:background 150ms var(--ease),color 150ms var(--ease),border-color 150ms var(--ease)}
+.chip:hover{color:var(--text);border-color:var(--border-hover)}
+.chip.active{background:rgba(201,123,58,0.10);color:var(--text);border-color:rgba(201,123,58,0.30)}
+.chip.active .chip-count{color:var(--accent)}
+.chip-count{font-variant-numeric:tabular-nums;color:var(--text-faint);font-weight:600;font-size:.625rem}
+.lead-list{flex:1;overflow-y:auto;padding:6px 8px 12px}
+.lead-list::-webkit-scrollbar{width:6px}
+.lead-list::-webkit-scrollbar-thumb{background:rgba(26,31,42,0.15);border-radius:3px}
+.lead{position:relative;padding:11px 12px;border-radius:10px;display:grid;grid-template-columns:1fr auto;gap:10px;align-items:start;cursor:pointer;transition:background 140ms var(--ease);border:1px solid transparent}
+.lead:hover{background:rgba(26,31,42,0.045)}
+.lead.active{background:rgba(201,123,58,0.08);border-color:rgba(201,123,58,0.18)}
+.lead + .lead{margin-top:2px}
+/* lead-av removed — no letter-initial avatars in Endeavor design */
+.lead-body{min-width:0}
+.lead-name-row{display:flex;align-items:center;gap:6px;min-width:0}
+.lead-name{font-size:.8125rem;font-weight:600;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.priority-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;background:var(--text-faint)}
+.priority-dot.hot{background:#D8552E;box-shadow:0 0 0 2px rgba(216,85,46,0.18)}
+.priority-dot.warm{background:#C97B3A}
+.priority-dot.cool{background:#6C7280}
+.lead-msg{font-size:.6875rem;color:var(--text-muted);margin-top:3px;line-height:1.35;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.lead.unread .lead-msg{color:var(--text)}
+.lead.unread .lead-name{font-weight:700}
+.lead-meta{display:flex;flex-direction:column;align-items:flex-end;gap:5px;flex-shrink:0}
+.lead-time{font-size:.625rem;color:var(--text-faint);font-variant-numeric:tabular-nums;font-weight:500}
+.lead-unread{min-width:18px;height:18px;padding:0 5px;background:var(--accent);color:#fff;border-radius:9px;font-size:.625rem;font-weight:700;display:inline-flex;align-items:center;justify-content:center;font-variant-numeric:tabular-nums}
+.lead-tags{display:flex;gap:4px;margin-top:6px;flex-wrap:wrap;grid-column:1/-1}
+.lt{display:inline-flex;align-items:center;gap:3px;padding:2px 6px;border-radius:5px;font-size:.5625rem;font-weight:700;letter-spacing:.04em;text-transform:uppercase}
+.lt.score{background:#F0EFEB;color:var(--text-muted)}
+.lt.score b{color:var(--text-strong);font-weight:700;font-variant-numeric:tabular-nums}
+.lt.hot{background:rgba(216,85,46,0.10);color:#9B3A1C}
+.lt.appt{background:rgba(79,130,104,0.10);color:#2E5A45}
+.lt.dnc{background:rgba(163,82,92,0.12);color:#7A2F39}
+.lt.dead{background:rgba(26,31,42,0.08);color:var(--text-muted)}
+.lead-actions{position:absolute;right:8px;bottom:8px;display:none;gap:4px;background:#FFFFFF;border:1px solid var(--border);border-radius:8px;padding:3px;box-shadow:0 4px 12px rgba(26,31,42,0.10)}
+.lead:hover .lead-actions{display:flex}
+.la-btn{width:26px;height:26px;border-radius:6px;background:transparent;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--text-muted);transition:background 130ms var(--ease),color 130ms var(--ease)}
+.la-btn:hover{background:#F6F4EF;color:var(--text)}
+.la-btn.danger:hover{background:rgba(163,82,92,0.10);color:var(--down)}
+.la-btn svg{width:13px;height:13px;stroke-width:1.8}
+
+/* Center panel: conversation */
+.conv-head{height:var(--head-h);padding:0 16px;border-bottom:1px solid var(--border-soft);display:flex;align-items:center;justify-content:space-between;gap:12px;flex-shrink:0}
+.conv-cust{display:flex;align-items:center;gap:12px;min-width:0}
+/* conv-av removed — no letter-initial avatars in Endeavor design */
+.conv-name{font-size:1rem;font-weight:600;letter-spacing:-0.005em;color:var(--text-strong)}
+.conv-sub{font-size:.75rem;color:var(--text-muted);margin-top:2px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.conv-sub .dot-sep{width:3px;height:3px;border-radius:50%;background:var(--text-faint)}
+.compliance-ok{color:var(--up)}
+.compliance-flag{color:var(--down)}
+.conv-actions{display:flex;align-items:center;gap:6px;flex-shrink:0;position:relative}
+.conv-ic{width:34px;height:34px;border-radius:8px;background:#F6F4EF;border:1px solid var(--border-soft);color:var(--text-muted);display:inline-flex;align-items:center;justify-content:center;cursor:pointer;transition:color 130ms var(--ease),background 130ms var(--ease)}
+.conv-ic:hover{color:var(--text);background:#EDEAE2}
+.conv-ic svg{width:15px;height:15px;stroke-width:1.7}
+/* Overflow menu (the "…" dropdown) */
+.conv-menu{position:absolute;top:calc(100% + 6px);right:0;z-index:60;min-width:212px;background:#FFFFFF;border:1px solid var(--border);border-radius:12px;box-shadow:0 10px 28px rgba(26,31,42,0.14),0 2px 6px rgba(26,31,42,0.06);padding:6px;display:flex;flex-direction:column;gap:1px}
+.conv-menu[hidden]{display:none}
+.conv-menu-item{display:flex;align-items:center;gap:10px;width:100%;padding:9px 10px;border:none;border-radius:8px;background:transparent;color:var(--text);font:inherit;font-size:.8125rem;font-weight:500;line-height:1.2;text-align:left;cursor:pointer;transition:background 120ms var(--ease),color 120ms var(--ease)}
+.conv-menu-item:hover{background:var(--list-tint)}
+.conv-menu-item svg{width:16px;height:16px;flex-shrink:0;color:var(--text-muted);stroke-width:1.8}
+.conv-menu-item.danger{color:var(--down)}
+.conv-menu-item.danger svg{color:var(--down)}
+.conv-menu-sep{height:1px;background:var(--border-soft);margin:4px 2px}
+.conv-thread{flex:1;overflow-y:auto;padding:18px 22px;display:flex;flex-direction:column;gap:14px;scroll-behavior:smooth}
+.conv-thread::-webkit-scrollbar{width:6px}
+.conv-thread::-webkit-scrollbar-thumb{background:rgba(26,31,42,0.15);border-radius:3px}
+.day-sep{display:flex;align-items:center;gap:10px;margin:4px 0}
+.day-sep .ds-line{flex:1;height:1px;background:var(--border-soft)}
+.day-sep .ds-label{font-size:.6875rem;color:var(--text-faint);font-weight:500;letter-spacing:.04em;text-transform:uppercase}
+.msg{display:flex;flex-direction:column;max-width:70%;gap:4px}
+.msg.in{align-self:flex-start;align-items:flex-start}
+.msg.out{align-self:flex-end;align-items:flex-end}
+.bubble{padding:10px 14px;border-radius:14px;font-size:.875rem;line-height:1.45;white-space:pre-wrap;word-wrap:break-word}
+.msg.in .bubble{background:#F4F1EA;color:var(--text);border:1px solid var(--border-soft);border-bottom-left-radius:5px}
+.msg.out .bubble{background:#1A1F2A;color:#fff;border-bottom-right-radius:5px}
+.msg .meta{font-size:.6875rem;color:var(--text-faint);display:flex;align-items:center;gap:6px;font-variant-numeric:tabular-nums}
+.msg.out .meta{flex-direction:row-reverse}
+.msg .meta .status{display:inline-flex;align-items:center;gap:3px;color:var(--text-muted)}
+.msg .meta .status.read{color:var(--up)}
+.msg .meta svg{width:11px;height:11px;stroke-width:2}
+
+.ai-draft{align-self:flex-end;max-width:74%;border:1px dashed rgba(201,123,58,0.45);background:rgba(201,123,58,0.06);border-radius:14px;border-bottom-right-radius:5px;padding:10px 14px;display:flex;flex-direction:column;gap:8px}
+.ai-draft .ai-label{display:inline-flex;align-items:center;gap:6px;font-size:.625rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--accent)}
+.ai-draft .ai-label svg{width:11px;height:11px;stroke-width:2}
+.ai-draft .ai-text{font-size:.875rem;color:var(--text);line-height:1.45}
+.ai-draft .ai-row{display:flex;gap:6px;margin-top:4px;flex-wrap:wrap}
+.ai-mini{display:inline-flex;align-items:center;gap:4px;padding:5px 9px;border-radius:6px;background:#FFFFFF;border:1px solid var(--border);font-family:inherit;font-size:.6875rem;font-weight:600;color:var(--text);cursor:pointer;transition:background 130ms var(--ease),border-color 130ms var(--ease)}
+.ai-mini:hover{background:#F6F4EF;border-color:var(--border-hover)}
+.ai-mini.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+.ai-mini.primary:hover{background:var(--accent-hover);border-color:var(--accent-hover)}
+
+.signal{align-self:center;display:inline-flex;align-items:center;gap:8px;padding:6px 12px;border-radius:999px;background:rgba(79,130,104,0.10);color:#2E5A45;border:1px solid rgba(79,130,104,0.22);font-size:.6875rem;font-weight:600;letter-spacing:.02em}
+.signal svg{width:12px;height:12px;stroke-width:2}
+.warning{align-self:center;max-width:80%;display:flex;align-items:flex-start;gap:10px;padding:9px 12px;border-radius:10px;background:rgba(178,119,38,0.10);color:#7A5320;border:1px solid rgba(178,119,38,0.26);font-size:.75rem;line-height:1.4}
+.warning svg{width:14px;height:14px;stroke-width:1.8;flex-shrink:0;margin-top:1px}
+
+/* Composer */
+.composer{flex-shrink:0;border-top:1px solid var(--border-soft);padding:12px 14px 14px;background:#FCFBF8;display:flex;flex-direction:column;gap:10px}
+.composer-toolrow{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.tool{display:inline-flex;align-items:center;gap:5px;padding:6px 10px;border-radius:7px;background:#FFFFFF;border:1px solid var(--border);font-family:inherit;font-size:.75rem;font-weight:600;color:var(--text);cursor:pointer;transition:background 130ms var(--ease),border-color 130ms var(--ease),color 130ms var(--ease);white-space:nowrap}
+.tool:hover{background:#F6F4EF;border-color:var(--border-hover)}
+.tool svg{width:12px;height:12px;color:var(--text-muted);stroke-width:1.8}
+.tool.ai{border-color:rgba(201,123,58,0.32);color:var(--accent)}
+.tool.ai:hover{background:rgba(201,123,58,0.08);border-color:rgba(201,123,58,0.50)}
+.tool.ai svg{color:var(--accent)}
+.tool-sep{width:1px;height:18px;background:var(--border);margin:0 4px}
+.composer-input-wrap{position:relative;border:1px solid var(--border);border-radius:11px;background:#FFFFFF;transition:border-color 150ms var(--ease),box-shadow 150ms var(--ease)}
+.composer-input-wrap:focus-within{border-color:rgba(201,123,58,0.45);box-shadow:0 0 0 3px rgba(201,123,58,0.08)}
+.composer textarea{width:100%;min-height:120px;max-height:240px;resize:none;padding:12px 52px 12px 14px;background:transparent;border:none;outline:none;font-family:inherit;font-size:.875rem;line-height:1.5;color:var(--text)}
+.composer textarea::placeholder{color:var(--text-faint)}
+.composer-bottom{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.composer-status{font-size:.6875rem;color:var(--text-muted);display:inline-flex;align-items:center;gap:6px}
+/* Send lives INSIDE the message input, anchored bottom-right */
+.send-inline{position:absolute;right:8px;bottom:8px;width:38px;height:38px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;background:var(--accent);color:#fff;border:none;cursor:pointer;box-shadow:0 1px 2px rgba(178,106,45,0.18),0 3px 9px rgba(201,123,58,0.22);transition:transform 150ms var(--ease),background 200ms var(--ease),box-shadow 200ms var(--ease),opacity 150ms var(--ease)}
+.send-inline:hover{background:var(--accent-hover);transform:translateY(-1px);box-shadow:0 1px 2px rgba(178,106,45,0.20),0 5px 14px rgba(201,123,58,0.30)}
+.send-inline:active{transform:translateY(0) scale(.96)}
+.send-inline svg{width:15px;height:15px;stroke-width:2.2}
+.send-inline:disabled{background:#E7E3DA;color:var(--text-faint);cursor:default;box-shadow:none;transform:none;opacity:.85}
+.tool.recording{background:rgba(216,85,46,0.10);border-color:rgba(216,85,46,0.40);color:#9B3A1C}
+.tool.recording .rec-dot{width:7px;height:7px;border-radius:50%;background:#D8552E;animation:recPulse 1.2s ease-in-out infinite}
+@keyframes recPulse{0%,100%{opacity:1}50%{opacity:.3}}
+
+/* Right panel: copilot */
+.copilot{display:flex;flex-direction:column;min-height:0;position:relative}
+.copilot-scroll{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:18px}
+.copilot-scroll::-webkit-scrollbar{width:6px}
+.copilot-scroll::-webkit-scrollbar-thumb{background:rgba(26,31,42,0.15);border-radius:3px}
+/* Collapsible copilot: thin rail when collapsed; hover = peek, click = pin */
+.cp-rail{display:none;flex-direction:column;align-items:center;justify-content:center;gap:16px;width:100%;height:100%;border:none;background:transparent;cursor:pointer;color:var(--text-muted);transition:color 150ms var(--ease)}
+.cp-rail:hover{color:var(--accent)}
+.cp-rail svg{width:18px;height:18px;flex-shrink:0;stroke-width:1.9}
+.cp-rail-label{writing-mode:vertical-rl;transform:rotate(180deg);font-size:.6875rem;font-weight:700;letter-spacing:.09em;text-transform:uppercase;white-space:nowrap}
+.cp-collapse-btn{position:absolute;top:9px;right:9px;z-index:6;width:25px;height:25px;border-radius:7px;display:inline-flex;align-items:center;justify-content:center;background:#FFFFFF;border:1px solid var(--border-soft);color:var(--text-muted);cursor:pointer;box-shadow:0 1px 2px rgba(26,31,42,0.06);transition:color 150ms var(--ease),background 150ms var(--ease)}
+.cp-collapse-btn:hover{color:var(--text);background:var(--list-tint)}
+.cp-collapse-btn svg{width:14px;height:14px;stroke-width:2}
+.cp-collapse-btn .cp-ico-collapse{display:none}
+.inbox-shell.cp-pinned .cp-collapse-btn .cp-ico-pin{display:none}
+.inbox-shell.cp-pinned .cp-collapse-btn .cp-ico-collapse{display:block}
+.inbox-shell.cp-collapsed .copilot-scroll{display:none}
+.inbox-shell.cp-collapsed .cp-collapse-btn{display:none}
+.inbox-shell.cp-collapsed .cp-rail{display:flex}
+.cp-card{background:#FFFFFF;border:1px solid var(--border);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:10px}
+
+/* Accent-tinted card — matches the Run Analysis CTA */
+.cp-card.cp-card-accent{background:linear-gradient(135deg,var(--accent) 0%,var(--accent-2) 100%);border-color:transparent;box-shadow:0 1px 2px rgba(178,106,45,0.22),0 8px 24px rgba(201,123,58,0.28);color:#fff}
+.cp-card.cp-card-accent .cp-title{color:rgba(255,255,255,0.78)}
+.cp-card.cp-card-accent .cp-eyebrow{color:rgba(255,255,255,0.92)}
+.cp-card.cp-card-accent .snap-grid .snap-k{color:rgba(255,255,255,0.72)}
+.cp-card.cp-card-accent .snap-grid .snap-v{color:#fff}
+.cp-card.cp-card-accent .sc-num{color:#fff}
+.cp-card.cp-card-accent .sc-out,.cp-card.cp-card-accent .sc-label{color:rgba(255,255,255,0.78)}
+.cp-card.cp-card-accent .snap-bar{background:rgba(255,255,255,0.22)}
+.cp-card.cp-card-accent .snap-bar .sb-fill{background:#fff}
+.cp-card.cp-card-accent .snap-meta{color:rgba(255,255,255,0.82)}
+.cp-card.cp-card-accent .snap-meta b{color:#fff}
+
+/* Collapsible cards — start collapsed, expand on hover (or focus-within for keyboard) */
+.cp-card-collapsible{cursor:pointer;gap:0;transition:gap 240ms var(--ease),padding 240ms var(--ease);min-height:56px;justify-content:center}
+.cp-card-collapsible:hover,
+.cp-card-collapsible:focus-within{min-height:0;justify-content:flex-start}
+.cp-card-collapsible .cp-head{position:relative;padding-right:22px}
+.cp-card-collapsible .cp-head::after{
+  content:'';position:absolute;right:0;top:50%;
+  width:7px;height:7px;border-right:1.4px solid var(--text-muted);border-bottom:1.4px solid var(--text-muted);
+  transform:translateY(-65%) rotate(45deg);
+  transition:transform 240ms var(--ease);
+}
+.cp-card-collapsible:hover .cp-head::after,
+.cp-card-collapsible:focus-within .cp-head::after{transform:translateY(-25%) rotate(-135deg)}
+.cp-card-collapsible > *:not(.cp-head){
+  max-height:0;opacity:0;overflow:hidden;
+  transition:max-height 320ms var(--ease),opacity 200ms var(--ease);
+}
+.cp-card-collapsible:hover,
+.cp-card-collapsible:focus-within{gap:10px}
+.cp-card-collapsible:hover > *:not(.cp-head),
+.cp-card-collapsible:focus-within > *:not(.cp-head){max-height:560px;opacity:1}
+
+/* On touch / no-hover devices — keep expanded by default (tap target is the whole card) */
+@media (hover:none){
+  .cp-card-collapsible{gap:10px}
+  .cp-card-collapsible > *:not(.cp-head){max-height:none;opacity:1;overflow:visible}
+  .cp-card-collapsible .cp-head::after{display:none}
+}
+.cp-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.cp-title{font-size:.75rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--text-muted)}
+.cp-eyebrow{display:inline-flex;align-items:center;gap:5px;font-size:.625rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--accent)}
+.cp-eyebrow svg{width:11px;height:11px;stroke-width:2}
+
+.snap-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px 14px}
+.snap-item{display:flex;flex-direction:column;gap:2px;min-width:0}
+.snap-k{font-size:.625rem;color:var(--text-faint);font-weight:600;letter-spacing:.04em;text-transform:uppercase}
+.snap-v{font-size:.875rem;color:var(--text-strong);font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.snap-score-row{display:flex;align-items:baseline;gap:8px;margin-top:4px;padding-top:12px;border-top:1px dashed var(--border)}
+.snap-score-row .sc-num{font-size:1.625rem;font-weight:600;line-height:1;letter-spacing:-0.02em;color:var(--text-strong);font-variant-numeric:tabular-nums}
+.snap-score-row .sc-out{font-size:.75rem;color:var(--text-muted)}
+.snap-score-row .sc-label{font-size:.6875rem;color:var(--text-muted);margin-left:auto}
+.snap-bar{height:6px;border-radius:3px;background:#F0EFEB;overflow:hidden;margin-top:8px}
+.snap-bar .sb-fill{height:100%;background:linear-gradient(90deg,#C97B3A,#E0995E);border-radius:3px;transition:width 300ms var(--ease)}
+.snap-meta{display:flex;justify-content:space-between;gap:8px;font-size:.6875rem;color:var(--text-muted);margin-top:6px}
+.snap-meta b{color:var(--text-strong);font-weight:700;font-variant-numeric:tabular-nums}
+
+.sugg-list{display:flex;flex-direction:column;gap:6px}
+.sugg{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;border-radius:9px;background:#F6F4EF;border:1px solid var(--border-soft);cursor:pointer;text-align:left;width:100%;font-family:inherit;transition:background 130ms var(--ease),border-color 130ms var(--ease)}
+.sugg:hover{background:#EDEAE2;border-color:var(--border-hover)}
+.sugg-l{display:flex;flex-direction:column;gap:2px;min-width:0}
+.sugg-t{font-size:.8125rem;font-weight:600;color:var(--text)}
+.sugg-d{font-size:.6875rem;color:var(--text-muted);line-height:1.35}
+.sugg svg.arr{width:13px;height:13px;color:var(--text-faint);flex-shrink:0;stroke-width:2}
+
+.comp-list{display:flex;flex-direction:column;gap:8px}
+.comp-item{display:flex;gap:10px;padding:10px 12px;border-radius:9px;border:1px solid var(--border-soft)}
+.comp-item.risk{background:rgba(178,119,38,0.06);border-color:rgba(178,119,38,0.24)}
+.comp-item.dnc{background:rgba(163,82,92,0.06);border-color:rgba(163,82,92,0.24)}
+.comp-item.ok{background:rgba(79,130,104,0.06);border-color:rgba(79,130,104,0.24)}
+.comp-ic{width:24px;height:24px;border-radius:6px;flex-shrink:0;display:flex;align-items:center;justify-content:center}
+.comp-ic svg{width:13px;height:13px;stroke-width:2}
+.comp-item.risk .comp-ic{background:rgba(178,119,38,0.18);color:#7A5320}
+.comp-item.dnc .comp-ic{background:rgba(163,82,92,0.18);color:#7A2F39}
+.comp-item.ok .comp-ic{background:rgba(79,130,104,0.18);color:#2E5A45}
+.comp-t{font-size:.75rem;font-weight:600;color:var(--text);line-height:1.35}
+.comp-d{font-size:.6875rem;color:var(--text-muted);margin-top:2px;line-height:1.4}
+
+.deal-fields{display:grid;grid-template-columns:1fr 1fr;gap:8px 12px;background:#F6F4EF;border:1px solid var(--border-soft);border-radius:9px;padding:12px}
+.deal-field{display:flex;flex-direction:column;gap:2px;min-width:0}
+.deal-field.full{grid-column:1/-1}
+.deal-k{font-size:.625rem;color:var(--text-faint);font-weight:600;letter-spacing:.04em;text-transform:uppercase}
+.deal-v{font-size:.8125rem;font-weight:600;color:var(--text-strong);font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.deal-confidence{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 0 2px;font-size:.6875rem;color:var(--text-muted)}
+.deal-confidence b{color:var(--text-strong);font-weight:700;font-variant-numeric:tabular-nums}
+.deal-actions{display:flex;gap:6px;margin-top:6px}
+.deal-mini{flex:1;display:inline-flex;align-items:center;justify-content:center;gap:5px;padding:8px 10px;border-radius:8px;background:#FFFFFF;border:1px solid var(--border);font-family:inherit;font-size:.75rem;font-weight:600;color:var(--text);cursor:pointer;transition:background 130ms var(--ease),border-color 130ms var(--ease)}
+.deal-mini:hover{background:#F6F4EF;border-color:var(--border-hover)}
+.deal-mini svg{width:11px;height:11px;stroke-width:1.8}
+.submit-deal{width:100%;display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:13px 16px;border-radius:10px;background:var(--accent);color:#fff;border:none;font-family:inherit;font-size:.9375rem;font-weight:600;letter-spacing:-0.005em;cursor:pointer;box-shadow:0 1px 2px rgba(178,106,45,0.22),0 6px 18px rgba(201,123,58,0.32);transition:transform 150ms var(--ease),background 200ms var(--ease),box-shadow 200ms var(--ease);margin-top:2px}
+.submit-deal:hover{background:var(--accent-hover);transform:translateY(-1px);box-shadow:0 1px 2px rgba(178,106,45,0.24),0 8px 22px rgba(201,123,58,0.40)}
+.submit-deal svg{width:15px;height:15px;stroke-width:2.2}
+
+/* FAB */
+.fab-wrap{position:fixed;bottom:22px;right:22px;display:flex;align-items:center;gap:10px;z-index:50}
+.fab-quote{font-size:.8125rem;color:var(--text);font-weight:500;background:#FFFFFF;border:1px solid var(--border);border-radius:999px;padding:8px 14px;box-shadow:0 4px 14px rgba(26,31,42,0.10);animation:fadeShift 5s ease-in-out infinite}
+@keyframes fadeShift{0%,100%{opacity:.7;transform:translateY(0)}50%{opacity:1;transform:translateY(-1px)}}
+.fab{width:56px;height:56px;border-radius:50%;background:var(--accent);color:#fff;border:none;cursor:pointer;box-shadow:0 1px 2px rgba(178,106,45,0.30),0 8px 24px rgba(201,123,58,0.40),inset 0 1px 0 rgba(255,255,255,0.18);display:flex;align-items:center;justify-content:center;transition:transform 150ms var(--ease),background 200ms var(--ease)}
+.fab:hover{background:var(--accent-hover);transform:translateY(-2px) scale(1.04)}
+.fab svg{width:22px;height:22px;stroke-width:1.8}
+
+/* Toast */
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);background:#1A1F2A;color:#fff;padding:12px 18px;border-radius:10px;font-size:.8125rem;font-weight:500;letter-spacing:-0.005em;box-shadow:0 10px 30px rgba(26,31,42,0.30);opacity:0;pointer-events:none;transition:opacity 200ms var(--ease),transform 200ms var(--ease);z-index:80;display:flex;align-items:center;gap:10px;max-width:90vw}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0);pointer-events:auto}
+.toast svg{width:15px;height:15px;color:#4F8268;stroke-width:2.2}
+.toast.accent svg{color:#E0995E}
+
+/* Responsive */
+@media (max-width:1200px){
+  :root{--leadcol-w:280px;--copilot-w:320px}
+  .conv-thread{padding:14px 16px}
+}
+@media (max-width:1024px){
+  .inbox-shell{grid-template-columns:minmax(0,1fr)}
+  .copilot,.col-resize[data-resize="copilot"]{display:none}
+}
+@media (max-width:820px){
+  :root{--sidebar-w:0px}
+  .sidebar{transform:translateX(-100%);transition:transform 200ms var(--ease);width:220px}
+  .sidebar.open{transform:translateX(0)}
+  .topbar{left:0;padding:0 14px}
+  .menu-toggle{display:inline-flex}
+  .inbox-shell{left:0;grid-template-columns:1fr;grid-template-rows:1fr;padding:8px;gap:8px}
+  /* Stack the merged surface: list on top, thread below; no horizontal splitter */
+  .merged-surface{flex-direction:column}
+  .merged-surface .panel.leads{flex:0 0 auto;max-height:42vh}
+  .merged-surface .panel.conv{flex:1 1 auto;min-height:0}
+  .col-resize--inner{display:none}
+  .search{display:none}
+  .brand{font-size:.9375rem}
+}
+@media (max-width:520px){
+  .conv-head{height:auto;min-height:var(--head-h);padding:10px 14px;flex-wrap:wrap;gap:8px}
+  .conv-name{font-size:.9375rem}
+  .composer-toolrow{gap:4px;overflow-x:auto;flex-wrap:nowrap;-webkit-overflow-scrolling:touch}
+  .composer-toolrow::-webkit-scrollbar{display:none}
+  .tool{font-size:.6875rem;padding:5px 8px;flex-shrink:0;white-space:nowrap}
+  .ai-draft,.msg{max-width:92%}
+  .snap-grid{grid-template-columns:1fr}
+  .fab-wrap{bottom:14px;right:14px;gap:8px}
+  .fab{width:50px;height:50px}
+  .fab svg{width:20px;height:20px}
+  .fab-quote{font-size:.75rem;padding:6px 12px;max-width:55vw;white-space:normal;line-height:1.3}
+}
+/* Collapsible copilot — desktop only (copilot is hidden ≤1024px) */
+@media (min-width:1025px){
+  .inbox-shell{transition:grid-template-columns 260ms var(--ease)}
+  .inbox-shell:has(.col-resize.dragging){transition:none}
+  .inbox-shell.cp-collapsed{grid-template-columns:minmax(0,1fr) 0px 46px}
+  .inbox-shell:not(.cp-pinned):not(.cp-collapsed){grid-template-columns:minmax(0,1fr) 0px var(--copilot-w)}
+  .inbox-shell:not(.cp-pinned) .col-resize[data-resize="copilot"]{opacity:0;pointer-events:none}
+}
+@media (max-width:480px){
+  .inbox-shell{padding:6px;gap:6px}
+  .merged-surface .panel.leads{max-height:38vh}
+  .lead{padding:9px 10px;gap:8px}
+  .lead-name{font-size:.8125rem}
+  .lead-msg{font-size:.6875rem}
+  .lt{font-size:.625rem}
+  .conv-head{height:auto;min-height:var(--head-h);padding:9px 12px;gap:8px;flex-wrap:wrap}
+  .conv-name{font-size:.875rem}
+  .conv-thread{padding:10px 12px}
+  .msg-bubble{font-size:.8125rem;padding:8px 11px;line-height:1.45}
+  .composer-wrap{padding:8px 10px}
+  .composer-input{font-size:.8125rem}
+  .composer-toolrow{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none}
+  .composer-toolrow::-webkit-scrollbar{display:none}
+  .chips{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;margin:0 -6px;padding:0 6px}
+  .chips::-webkit-scrollbar{display:none}
+  .chip{flex-shrink:0}
+  .copilot-scroll{padding:12px;gap:12px}
+  .cp-card-collapsible{min-height:52px}
+  .fab-quote{display:none}
+}
+</style>
+  <script src="services/api.js?v=10"></script>
+  <script src="services/call-now-popup.js?v=1"></script>
+  <script src="services/error-boundary.js?v=19"></script>
+</head>
+<body>
+
+<div class="sb-overlay" id="sbOverlay"></div>
+
+<aside class="sidebar" id="sidebar">
+  <a class="sb-brand" href="ask-the-brain.html" style="text-decoration:none">
+    <span class="sb-brand-dot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/><path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/></svg></span>
+    <span>Endeavor</span>
+  </a>
+  <nav class="sb-nav">
+    <a class="sb-item sb-featured" href="ask-the-brain.html" aria-label="Ask the Brain">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/><path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/></svg>
+      <span class="sb-tip">Ask the Brain</span>
+    </a>
+    <a class="sb-item" id="navCeo" href="ceo-dashboard.html" aria-label="CEO Dashboard">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 1 18 0"/><path d="M12 12l4-2"/><circle cx="12" cy="12" r="1.6"/></svg>
+      <span class="sb-tip">CEO Dashboard</span>
+
+    </a>
+    <a class="sb-item" id="navUpload" href="upload-leads.html" aria-label="Upload leads">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 8 5-5 5 5"/><path d="M5 17v2a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-2"/></svg>
+      <span class="sb-tip">Upload Leads</span>
+    </a>
+    <a class="sb-item" href="notifications.html" aria-label="Notifications">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 7 3 9H3c0-2 3-2 3-9Z"/><path d="M10 21a2 2 0 0 0 4 0"/></svg>
+      <span class="sb-tip">Notifications</span>
+      <span class="sb-badge" style="display:none">0</span>
+    </a>
+    <div class="sb-group" id="sbWorkspaces">
+      <button class="sb-group-head" type="button">
+        Workspaces
+        <svg class="sb-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg>
+      </button>
+      <div class="sb-group-body">
+        <a class="sb-item" href="my-team.html" aria-label="My Team">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="7" r="4"/><path d="M3 21c0-3.5 3-6 6-6s6 2.5 6 6"/><path d="M16 3.5a4 4 0 0 1 0 7.5"/><path d="M22 21c0-3-2-5-5-5.5"/></svg>
+          <span class="sb-tip">My Team</span>
+        </a>
+        <a class="sb-item active" href="inbox.html" aria-label="Inbox">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h6l2 3h2l2-3h6"/><path d="M3 7l2 12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2l2-12"/><path d="M5 7l2-3h10l2 3"/></svg>
+          <span class="sb-tip">Inbox</span>
+          <span class="sb-badge" id="inboxBadge" style="display:none">0</span>
+        </a>
+        <a class="sb-item" href="deals.html" aria-label="Deals">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 3 7v6c0 5 4 8 9 9 5-1 9-4 9-9V7Z"/><path d="M9 12l2 2 4-4"/></svg>
+          <span class="sb-tip">Deals</span>
+        </a>
+        <a class="sb-item" href="appointments.html" aria-label="Appointments">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 11h18"/></svg>
+          <span class="sb-tip">Appointments</span>
+        </a>
+        <a class="sb-item" href="analytics.html" aria-label="Analytics">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 15l4-6 4 4 5-7"/></svg>
+          <span class="sb-tip">Analytics</span>
+        </a>
+        <a class="sb-item" href="qa-review.html" aria-label="QA Review">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9 12l2 2 4-4"/><path d="M21 12c0 5-4 8.5-9 9-5-.5-9-4-9-9V5l9-3 9 3v7Z"/></svg>
+          <span class="sb-tip">QA Review</span>
+        </a>
+      </div>
+    </div>
+  </nav>
+  <div class="sb-bottom">
+    <a class="sb-item" href="settings.html" aria-label="Settings">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.8-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1A1.6 1.6 0 0 0 9 19.4a1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.8 1.6 1.6 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1A1.6 1.6 0 0 0 4.6 9a1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3H9a1.6 1.6 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1c0 .6.4 1.2 1 1.5a1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8V9c.3.6.9 1 1.5 1H21a2 2 0 1 1 0 4h-.1c-.6 0-1.2.4-1.5 1Z"/></svg>
+      <span class="sb-tip">Settings</span>
+    </a>
+    <a class="sb-item sb-logout" href="login.html" aria-label="Log out" title="Log out">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></svg>
+      <span class="sb-tip">Log out</span>
+    </a>
+  </div>
+</aside>
+
+<header class="topbar">
+  <button class="menu-toggle" id="menuToggle" aria-label="Open menu">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+  </button>
+  <div class="search">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+    <input id="topSearch" placeholder="Search by name or message"/>
+    <kbd>⌘K</kbd>
+  </div>
+  <div class="tb-right">
+    <button class="icon-btn" aria-label="Notifications" type="button">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 7 3 9H3c0-2 3-2 3-9Z"/><path d="M10 21a2 2 0 0 0 4 0"/></svg>
+      <span class="dot"></span>
+    </button>
+    <button class="avatar" type="button" aria-label="Account"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-8 8-8s8 3.6 8 8"/></svg></button>
+  </div>
+</header>
+
+<div class="inbox-shell cp-collapsed">
+
+  <!-- Merged surface: list pane + thread pane read as one Messages-style card -->
+  <div class="merged-surface">
+
+  <section class="panel leads">
+    <div class="panel-head">
+      <div class="panel-title-row">
+        <div class="panel-title">Inbox</div>
+      </div>
+    </div>
+    <div class="list-tools">
+      <div class="lead-search">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+        <input id="leadSearch" placeholder="Search by name or message"/>
+      </div>
+      <div class="chips" id="leadChips">
+        <button class="chip active" data-filter="all">All <span class="chip-count" id="cc-all">0</span></button>
+        <button class="chip" data-filter="hot">Hot <span class="chip-count" id="cc-hot">0</span></button>
+        <button class="chip" data-filter="appt">Appointments <span class="chip-count" id="cc-appt">0</span></button>
+        <button class="chip" data-filter="replied">Replied <span class="chip-count" id="cc-replied">0</span></button>
+        <button class="chip" data-filter="dead">Dead <span class="chip-count" id="cc-dead">0</span></button>
+        <button class="chip" data-filter="dnc">DNC <span class="chip-count" id="cc-dnc">0</span></button>
+      </div>
+    </div>
+    <div class="lead-list" id="leadList"><div class="eb-list-loader"><span class="eb-spin"></span>Loading…</div></div>
+  </section>
+
+  <div class="col-resize col-resize--inner" data-resize="leads" aria-label="Resize inbox column" role="separator">
+    <span class="cr-grip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6-6 6 6 6"/><path d="m15 6 6 6-6 6"/></svg></span>
+  </div>
+
+  <section class="panel conv">
+    <div class="conv-head">
+      <div class="conv-cust">
+        <div>
+          <div class="conv-name" id="convName"></div>
+          <div class="conv-sub" id="convSub"></div>
+        </div>
+      </div>
+      <div class="conv-actions">
+        <button class="conv-ic" aria-label="Call" type="button" id="callBtn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6A19.79 19.79 0 0 1 2.12 4.18 2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92Z"/></svg>
+        </button>
+        <button class="conv-ic" aria-label="More" type="button" id="convMoreBtn" aria-haspopup="true" aria-expanded="false">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg>
+        </button>
+        <div class="conv-menu" id="convMenu" role="menu" aria-label="Conversation actions" hidden>
+          <button class="conv-menu-item" type="button" role="menuitem" data-act="schedule">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+            Schedule callback
+          </button>
+          <button class="conv-menu-item" type="button" role="menuitem" data-act="resolve">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+            Mark as resolved
+          </button>
+          <button class="conv-menu-item" type="button" role="menuitem" data-act="pin">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17v5"/><path d="M9 3h6l-1 7 3 3H7l3-3-1-7Z"/></svg>
+            Pin conversation
+          </button>
+          <button class="conv-menu-item" type="button" role="menuitem" data-act="mute">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M13.73 21a2 2 0 0 1-3.46 0"/><path d="M18.63 13A17.89 17.89 0 0 1 18 8"/><path d="M6.26 6.26A5.86 5.86 0 0 0 6 8c0 7-3 9-3 9h14"/><path d="M18 8a6 6 0 0 0-9.33-5"/><path d="m1 1 22 22"/></svg>
+            Mute notifications
+          </button>
+          <div class="conv-menu-sep"></div>
+          <button class="conv-menu-item danger" type="button" role="menuitem" data-act="block">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m4.9 4.9 14.2 14.2"/></svg>
+            Block sender
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div class="conv-thread" id="thread"><div class="eb-thread-loader"><span class="eb-spin"></span>Loading…</div></div>
+
+    <div class="composer">
+      <div class="composer-toolrow">
+        <button class="tool" type="button" data-tool="voice" id="voiceBtn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v4"/></svg>
+          <span>Voice to Text</span>
+        </button>
+        <button class="tool" type="button" data-tool="schedule">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+          Schedule Message
+        </button>
+        <button class="tool" type="button" data-tool="template">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M9 14h6"/></svg>
+          Insert Template
+        </button>
+        <button class="tool" type="button" data-tool="appointment">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 11h18M9 16h6"/></svg>
+          Book Appointment
+        </button>
+      </div>
+
+      <div class="composer-input-wrap">
+        <textarea id="composer" placeholder="Type a message, or press AI Draft to start…"></textarea>
+        <button class="send-inline" type="button" id="sendBtn" aria-label="Send" title="Send" disabled>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-11 11"/><path d="m22 2-7 20-4-9-9-4 20-7Z"/></svg>
+        </button>
+      </div>
+    </div>
+  </section>
+
+  </div><!-- /.merged-surface -->
+
+  <div class="col-resize" data-resize="copilot" aria-label="Resize copilot column" role="separator">
+    <span class="cr-grip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6-6 6 6 6"/><path d="m15 6 6 6-6 6"/></svg></span>
+  </div>
+
+  <aside class="panel copilot" id="copilot">
+    <button class="cp-collapse-btn" id="cpToggle" type="button" aria-label="Pin or collapse panel" title="Collapse panel">
+      <svg class="cp-ico-pin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17v5"/><path d="M9 4h6l-1 7 3 2H7l3-2-1-7Z"/></svg>
+      <svg class="cp-ico-collapse" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg>
+    </button>
+    <button class="cp-rail" id="cpRail" type="button" aria-label="Expand customer snapshot" title="Customer snapshot">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m15 6-6 6 6 6"/></svg>
+      <span class="cp-rail-label">Customer snapshot</span>
+    </button>
+    <div class="copilot-scroll">
+
+      <div class="cp-card cp-card-accent">
+        <div class="cp-head">
+          <div class="cp-title">Customer snapshot</div>
+          <span class="cp-eyebrow">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 9.5 8 3 8.5l5 4.5L6.5 20 12 16.6 17.5 20 16 13l5-4.5L14.5 8 12 2Z"/></svg>
+            AI
+          </span>
+        </div>
+        <div class="snap-grid" id="snapGrid"></div>
+        <div class="snap-score-row">
+          <span class="sc-num" id="snapScore">—</span>
+          <span class="sc-out">/100</span>
+          <span class="sc-label">AI lead score</span>
+        </div>
+        <div class="snap-bar"><div class="sb-fill" id="snapBar" style="width:0%"></div></div>
+        <div class="snap-meta">
+          <span>Predicted conversion <b id="snapConv">—</b></span>
+        </div>
+      </div>
+
+      <div class="cp-card cp-card-collapsible">
+        <div class="cp-head">
+          <div class="cp-title">Compliance</div>
+          <span class="cp-eyebrow" style="color:var(--pending)" id="compFlagCount">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 2 22h20L12 2Z"/><path d="M12 9v4M12 17h.01"/></svg>
+            1 flag
+          </span>
+        </div>
+        <div class="comp-list" id="compList"></div>
+      </div>
+
+      <div class="cp-card cp-card-collapsible">
+        <div class="cp-head">
+          <div class="cp-title">Deal extraction</div>
+          <span class="cp-eyebrow">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v4H4zM4 12h16v4H4zM4 20h10"/></svg>
+            Auto
+          </span>
+        </div>
+        <div class="deal-fields" id="dealFields">
+          <div class="deal-field"><span class="deal-k">Name</span><span class="deal-v" id="d-name">—</span></div>
+          <div class="deal-field"><span class="deal-k">DOB</span><span class="deal-v" id="d-dob">—</span></div>
+          <div class="deal-field full"><span class="deal-k">Address</span><span class="deal-v" id="d-addr">—</span></div>
+          <div class="deal-field"><span class="deal-k">Plan type</span><span class="deal-v" id="d-plan">—</span></div>
+          <div class="deal-field"><span class="deal-k">Income</span><span class="deal-v" id="d-income">—</span></div>
+          <div class="deal-field"><span class="deal-k">Household</span><span class="deal-v" id="d-house">—</span></div>
+        </div>
+        <div class="deal-actions">
+          <button class="deal-mini" type="button" data-deal="review">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+            Review Fields
+          </button>
+          <button class="deal-mini" type="button" data-deal="edit">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5Z"/></svg>
+            Edit Fields
+          </button>
+        </div>
+        <button class="submit-deal" type="button" id="submitDeal">
+          Submit Deal
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+        </button>
+      </div>
+
+    </div>
+  </aside>
+
+</div>
+
+<div class="fab-wrap">
+  <div class="fab-quote" id="fabQuote">Ask the brain</div>
+  <button class="fab" id="fabAssistant" type="button" aria-label="AI Assistant — Ask">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/>
+      <path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/>
+      <path d="M9 12h.01M15 12h.01"/>
+    </svg>
+  </button>
+</div>
+
+<div class="toast" id="toast">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+  <span id="toastMsg">Done</span>
+</div>
+
+<script>
+(function(){
+  const $ = q => document.querySelector(q);
+  const $$ = q => document.querySelectorAll(q);
+  const sb = $('#sidebar'), sbo = $('#sbOverlay');
+  $('#menuToggle')?.addEventListener('click',()=>{sb.classList.add('open');sbo.classList.add('open')});
+
+  // Workspaces collapsible (auto-open if active item is inside)
+  const wkGroup = document.getElementById('sbWorkspaces');
+  if(wkGroup){
+    const hasActiveInside = !!wkGroup.querySelector('.sb-item.active');
+    const savedOpen = localStorage.getItem('ebSbWorkspaces');
+    if(hasActiveInside || savedOpen === 'open'){ wkGroup.classList.add('open'); }
+    const wkHead = wkGroup.querySelector('.sb-group-head');
+    wkHead?.addEventListener('click', ()=>{
+      wkGroup.classList.toggle('open');
+      localStorage.setItem('ebSbWorkspaces', wkGroup.classList.contains('open') ? 'open' : 'closed');
+    });
+  }
+
+  sbo?.addEventListener('click',()=>{sb.classList.remove('open');sbo.classList.remove('open')});
+
+  // === Role-aware personalization ===
+  const ROLE = (localStorage.getItem('ebRole') || 'admin');
+  const ROLE_FAB = {
+    agent: ['Ask','How do I close my hottest deal today?','Where am I losing time?','What should I do next?','Who should I follow up with?','Brief me on my biggest deal'],
+    lead:  ['Ask','Who needs coaching this week?','How is my team trending?','Where is my team losing deals?','Which teammate had the best week?','What changed in my team this week?'],
+    head:  ['Ask','Which team is underperforming?','Where should I reallocate budget?','Which leader needs support?','Compare my teams'],
+    admin: ['Ask','Show me org-wide health',"What is the biggest risk this week?",'Plan a 10-day improvement push','Where are integrations failing?','Summarize the company for me']
+  };
+  // Plain scope labels only — the real "N conversations · M unread" count is
+  // appended by refreshChipCounts() from live data (no fabricated counts).
+  const ROLE_SCOPE = { agent: 'Your conversations', lead: 'Your team', head: 'Region', admin: 'Org-wide inbox' };
+  window.__ROLE_FAB_QUOTES = ROLE_FAB[ROLE] || ROLE_FAB.admin;
+  const ceoLink = document.querySelector('#navCeo');
+  if(ceoLink && ROLE !== 'admin' && ROLE !== 'dev'){ ceoLink.style.display = 'none'; }
+  const ps = document.querySelector('#pageScope');
+  if(ps) ps.innerHTML = (ROLE_SCOPE[ROLE] || ROLE_SCOPE.admin);
+
+  let toastT;
+  function toast(msg, accent){
+    const t=$('#toast');
+    $('#toastMsg').textContent=msg;
+    t.classList.toggle('accent', !!accent);
+    t.classList.add('show');
+    clearTimeout(toastT);
+    toastT=setTimeout(()=>t.classList.remove('show'),2400);
+  }
+
+  var leads = [];
+  var currentLeadId = null;
+  var selfId = '';   // current user id (for in-app DM out/in detection)
+
+  // Styling for the pinned in-app admin rows + the "dm mode" chrome hiding.
+  try {
+    document.head.insertAdjacentHTML('beforeend', '<style>'+
+      '.lead.pinned{background:linear-gradient(90deg,rgba(201,123,58,.06),transparent)}'+
+      '.lead .pin-ic{width:11px;height:11px;color:var(--accent);flex:none;margin-right:2px}'+
+      '.lt.admin{background:rgba(63,110,158,.14);color:#3F6E9E}'+
+      '.lead-divider{padding:8px 14px 4px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-faint)}'+
+      'body.eb-dm-open #copilot,body.eb-dm-open [data-resize="copilot"],body.eb-dm-open .composer-toolrow,body.eb-dm-open .conv-actions{display:none !important}'+
+      'html[data-mode="dark"] .lead.pinned{background:linear-gradient(90deg,rgba(255,255,255,.05),transparent)}'+
+      '.eb-spin{display:inline-block;width:16px;height:16px;border:2px solid var(--border-hover);border-top-color:var(--accent);border-radius:50%;animation:ebspin .7s linear infinite;vertical-align:middle}'+
+      '@keyframes ebspin{to{transform:rotate(360deg)}}'+
+      '.eb-list-loader{display:flex;align-items:center;gap:8px;padding:24px 14px;color:var(--text-faint);font-size:.8125rem}'+
+      '.eb-thread-loader{display:flex;align-items:center;justify-content:center;gap:8px;height:100%;min-height:220px;color:var(--text-faint);font-size:.8125rem}'+
+    '</style>');
+  } catch(e){}
+
+  let leadFilter='all', leadSearchQ='';
+
+  function matchFilter(l){
+    if(leadFilter==='all') return l.tags.indexOf('dead')<0 && l.tags.indexOf('dnc')<0;
+    return l.tags.indexOf(leadFilter)>=0;
+  }
+  function matchSearch(l){
+    if(!leadSearchQ) return true;
+    const q=leadSearchQ.toLowerCase();
+    return l.name.toLowerCase().includes(q) || l.last.toLowerCase().includes(q);
+  }
+  const tagLabels={hot:'Hot',appt:'Appt',replied:'Replied',dead:'Dead',dnc:'DNC'};
+  function tagHtml(t){return `<span class="lt ${t}">${tagLabels[t]||t}</span>`}
+
+  function leadRowHtml(l){
+    return `
+      <div class="lead ${l.id===currentLeadId?'active':''} ${l.unread>0?'unread':''}" data-id="${l.id}">
+        <div class="lead-body">
+          <div class="lead-name-row">
+            <span class="priority-dot ${l.priority}"></span>
+            <span class="lead-name">${l.name}</span>
+          </div>
+          <div class="lead-msg">${escapeHtml(l.last)}</div>
+        </div>
+        <div class="lead-meta">
+          <span class="lead-time">${l.time}</span>
+          ${l.unread>0?`<span class="lead-unread">${l.unread}</span>`:''}
+        </div>
+        <div class="lead-tags">
+          ${l.score>0?`<span class="lt score">Score <b>${l.score}</b></span>`:''}
+          ${l.tags.map(tagHtml).join('')}
+        </div>
+        <div class="lead-actions">
+          <button class="la-btn" title="Open lead" data-act="open" data-id="${l.id}">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M21 14v7H3V3h7"/></svg>
+          </button>
+          <button class="la-btn" title="Call" data-act="call" data-id="${l.id}">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6A19.79 19.79 0 0 1 2.12 4.18 2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92Z"/></svg>
+          </button>
+          <button class="la-btn" title="Schedule callback" data-act="callback" data-id="${l.id}">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+          </button>
+          <button class="la-btn danger" title="Mark wrong number" data-act="wrong" data-id="${l.id}">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="m4.93 4.93 14.14 14.14"/></svg>
+          </button>
+        </div>
+      </div>`;
+  }
+  // Pinned in-app admin row (no lead actions / score; tagged "Admin").
+  function dmRowHtml(l){
+    return `
+      <div class="lead pinned ${l.id===currentLeadId?'active':''} ${l.unread>0?'unread':''}" data-id="${l.id}">
+        <div class="lead-body">
+          <div class="lead-name-row">
+            <svg class="pin-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17v5"/><path d="M9 3h6l-1 7 3 3H7l3-3-1-7Z"/></svg>
+            <span class="lead-name">${escapeHtml(l.name)}</span>
+            <span class="lt admin">${escapeHtml(l.tag||'Admin')}</span>
+          </div>
+          <div class="lead-msg">${escapeHtml(l.last)}</div>
+        </div>
+        <div class="lead-meta">
+          <span class="lead-time">${l.time}</span>
+          ${l.unread>0?`<span class="lead-unread">${l.unread}</span>`:''}
+        </div>
+      </div>`;
+  }
+  function renderLeadList(){
+    const pinned = leads.filter(l => l.channel==='dm' && matchSearch(l));
+    const list = leads.filter(l => l.channel!=='dm' && matchFilter(l) && matchSearch(l));
+    { var lcEl = $('#leadCount'); if(lcEl) lcEl.textContent = list.length; }
+    const listHtml = list.map(leadRowHtml).join('');
+    $('#leadList').innerHTML =
+      pinned.map(dmRowHtml).join('') +
+      (pinned.length && listHtml ? `<div class="lead-divider">Conversations</div>` : '') +
+      (listHtml || (pinned.length ? '' : `<div style="padding:30px 12px;text-align:center;color:var(--text-faint);font-size:.8125rem">No leads match this filter.</div>`));
+    refreshChipCounts();
+  }
+  function refreshChipCounts(){
+    var cust = leads.filter(l=>l.channel!=='dm');   // filter chips count customer convos only
+    $('#cc-all').textContent = cust.filter(l=>l.tags.indexOf('dead')<0 && l.tags.indexOf('dnc')<0).length;
+    $('#cc-hot').textContent = cust.filter(l=>l.tags.indexOf('hot')>=0).length;
+    $('#cc-appt').textContent = cust.filter(l=>l.tags.indexOf('appt')>=0).length;
+    $('#cc-replied').textContent = cust.filter(l=>l.tags.indexOf('replied')>=0).length;
+    $('#cc-dead').textContent = cust.filter(l=>l.tags.indexOf('dead')>=0).length;
+    $('#cc-dnc').textContent = cust.filter(l=>l.tags.indexOf('dnc')>=0).length;
+    const totalUnread = leads.reduce((s,l)=>s+l.unread,0);
+    var ib = $('#inboxBadge');
+    if(ib){ ib.textContent = totalUnread; ib.style.display = totalUnread>0 ? '' : 'none'; }
+    // Real header count (was a hardcoded "4 unread").
+    var psEl = document.querySelector('#pageScope');
+    if(psEl) psEl.textContent = leads.length + ' conversation' + (leads.length===1?'':'s') + ' · ' + totalUnread + ' unread';
+  }
+
+  $$('#leadChips .chip').forEach(c=>{
+    c.addEventListener('click',()=>{
+      $$('#leadChips .chip').forEach(x=>x.classList.remove('active'));
+      c.classList.add('active');
+      leadFilter = c.dataset.filter;
+      renderLeadList();
+    });
+  });
+  $('#leadSearch').addEventListener('input',e=>{leadSearchQ=e.target.value;renderLeadList()});
+
+  // Topbar search drives the same lead filter, and ⌘K / Ctrl+K focuses it.
+  var topSearch = document.getElementById('topSearch');
+  if(topSearch){
+    topSearch.addEventListener('input',e=>{
+      leadSearchQ=e.target.value;
+      var ls=document.getElementById('leadSearch'); if(ls) ls.value=e.target.value;
+      renderLeadList();
+    });
+  }
+  document.addEventListener('keydown',function(e){
+    if((e.metaKey||e.ctrlKey) && (e.key==='k'||e.key==='K')){
+      e.preventDefault();
+      var t = topSearch || document.getElementById('leadSearch');
+      if(t){ t.focus(); t.select(); }
+    }
+  });
+
+  $('#leadList').addEventListener('click', function(e){
+    var actBtn = e.target.closest('[data-act]');
+    if(actBtn){ e.stopPropagation(); handleLeadAction(actBtn.dataset.act, actBtn.dataset.id); return; }
+    var card = e.target.closest('.lead');
+    if(card) selectLead(card.dataset.id);
+  });
+  function handleLeadAction(act,id){
+    const l = leads.find(function(x){ return x.id === id; }); if(!l) return;
+    if(act==='open'){selectLead(id);return}
+    if(act==='call'){toast('Dialing ' + l.name + ' · ' + l.phone, true);return}
+    if(act==='callback'){toast('Callback scheduled — ' + l.name + ' · tomorrow 11:00 AM CT');return}
+    if(act==='wrong'){
+      l.tags=['dead']; l.unread=0; l.last='Marked wrong number — removed from active campaigns.';
+      toast(l.name + ' marked wrong number · removed from campaigns');
+      renderLeadList();
+    }
+  }
+
+  function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]))}
+  function statusSvg(s){
+    if(s==='sent') return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>';
+    return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 9 15l-3-3"/><path d="M22 6 13 15l-1-1"/></svg>';
+  }
+  function statusLabel(s){return s==='read'?'Read':s==='delivered'?'Delivered':s==='failed'?'Failed':'Sent'}
+
+  function renderThread(l){
+    $('#thread').innerHTML = l.thread.map(item=>{
+      if(item.type==='day') return `<div class="day-sep"><span class="ds-line"></span><span class="ds-label">${escapeHtml(item.label)}</span><span class="ds-line"></span></div>`;
+      if(item.type==='in') return `<div class="msg in"><div class="bubble">${escapeHtml(item.text)}</div><div class="meta"><span>${escapeHtml(item.time)}</span></div></div>`;
+      if(item.type==='out') return `<div class="msg out"><div class="bubble">${escapeHtml(item.text)}</div><div class="meta"><span class="status ${item.status||''}">${statusSvg(item.status||'sent')} ${statusLabel(item.status||'sent')}</span><span>${escapeHtml(item.time)}</span></div></div>`;
+      if(item.type==='signal') return `<div class="signal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>${escapeHtml(item.text)}</div>`;
+      if(item.type==='warning') return `<div class="warning"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 2 22h20L12 2Z"/><path d="M12 9v4M12 17h.01"/></svg><span>${escapeHtml(item.text)}</span></div>`;
+      if(item.type==='aiDraft') return `
+        <div class="ai-draft">
+          <span class="ai-label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 9.5 8 3 8.5l5 4.5L6.5 20 12 16.6 17.5 20 16 13l5-4.5L14.5 8 12 2Z"/></svg>AI Draft · suggested reply</span>
+          <div class="ai-text">${escapeHtml(item.text)}</div>
+          <div class="ai-row">
+            <button class="ai-mini primary" type="button" data-aidraft-use="${encodeURIComponent(item.text)}">Use draft</button>
+            <button class="ai-mini" type="button" data-aidraft-tone="casual">Casual</button>
+            <button class="ai-mini" type="button" data-aidraft-tone="professional">Professional</button>
+            <button class="ai-mini" type="button" data-aidraft-tone="match">Match tone</button>
+          </div>
+        </div>`;
+      return '';
+    }).join('');
+    setTimeout(()=>{const t=$('#thread');t.scrollTop=t.scrollHeight},0);
+  }
+
+  $('#thread').addEventListener('click', function(e){
+    var useBtn = e.target.closest('[data-aidraft-use]');
+    if(useBtn){
+      $('#composer').value = decodeURIComponent(useBtn.dataset.aidraftUse);
+      $('#composer').focus();
+      toast('AI draft inserted · compliance checked');
+      return;
+    }
+    var toneBtn = e.target.closest('[data-aidraft-tone]');
+    if(toneBtn){ applyRewrite(toneBtn.dataset.aidraftTone); toast('Rewritten — ' + toneBtn.dataset.aidraftTone); }
+  });
+
+  function renderCopilot(l){
+    $('#convName').textContent = l.name;
+    const dnc = l.tags.indexOf('dnc')>=0;
+    $('#convSub').innerHTML = `<span>${l.phone}</span>` + (dnc ? `<span class="dot-sep"></span><span class="compliance-flag">DNC — outbound blocked</span>` : '');
+
+    $('#snapGrid').innerHTML = [
+      ['Age', l.snapshot.age],
+      ['State', l.snapshot.state],
+      ['Plan type', l.snapshot.plan],
+      ['Household', l.snapshot.household],
+    ].map(([k,v])=>`<div class="snap-item"><span class="snap-k">${k}</span><span class="snap-v">${v}</span></div>`).join('');
+    $('#snapScore').textContent = l.snapshot.score;
+    $('#snapBar').style.width = (l.snapshot.score||0)+'%';
+    $('#snapConv').textContent = (l.snapshot.conv||0)+'%';
+
+    $('#compList').innerHTML = l.compliance.map(c=>{
+      const ic = c.kind==='ok'
+        ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>'
+        : c.kind==='dnc'
+          ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="m4.93 4.93 14.14 14.14"/></svg>'
+          : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 2 22h20L12 2Z"/><path d="M12 9v4M12 17h.01"/></svg>';
+      return `<div class="comp-item ${c.kind}"><div class="comp-ic">${ic}</div><div><div class="comp-t">${escapeHtml(c.t)}</div><div class="comp-d">${escapeHtml(c.d)}</div></div></div>`;
+    }).join('');
+    const flagCount = l.compliance.filter(c=>c.kind!=='ok').length;
+    $('#compFlagCount').innerHTML = flagCount > 0
+      ? `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 2 22h20L12 2Z"/><path d="M12 9v4M12 17h.01"/></svg>${flagCount} flag${flagCount>1?'s':''}`
+      : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Clean`;
+    $('#compFlagCount').style.color = flagCount>0 ? 'var(--pending)' : 'var(--up)';
+
+    $('#d-name').textContent = l.deal.name;
+    $('#d-dob').textContent = l.deal.dob;
+    $('#d-addr').textContent = l.deal.addr;
+    $('#d-plan').textContent = l.deal.plan;
+    $('#d-income').textContent = l.deal.income;
+    $('#d-house').textContent = l.deal.household;
+  }
+
+  function selectLead(id){
+    var l = leads.find(function(x){ return x.id === id; }); if(!l) return;
+    currentLeadId = id;
+    l.unread = 0;
+    // ----- In-app admin DM (pinned) -----
+    if(l.channel === 'dm'){
+      renderLeadList();
+      openDmThread(l);
+      return;
+    }
+    // ----- Normal customer (SMS) conversation -----
+    document.body.classList.remove('eb-dm-open');
+    // Mark this conversation read (shared, persisted) and refresh the sidebar
+    // badge so it doesn't stay stuck at a stale unread count after viewing.
+    if(window.__ebInbox) window.__ebInbox.markRead(l.id, l.last_message_at);
+    if(window.__ebUpdateInboxBadge) window.__ebUpdateInboxBadge();
+    renderLeadList();
+    renderThread(l);
+    renderCopilot(l);
+    loadCopilot(l);
+  }
+
+  // ===== In-app admin DM channel (pinned rows) =====
+  function dmMsgItem(m){ return { type: (String(m.sender_id)===String(selfId) || m.mine) ? 'out' : 'in', text: m.body, time: formatTime(m.created_at), status: 'sent', id: m.id }; }
+  function openDmThread(l){
+    document.body.classList.add('eb-dm-open');
+    $('#convName').textContent = l.name;
+    $('#convSub').innerHTML = '<span>'+escapeHtml(l.phone||'')+'</span><span class="dot-sep"></span><span>'+escapeHtml(l.tag||'Admin')+' · in-app realtime</span>';
+    $('#thread').innerHTML = '<div style="padding:24px;text-align:center;color:var(--text-faint);font-size:.8125rem">Loading…</div>';
+    if(window.__ebAPI.clearCache) window.__ebAPI.clearCache();
+    window.__ebAPI.get('/inbox/dm/threads/'+encodeURIComponent(l.dm_user_id)).then(function(res){
+      if(currentLeadId !== l.id) return;
+      if(res && res.self_id) selfId = res.self_id;
+      l.thread = ((res && res.messages)||[]).map(dmMsgItem);
+      renderThread(l);
+      refreshDmRows();   // reflect the now-read state in the list
+      if(window.__ebUpdateInboxBadge) window.__ebUpdateInboxBadge();
+    }).catch(function(e){ $('#thread').innerHTML = '<div style="padding:24px;text-align:center;color:var(--text-faint);font-size:.8125rem">'+escapeHtml((e&&e.message)||'Failed to load conversation')+'</div>'; });
+  }
+  async function sendDm(l, text){
+    var pending = { type:'out', text:text, time: formatTime(new Date().toISOString()), status:'sent', id:'tmp-'+(window.__ebMid=(window.__ebMid||0)+1) };
+    l.thread.push(pending);
+    composer.value=''; syncSend(); renderThread(l);
+    try {
+      var res = await window.__ebAPI.post('/inbox/dm/threads/'+encodeURIComponent(l.dm_user_id)+'/send', { body: text });
+      if(res && res.message && res.message.id) pending.id = res.message.id;
+      refreshDmRows();
+    } catch(e){ pending.status='failed'; renderThread(l); toast('Message failed: '+((e&&e.message)||'send error')); }
+  }
+  // Refresh the pinned admin rows' unread/snippet in place (without disturbing
+  // the open thread or the customer conversations).
+  function refreshDmRows(){
+    if(!window.__ebAPI || !window.__ebAPI.get) return;
+    if(window.__ebAPI.clearCache) window.__ebAPI.clearCache();
+    window.__ebAPI.get('/inbox/dm/threads').then(function(res){
+      if(!res) return;
+      if(res.self_id) selfId = res.self_id;
+      var byId = {}; (res.threads||[]).forEach(function(t){ byId['dm:'+t.user_id] = t; });
+      leads.forEach(function(l){
+        if(l.channel==='dm' && byId[l.id]){
+          var t = byId[l.id];
+          l.unread = (l.id===currentLeadId) ? 0 : (t.unread||0);
+          l.last = t.last_message || 'Start a conversation';
+          l.last_message_at = t.last_message_at || null;
+          l.time = t.last_message_at ? timeAgo(t.last_message_at) : '';
+        }
+      });
+      renderLeadList();
+    }).catch(function(){});
+  }
+
+  // Pull the REAL customer snapshot, compliance checks and extracted deal
+  // fields for this lead and re-render the right panel with live data.
+  async function loadCopilot(l){
+    if(!l || !l.lead_id || !window.__ebAPI) return;
+    try {
+      var data = await window.__ebAPI.get('/leads/' + l.lead_id + '/copilot');
+      if(!data) return;
+      if(currentLeadId !== l.id) return; // user moved on
+      if(data.snapshot) l.snapshot = data.snapshot;
+      if(data.deal) l.deal = data.deal;
+      if(Array.isArray(data.compliance) && data.compliance.length) l.compliance = data.compliance;
+      renderCopilot(l);
+    } catch(e){ console.warn('Copilot load failed:', e); }
+  }
+  function curLead(){ return leads.find(function(x){ return x.id === currentLeadId; }) || null; }
+
+  const composer = $('#composer');
+
+  function applyRewrite(tone){
+    var base = composer.value.trim(); if(!base) return;
+    var out = base;
+    var cur = curLead();
+    if(tone==='casual'){
+      out = base.replace(/Absolutely/gi,'Yeah totally').replace(/\bPerfect\b/gi,'Awesome');
+    } else if(tone==='professional'){
+      out = base.replace(/yeah/gi,'Certainly').replace(/awesome/gi,'Excellent').replace(/want to/gi,'would you like to').replace(/right now/gi,'at your convenience');
+    } else if(tone==='match'){
+      var th = (cur && cur.thread) || [];
+      var lastMsg = th.slice().reverse().find(function(m){ return m.type === 'in'; }) || {};
+      var last = lastMsg.text || '';
+      var friendly = last.length < 30 || /thanks|please|hi/i.test(last);
+      out = friendly ? 'Got it — '+base : base;
+    }
+    composer.value = out.charAt(0).toUpperCase()+out.slice(1);
+  }
+
+  // ===== Voice to Text — real, in-browser dictation (Web Speech API) =====
+  // Uses the browser's built-in SpeechRecognition (Chrome/Edge/Safari). No
+  // server speech provider needed. Interim results stream into the composer
+  // live; the final transcript is appended to whatever is already typed.
+  const __micSVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v4"/></svg>';
+  let voiceRec = null, voiceBtn = null, voiceBase = '';
+  function resetVoiceBtn(btn){
+    if(!btn) return;
+    btn.classList.remove('recording');
+    btn.innerHTML = __micSVG + '<span>Voice to Text</span>';
+  }
+  function toggleVoice(btn){
+    var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if(!SR){
+      toast('Voice input is not supported in this browser — try Chrome or Edge', true);
+      return;
+    }
+    // If already recording, stop.
+    if(voiceRec){
+      try { voiceRec.stop(); } catch(_){}
+      return;
+    }
+    var rec = new SR();
+    voiceRec = rec; voiceBtn = btn;
+    voiceBase = (composer.value || '');
+    if(voiceBase && !/\s$/.test(voiceBase)) voiceBase += ' ';
+    rec.lang = (document.documentElement.getAttribute('lang') || 'en-US');
+    rec.interimResults = true;
+    rec.continuous = true;
+    btn.classList.add('recording');
+    btn.innerHTML = __micSVG + '<span>Listening… (click to stop)</span>';
+    rec.onresult = function(ev){
+      var finalT = '', interim = '';
+      for(var i=ev.resultIndex; i<ev.results.length; i++){
+        var r = ev.results[i];
+        if(r.isFinal) finalT += r[0].transcript;
+        else interim += r[0].transcript;
+      }
+      if(finalT) voiceBase += finalT;
+      composer.value = (voiceBase + interim);
+    };
+    rec.onerror = function(ev){
+      if(ev && ev.error === 'not-allowed') toast('Microphone permission denied', true);
+      else if(ev && ev.error !== 'aborted' && ev.error !== 'no-speech') toast('Voice error: ' + (ev.error||'unknown'), true);
+    };
+    rec.onend = function(){
+      voiceRec = null;
+      resetVoiceBtn(voiceBtn);
+      composer.value = composer.value.trim();
+      composer.focus();
+    };
+    try { rec.start(); toast('Listening — speak now'); }
+    catch(e){ voiceRec = null; resetVoiceBtn(btn); toast('Could not start microphone', true); }
+  }
+
+  $$('.composer-toolrow [data-tool]').forEach(b=>{
+    b.addEventListener('click',async ()=>{
+      const t = b.dataset.tool, l = curLead();
+      if(t==='draft'){
+        try {
+          if (l && (l.lead_id || l.id)) {
+            var leadId = l.lead_id || l.id;
+            var lang = '';
+            try { lang = localStorage.getItem('ebLanguage') || ''; } catch(_){}
+            // Read-only draft: generates a suggested reply from the chat history
+            // and only fills the box — nothing is sent or saved until "Send".
+            var res = await window.__ebAPI.post('/ai/conversation/draft', { lead_id: leadId, conversation_id: l.conversation_id || null, language: lang }).catch(function(){ return null; });
+            if (res && res.draft) composer.value = res.draft;
+          }
+        } catch(e) {
+          console.warn('AI draft failed:', e);
+        }
+        if(composer.value.trim()){
+          composer.focus();
+          toast('AI draft generated · compliance checked');
+        } else {
+          toast('AI draft unavailable from backend');
+        }
+      } else if(t==='casual'||t==='professional'||t==='match'){
+        applyRewrite(t); toast(`Rewritten — ${t}`);
+      } else if(t==='voice'){
+        toggleVoice(b);
+      } else if(t==='schedule'){
+        toast('Scheduled messaging requires backend automation');
+      } else if(t==='template'){
+        composer.value = l ? 'Hi '+l.name.split(' ')[0]+', following up on our last chat — let me know what works for the next step.' : 'Hi, following up on our last chat.';
+        toast('Template inserted');
+      } else if(t==='appointment'){
+        window.location.href = 'appointments.html';
+      }
+    });
+  });
+
+  $('#sendBtn').addEventListener('click',async ()=>{
+    const text = composer.value.trim(); if(!text) return;
+    const l = curLead();
+    if(!l){ toast('Select a conversation before sending'); return; }
+    if(l.channel === 'dm'){ return sendDm(l, text); }   // in-app admin DM (optimistic)
+    const time = new Date().toLocaleTimeString([],{hour:'numeric',minute:'2-digit'});
+    if(l.thread.length && l.thread[l.thread.length-1].type==='aiDraft') l.thread.pop();
+    const pendingMsg = {type:'out',text,time,status:'sent'};
+    l.thread.push(pendingMsg);
+    composer.value=''; syncSend();
+    renderThread(l);
+    toast('Message sent · delivery in progress');
+    try {
+      var convId = l.conversation_id || l.id;
+      var saved = await window.__ebAPI.post('/conversations/' + convId + '/messages', { content: text, sender: 'agent', message_type: 'sms' });
+      pendingMsg.status = saved && saved.delivery_status === 'delivered' ? 'delivered' : 'sent';
+      renderThread(l);
+    } catch(e) {
+      console.warn('Send failed:', e);
+      pendingMsg.status = 'failed';
+      renderThread(l);
+      toast('Message failed: ' + (e.message || 'backend rejected send'));
+    }
+  });
+
+  // In-input send icon: enabled only when there's text; Enter sends (Shift+Enter = newline).
+  function syncSend(){ var sb = document.getElementById('sendBtn'); if(sb) sb.disabled = !composer.value.trim(); }
+  composer.addEventListener('input', syncSend);
+  composer.addEventListener('keydown', function(e){
+    if(e.key === 'Enter' && !e.shiftKey){
+      e.preventDefault();
+      if(composer.value.trim()) document.getElementById('sendBtn').click();
+    }
+  });
+  syncSend();
+
+  $('#callBtn').addEventListener('click',function(){
+    var l = curLead();
+    if(l && l.phone){
+      // Real dial: hand off to the device/softphone via a tel: link.
+      window.location.href = 'tel:' + String(l.phone).replace(/[^+\d]/g,'');
+    } else {
+      toast('No phone number on file for this contact', true);
+    }
+  });
+  // "…" overflow menu — a real dropdown. The Schedule-callback action (formerly the
+  // standalone clock button) now lives here as the first item; behavior is unchanged.
+  (function(){
+    var moreBtn = $('#convMoreBtn'), menu = $('#convMenu');
+    if(!moreBtn || !menu) return;
+    function closeMenu(){ menu.hidden = true; moreBtn.setAttribute('aria-expanded','false'); }
+    function openMenu(){ menu.hidden = false; moreBtn.setAttribute('aria-expanded','true'); }
+    moreBtn.addEventListener('click', function(e){
+      e.stopPropagation();
+      if(!curLead()){ toast('Open a conversation first', true); return; }
+      if(menu.hidden) openMenu(); else closeMenu();
+    });
+    document.addEventListener('click', function(e){
+      if(!menu.hidden && !e.target.closest('.conv-actions')) closeMenu();
+    });
+    document.addEventListener('keydown', function(e){ if(e.key === 'Escape') closeMenu(); });
+    menu.addEventListener('click', async function(e){
+      var item = e.target.closest('.conv-menu-item'); if(!item) return;
+      var act = item.dataset.act; closeMenu();
+      var l = curLead();
+      if(!l){ toast('Open a conversation first', true); return; }
+      var convId = l.conversation_id || l.id;
+      var lid = l.lead_id || l.id;
+      try {
+        if(act === 'schedule'){
+          // Moved from the old clock button: prefill the lead + jump to the calendar to book a follow-up.
+          try { localStorage.setItem('ebPrefillLead', JSON.stringify({ id:l.id, name:l.name, phone:l.phone })); } catch(_){}
+          window.location.href = 'appointments.html';
+        } else if(act === 'resolve'){
+          await window.__ebAPI.patch('/conversations/' + convId, { status: 'resolved' });
+          toast('Conversation marked resolved', 'accent');
+        } else if(act === 'pin'){
+          var pins = JSON.parse(localStorage.getItem('ebPinned')||'[]'); if(pins.indexOf(lid)<0) pins.push(lid);
+          localStorage.setItem('ebPinned', JSON.stringify(pins)); toast(l.name + ' pinned');
+        } else if(act === 'mute'){
+          var mut = JSON.parse(localStorage.getItem('ebMuted')||'[]'); if(mut.indexOf(lid)<0) mut.push(lid);
+          localStorage.setItem('ebMuted', JSON.stringify(mut)); toast('Notifications muted for ' + l.name);
+        } else if(act === 'block'){
+          await window.__ebAPI.patch('/leads/' + lid, { ai_status: 'stopped', status: 'unqualified' });
+          toast(l.name + ' blocked · AI stopped', 'accent');
+        }
+      } catch(err){ toast('Action failed: ' + ((err&&err.message)||'error'), true); }
+    });
+  })();
+
+  // AI Suggestions panel removed — the agent composes/sends replies manually.
+  // (The composer's "AI Draft" tool still offers a read-only draft on demand.)
+
+  $$('[data-deal]').forEach(b=>{
+    b.addEventListener('click',()=>{
+      const k = b.dataset.deal;
+      if(k==='review' || k==='edit') window.location.href = 'add-deal.html';
+    });
+  });
+  $('#submitDeal').addEventListener('click',async ()=>{
+    const l = curLead();
+    if (!l) return;
+    try {
+      var lid = l.lead_id || l.id;
+      await window.__ebAPI.patch('/leads/' + lid, { status: 'won' });
+      toast('Deal submitted · ' + l.name + ' · marked as won', true);
+    } catch(e) {
+      toast('Failed to submit deal: ' + (e.message || 'Unknown error'));
+    }
+    const b = $('#submitDeal');
+    b.style.transform='scale(.97)'; setTimeout(function(){ b.style.transform=''; }, 160);
+  });
+
+  const quotes = window.__ROLE_FAB_QUOTES || ['Ask',"What's the next-best action?",'Summarize this thread','Draft a reply','Forecast my week'];
+  let qi=0;
+  setInterval(()=>{qi=(qi+1)%quotes.length;$('#fabQuote').textContent=quotes[qi]},4400);
+  $('#fabAssistant').addEventListener('click',()=>{window.location.href='ask-the-brain.html'});
+
+  /* === Real data fetching === */
+  // Pinned in-app admin DM → list row.
+  function buildDmLead(t){
+    var nm = t.name || 'Admin';
+    return {
+      id: 'dm:'+t.user_id, channel:'dm', dm_user_id: t.user_id, pinned:true,
+      name: nm, initials: nm.split(' ').map(function(s){ return s[0]; }).join('').slice(0,2).toUpperCase(),
+      phone: t.email || '', tag: t.tag || 'Admin',
+      last: t.last_message || 'Start a conversation',
+      last_message_at: t.last_message_at || null,
+      time: t.last_message_at ? timeAgo(t.last_message_at) : '',
+      unread: t.unread || 0, score:0, priority:'cool', tags:[], thread:[]
+    };
+  }
+  // Customer conversation → list row.
+  function buildConvLead(c, idx){
+    var leadName = c.lead_name || c.sender || 'Conversation ' + (idx + 1);
+    var initials = leadName.split(' ').map(function(s){ return s[0]; }).join('').slice(0, 2).toUpperCase();
+    var score = c.lead_score || 0;
+    var lmf = (c.last_message_from || '').toLowerCase();
+    var isInbound = (lmf === 'lead' || lmf === 'customer' || lmf === 'inbound' || lmf === 'user' || lmf === 'them');
+    var tags = [];
+    if (score >= 70) tags.push('hot');
+    if ((c.message_count || 0) > 1 || (lmf && !isInbound)) tags.push('replied');
+    return {
+      id: c.id,
+      conversation_id: c.id,
+      lead_id: c.lead_id || null,
+      last_message_at: c.last_message_at || null,
+      name: leadName,
+      initials: initials || '?',
+      phone: c.lead_phone || '—',
+      last: c.last_message || c.status || '',
+      time: c.last_message_at ? timeAgo(c.last_message_at) : '—',
+      unread: (window.__ebInbox ? window.__ebInbox.isUnread(c) : isInbound) ? 1 : 0,
+      score: score,
+      priority: score >= 70 ? 'hot' : score >= 40 ? 'warm' : 'cool',
+      tags: tags,
+      snapshot: { age: '—', state: c.lead_state || '—', plan: '—', household: '—', score: c.lead_score || 0, conv: Math.round(c.conversion_probability || c.booking_probability || 0), rev: '$0' },
+      deal: { name: leadName, dob: '—', addr: '—', plan: '—', income: '—', household: '—', confidence: 0 },
+      compliance: [{ kind: 'ok', t: 'No DNC conflicts', d: 'Number is consented and outside quiet hours.' }],
+      thread: [{ type: 'day', label: 'Today' }, { type: 'in', text: c.last_message || 'Started conversation', time: c.last_message_at ? formatTime(c.last_message_at) : '—' }],
+    };
+  }
+
+  async function initInbox() {
+    // Preserve an open in-app DM thread across realtime reloads.
+    var _openDmId = (currentLeadId && String(currentLeadId).slice(0,3)==='dm:') ? currentLeadId : null;
+    var _openDmThread = _openDmId ? (((leads.find(function(l){ return l.id===_openDmId; })||{}).thread) || null) : null;
+
+    // Fire BOTH in parallel so the pinned admin doesn't wait behind /conversations.
+    var convP = window.__ebAPI.get('/conversations', { page: 1, size: 20 }).catch(function(){ return null; });
+    var dmP = window.__ebAPI.get('/inbox/dm/threads').catch(function(){ return null; });
+
+    // Pinned admin DMs (only returned for agents) — paint them the moment they
+    // arrive, before /conversations resolves, so there's no empty-list gap.
+    var dmLeads = [];
+    try {
+      var dmRes = await dmP;
+      if(dmRes){
+        if(dmRes.self_id) selfId = dmRes.self_id;
+        dmLeads = (dmRes.threads||[]).map(buildDmLead);
+        if(_openDmId && _openDmThread){ var keep = dmLeads.find(function(l){ return l.id===_openDmId; }); if(keep) keep.thread = _openDmThread; }
+      }
+    } catch(e){}
+    if(dmLeads.length && !leads.some(function(l){ return l.channel!=='dm'; })){
+      leads = dmLeads.slice();
+      renderLeadList();   // show pinned admins immediately
+    }
+
+    // Then merge in the customer conversations.
+    var convLeads = [];
+    try {
+      var convRes = await convP;
+      convLeads = ((convRes && convRes.items) || []).map(buildConvLead);
+    } catch(err){ console.warn('Failed to load conversations:', err); }
+
+    leads = dmLeads.concat(convLeads);
+    renderLeadList();
+    // First load → auto-open the first CUSTOMER conversation (admins are pinned
+    // but shouldn't steal focus); if none, open the admin so the placeholder
+    // clears. On realtime reloads, keep what's already open.
+    if(currentLeadId && leads.find(function(l){ return l.id===currentLeadId; })){
+      var cur = leads.find(function(l){ return l.id===currentLeadId; });
+      if(cur.channel!=='dm'){ renderThread(cur); renderCopilot(cur); }
+    } else {
+      var firstCust = leads.find(function(l){ return l.channel!=='dm'; });
+      if(firstCust) selectLead(firstCust.id);
+      else if(leads.length) selectLead(leads[0].id);
+      else {
+        // Nothing to show — clear the loader + the hardcoded placeholder.
+        document.body.classList.remove('eb-dm-open');
+        $('#convName').textContent = '';
+        $('#convSub').innerHTML = '';
+        $('#thread').innerHTML = '<div class="eb-thread-loader">No conversations yet.</div>';
+      }
+    }
+  }
+
+  function timeAgo(dateStr){
+    if (!dateStr) return '—';
+    var diff = Date.now() - new Date(dateStr).getTime();
+    var mins = Math.floor(diff / 60000);
+    if (mins < 1) return 'now';
+    if (mins < 60) return mins + 'm ago';
+    var hrs = Math.floor(mins / 60);
+    if (hrs < 24) return hrs + 'h ago';
+    return Math.floor(hrs / 24) + 'd ago';
+  }
+  function formatTime(dateStr){
+    if (!dateStr) return '—';
+    return new Date(dateStr).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  }
+
+  __ebSafeInit(function(){ return initInbox(); });
+
+  // ---- Realtime auto-update (no refresh): reload conversations on relevant events ----
+  (function(){
+    var _t; function reload(){ clearTimeout(_t); _t = setTimeout(function(){ initInbox().catch(function(){}); }, 450); }
+    ['conversation_message_created','lead_replied','lead_updated','message_delivery_updated','engage_cloud_inbound_processed']
+      .forEach(function(ev){ window.addEventListener('launchpad:realtime:' + ev, reload); });
+    try { window.__ebRealtime && window.__ebRealtime.connect(); } catch(e){}
+  })();
+
+  // ---- In-app admin DM realtime: append to the open admin thread + keep the
+  // pinned rows' unread live (does NOT trigger the heavy /conversations reload).
+  window.addEventListener('launchpad:realtime:inapp_message', function(ev){
+    var d = (ev && ev.detail) || {};
+    var l = curLead();
+    if(l && l.channel==='dm' && String(d.peer_id)===String(l.dm_user_id)){
+      var dup = l.thread.some(function(it){ return it.id && String(it.id)===String(d.id); });
+      if(!dup){ l.thread.push({ type: String(d.sender_id)===String(selfId)?'out':'in', text:d.body, time:formatTime(d.created_at), status:'sent', id:d.id }); renderThread(l); }
+      if(window.__ebAPI.clearCache) window.__ebAPI.clearCache();
+      window.__ebAPI.get('/inbox/dm/threads/'+encodeURIComponent(l.dm_user_id))
+        .then(function(){ refreshDmRows(); if(window.__ebUpdateInboxBadge) window.__ebUpdateInboxBadge(); })
+        .catch(function(){ refreshDmRows(); });
+    } else {
+      refreshDmRows();
+    }
+  });
+
+  // === Column resizing ===
+  // Drag the thin handles between panels to resize them. Widths persist
+  // in localStorage so the layout you set sticks across page loads.
+  (function initResizers(){
+    const shell = document.querySelector('.inbox-shell');
+    if(!shell) return;
+    const CONFIG = {
+      leads:   { cssVar:'--leadcol-w', side:'left',  storage:'ebInboxLeadW',    min:240, max:480, dir: 1 },
+      copilot: { cssVar:'--copilot-w', side:'right', storage:'ebInboxCopilotW', min:240, max:520, dir:-1 }
+    };
+    // Restore persisted widths
+    Object.values(CONFIG).forEach(c=>{
+      try{
+        const stored = localStorage.getItem(c.storage);
+        if(stored && /^\d+px$/.test(stored)) shell.style.setProperty(c.cssVar, stored);
+      }catch(e){}
+    });
+
+    function getCurrentWidth(cssVar){
+      const cs = getComputedStyle(shell).getPropertyValue(cssVar).trim();
+      return parseInt(cs, 10) || 320;
+    }
+
+    shell.querySelectorAll('.col-resize').forEach(handle=>{
+      handle.addEventListener('mousedown', startDrag);
+      handle.addEventListener('touchstart', startDrag, {passive:false});
+
+      function startDrag(e){
+        const key = handle.dataset.resize;
+        const cfg = CONFIG[key];
+        if(!cfg) return;
+        e.preventDefault();
+        handle.classList.add('dragging');
+        document.body.style.cursor = 'col-resize';
+        document.body.style.userSelect = 'none';
+        const startX = (e.touches ? e.touches[0].clientX : e.clientX);
+        const startW = getCurrentWidth(cfg.cssVar);
+
+        function onMove(ev){
+          const x = (ev.touches ? ev.touches[0].clientX : ev.clientX);
+          const delta = (x - startX) * cfg.dir;
+          const w = Math.max(cfg.min, Math.min(cfg.max, startW + delta));
+          shell.style.setProperty(cfg.cssVar, w + 'px');
+        }
+        function onUp(){
+          handle.classList.remove('dragging');
+          document.body.style.cursor = '';
+          document.body.style.userSelect = '';
+          document.removeEventListener('mousemove', onMove);
+          document.removeEventListener('mouseup', onUp);
+          document.removeEventListener('touchmove', onMove);
+          document.removeEventListener('touchend', onUp);
+          try{ localStorage.setItem(cfg.storage, shell.style.getPropertyValue(cfg.cssVar) || (getCurrentWidth(cfg.cssVar)+'px')); }catch(e){}
+        }
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('mouseup', onUp);
+        document.addEventListener('touchmove', onMove, {passive:false});
+        document.addEventListener('touchend', onUp);
+      }
+    });
+  })();
+
+  // Collapsible Customer-Snapshot copilot: rail by default; hover = peek, click = pin. Persisted.
+  (function initCopilotCollapse(){
+    var shell = document.querySelector('.inbox-shell');
+    var copilot = document.getElementById('copilot');
+    if(!shell || !copilot) return;
+    var rail = document.getElementById('cpRail');
+    var toggle = document.getElementById('cpToggle');
+    var PIN = 'ebInboxCopilotPinned';
+    var pinned = false; try { pinned = localStorage.getItem(PIN) === '1'; } catch(_){}
+    var peek = false;
+    function apply(){
+      var open = pinned || peek;
+      shell.classList.toggle('cp-collapsed', !open);
+      shell.classList.toggle('cp-pinned', pinned);
+      if(toggle) toggle.title = pinned ? 'Collapse panel' : 'Keep panel open';
+    }
+    function setPinned(v){ pinned = v; peek = false; try { localStorage.setItem(PIN, v ? '1' : '0'); } catch(_){} apply(); }
+    // Hover the rail/panel → peek open; leaving → collapse (only while not pinned, so dropdowns stay usable).
+    copilot.addEventListener('mouseenter', function(){ if(!pinned){ peek = true; apply(); } });
+    copilot.addEventListener('mouseleave', function(){ if(!pinned){ peek = false; apply(); } });
+    // Click the rail → pin open (also the path for touch, where there's no hover).
+    if(rail) rail.addEventListener('click', function(){ setPinned(true); });
+    // Corner toggle: pin when peeking, collapse when pinned.
+    if(toggle) toggle.addEventListener('click', function(e){ e.stopPropagation(); setPinned(!pinned); });
+    apply();
+  })();
+})();
+</script>
+</body>
+</html>

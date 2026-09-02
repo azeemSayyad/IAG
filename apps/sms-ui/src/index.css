@@ -1,0 +1,145 @@
+@import "tailwindcss";
+
+/* Tailwind tokens mirroring the portal palette (used by SMS page content).
+   The accent + ink + hairline tokens DRIVE from runtime CSS variables (set by
+   the theme bridge in src/lib/theme.ts on <html>) so that:
+     - switching ebTheme recolors every accent utility (bg-accent, text-accent…)
+     - dark mode (html[data-mode="dark"]) flips the ink/hairline palette.
+   Fallbacks keep the light/warm look if the bridge hasn't run yet. */
+@theme {
+  --color-cream: #fff8ee;
+  --color-accent: var(--accent, #c97b3a);
+  --color-accent-hover: var(--accent-hover, #b26a2d);
+  --color-accent2: var(--accent-2, #e0995e);
+  --color-ink: var(--text-strong, #1a1f2a);
+  --color-ink-soft: var(--text, #2d3340);
+  --color-ink-muted: var(--text-muted, rgba(26, 31, 42, 0.6));
+  --color-ink-faint: var(--text-faint, rgba(26, 31, 42, 0.42));
+  --color-success: #4f8268;
+  --color-danger: #a3525c;
+  --color-pending: #9c7842;
+  --color-hairline: var(--border, rgba(26, 31, 42, 0.1));
+  --color-hairline-soft: var(--border-soft, rgba(26, 31, 42, 0.06));
+  --font-sans: "Inter", system-ui, -apple-system, sans-serif;
+}
+
+/* Glass card surface flips translucency in dark mode so cards read as dark
+   panels on the dark canvas (mirrors prefs-extras.js's .card dark override). */
+html[data-mode="dark"] .glass {
+  background: rgba(24, 28, 36, 0.78);
+  border-color: rgba(255, 255, 255, 0.08);
+  color: var(--text);
+}
+
+/* Base surface for toned panels (Panel with a `tone`). The tone tint is layered
+   over this via an inline gradient, so the base must flip in dark mode too —
+   otherwise the tint sits on a hardcoded light base and washes out. */
+:root {
+  --panel-base: rgba(255, 255, 255, 0.6);
+}
+html[data-mode="dark"] {
+  --panel-base: rgba(24, 28, 36, 0.78);
+}
+
+/* Recharts default tooltip is a white box with dark text via inline styles —
+   flip it to a dark surface in dark mode (series-colored items are untouched). */
+html[data-mode="dark"] .recharts-default-tooltip {
+  background-color: #1a1f2a !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+}
+html[data-mode="dark"] .recharts-tooltip-label {
+  color: var(--text) !important;
+}
+
+/* Glass card surface, matching the portal's translucent panels. */
+@utility glass {
+  background: rgba(255, 255, 255, 0.55);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--color-hairline);
+}
+
+/* ── Sales Dashboard: Sales-Mix glossy bars + canvas-chart tooltips ────────
+   Ported from the Gamified dashboard (portal-v2.css .pb-* + .*-tooltip). */
+.sd-pb-bar { height: 20px; background: rgba(0, 0, 0, 0.08); border-radius: 10px; position: relative; overflow: visible; }
+html[data-mode="dark"] .sd-pb-bar { background: rgba(255, 255, 255, 0.08); }
+.sd-pb-fill {
+  height: 100%; border-radius: 10px; position: relative; overflow: hidden; min-width: 12px;
+  transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.55), inset 0 -2px 4px rgba(0, 0, 0, 0.2), inset -3px 0 6px rgba(0, 0, 0, 0.15);
+}
+.sd-pb-fill::after {
+  content: ""; position: absolute; top: 1px; left: 0; right: 0; height: 45%;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.55) 0%, rgba(255, 255, 255, 0) 100%);
+  border-radius: 10px 10px 0 0; pointer-events: none;
+}
+.sd-pb-fill.medical { background: linear-gradient(90deg, #93C5FD 0%, #3B82F6 70%, #1E40AF 100%); box-shadow: inset 0 2px 0 rgba(255,255,255,0.55), inset 0 -2px 4px rgba(0,0,0,0.2), 0 4px 12px rgba(59, 130, 246, 0.3); }
+.sd-pb-fill.dental  { background: linear-gradient(90deg, #A7F3D0 0%, #10B981 70%, #047857 100%); box-shadow: inset 0 2px 0 rgba(255,255,255,0.55), inset 0 -2px 4px rgba(0,0,0,0.2), 0 4px 12px rgba(16, 185, 129, 0.3); }
+.sd-pb-fill.vision  { background: linear-gradient(90deg, #FECACA 0%, #F43F5E 70%, #BE123C 100%); box-shadow: inset 0 2px 0 rgba(255,255,255,0.55), inset 0 -2px 4px rgba(0,0,0,0.2), 0 4px 12px rgba(244, 63, 94, 0.3); }
+
+.sd-tooltip {
+  position: absolute; z-index: 20; display: flex; align-items: center; gap: 7px;
+  padding: 6px 11px; border-radius: 9px; pointer-events: none; white-space: nowrap;
+  background: #1A1F2A; color: #fff; font-size: 12px; box-shadow: 0 8px 22px rgba(0, 0, 0, 0.28);
+}
+.sd-tooltip-dot { width: 9px; height: 9px; border-radius: 50%; }
+.sd-tooltip-name { font-weight: 600; }
+.sd-tooltip-val { opacity: 0.85; }
+
+/* ── Dark-mode surface fixes ──────────────────────────────────────────────
+   The components use a handful of hardcoded LIGHT Tailwind surface utilities
+   (bg-white, bg-white/40, bg-white/70, bg-black/5) for nested tiles, inputs,
+   popover menus and message bubbles. Those compile to fixed colors that stay
+   light/transparent in dark mode, making sections look whitish/invisible on the
+   dark canvas. We retint them here at the utility level so EVERY usage flips
+   automatically (no per-component edits needed). Light mode is untouched.
+
+   Palette mirrors the portal engine:
+     opaque popover/menu surface  -> #1A1F2A
+     nested tile / input surface  -> rgba(255,255,255,0.04)
+     subtle row tint (bg-black/5) -> rgba(255,255,255,0.05)
+     hairline border              -> rgba(255,255,255,0.08) */
+html[data-mode="dark"] .bg-white {
+  background-color: #1a1f2a !important;
+}
+html[data-mode="dark"] .bg-white\/70,
+html[data-mode="dark"] .bg-white\/60,
+html[data-mode="dark"] .bg-white\/50,
+html[data-mode="dark"] .bg-white\/40 {
+  background-color: rgba(255, 255, 255, 0.04) !important;
+}
+/* bg-black/5 is used as a faint surface tint on light cards; on dark it must
+   be a faint LIGHT tint instead, otherwise it disappears into the panel.
+   (bg-black/30 — the modal scrim — is intentionally left alone.) */
+html[data-mode="dark"] .bg-black\/5 {
+  background-color: rgba(255, 255, 255, 0.05) !important;
+}
+/* Message-bubble + popover text/border legibility on the retinted surfaces. */
+html[data-mode="dark"] .bg-white {
+  color: var(--text);
+}
+
+/* ── Dark-mode follow-ups (audit) ─────────────────────────────────────────
+   More hardcoded light/near-black tokens that the earlier overrides didn't
+   reach. Same approach: retint at the utility level so every usage flips and
+   light mode is untouched. */
+
+/* Toggle tracks / faint scrims tinted with black: flip to a faint LIGHT tint
+   so they stay visible on the dark canvas (mirrors the bg-black/5 rule). */
+html[data-mode="dark"] .bg-black\/10 { background-color: rgba(255, 255, 255, 0.10) !important; }
+html[data-mode="dark"] .bg-black\/15 { background-color: rgba(255, 255, 255, 0.18) !important; }
+
+/* Hardcoded near-black rings on popovers/menus → faint light hairline. */
+html[data-mode="dark"] .ring-black\/5 { --tw-ring-color: rgba(255, 255, 255, 0.08) !important; }
+
+/* Recharts grid lines + axis tick labels are drawn with inline ink (near-black)
+   colors as SVG attributes, so they vanish on the dark canvas. Presentation
+   attributes lose to any CSS rule, so retint them here for dark mode only. */
+html[data-mode="dark"] .recharts-cartesian-grid line { stroke: rgba(255, 255, 255, 0.12) !important; }
+html[data-mode="dark"] .recharts-cartesian-axis-tick-value,
+html[data-mode="dark"] .recharts-cartesian-axis-tick-value tspan { fill: rgba(255, 255, 255, 0.6) !important; }
+
+/* Arbitrary dark-hex product/status text (Sales Dashboard badges, "Won" label)
+   read dark-on-dark in dark mode; map each to a light variant of the same hue. */
+html[data-mode="dark"] .text-\[\#1d4ed8\] { color: #93c5fd !important; } /* blue  → light */
+html[data-mode="dark"] .text-\[\#047857\] { color: #6ee7b7 !important; } /* green → light */
+html[data-mode="dark"] .text-\[\#be123c\] { color: #fda4af !important; } /* rose  → light */

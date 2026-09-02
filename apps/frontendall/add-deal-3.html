@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Add Deal · ACA · Step 3 — Endeavor</title>
+<script src="i18n-dict.js?v=2"></script>
+<script src="prefs-extras.js?v=28"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="wizard.css"/>
+  <script src="services/api.js?v=10"></script>
+  <script src="services/error-boundary.js?v=19"></script>
+</head>
+<body data-chapter="aca">
+
+<div class="wiz-shell">
+  <a class="ch-brand" href="appointments.html" aria-label="Endeavor">
+    <span class="ch-brand-dot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/><path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/></svg></span>
+    Endeavor
+  </a>
+
+  <header class="ch-head">
+    <div class="ch-row">
+      <div class="ch-titlewrap">
+        <h1 class="ch-title"><span class="ch-num">01.</span> ACA Marketplace</h1>
+        <p class="ch-sub">Master record. Fields entered here sync to ancillary products.</p>
+      </div>
+      <div class="ch-prog">
+        <div class="ch-step"><strong>3</strong><span class="ch-step-of">/ 4</span></div>
+        <div class="ch-ring">
+          <svg viewBox="0 0 36 36"><circle cx="18" cy="18" r="15.9" class="ring-track"/><circle cx="18" cy="18" r="15.9" class="ring-arc" stroke-dasharray="75,100"/></svg>
+          <span class="ch-ring-num">75%</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <div class="wiz-card">
+    <div class="wiz-num">03</div>
+    <div class="wiz-eyebrow">Household &amp; income</div>
+    <h2 class="wiz-title">Subsidy details.</h2>
+    <p class="wiz-sub">Projected MAGI determines APTC and CSR eligibility.</p>
+
+    <form id="step3" class="form-stack" autocomplete="off" novalidate>
+      <div class="form-grid-3">
+        <div class="field">
+          <label class="field-label" for="fHHSize">Household size</label>
+          <input class="ctl" id="fHHSize" type="number" min="1" max="20" placeholder="3" required/>
+        </div>
+        <div class="field">
+          <label class="field-label" for="fDep">Dependents</label>
+          <input class="ctl" id="fDep" type="number" min="0" max="20" placeholder="2" required/>
+        </div>
+        <div class="field">
+          <label class="field-label" for="fFiling">Filing status</label>
+          <select class="ctl ctl-select placeholder" id="fFiling" required>
+            <option value="" disabled selected hidden>Select…</option>
+            <option>Single</option><option>Married filing jointly</option>
+            <option>Married filing separately</option><option>Head of household</option>
+            <option>Qualifying widow(er)</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-grid-3">
+        <div class="field">
+          <label class="field-label" for="fIncome">Annual income</label>
+          <input class="ctl" id="fIncome" type="text" inputmode="numeric" placeholder="$48,000" required/>
+        </div>
+        <div class="field">
+          <label class="field-label" for="fEmp">Employment</label>
+          <select class="ctl ctl-select placeholder" id="fEmp" required>
+            <option value="" disabled selected hidden>Select…</option>
+            <option>W-2 employee</option><option>1099 / contractor</option>
+            <option>Self-employed</option><option>Retired</option>
+            <option>Unemployed</option><option>Student</option>
+          </select>
+        </div>
+        <div class="field">
+          <label class="field-label">Currently insured?</label>
+          <div class="seg-yn" role="group" aria-label="Currently insured?">
+            <button type="button" class="active" data-yn="no">No</button>
+            <button type="button" data-yn="yes">Yes</button>
+          </div>
+        </div>
+      </div>
+      <div class="field">
+        <label class="field-label" for="fRx">Doctors / Rx (optional)</label>
+        <textarea class="ctl ctl-textarea" id="fRx" placeholder="Dr. Patel — Baptist Health; Lipitor 20mg…"></textarea>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="wiz-foot">
+  <button class="btn-step back" id="btnBack" type="button">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+    Back
+  </button>
+  <button class="btn-step next" id="btnNext" type="button">
+    Next
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
+  </button>
+</div>
+
+<script>
+(function(){
+  const $ = (s,r=document)=>r.querySelector(s);
+  const $$ = (s,r=document)=>Array.from(r.querySelectorAll(s));
+  const DRAFT_KEY = 'ebDealDraft';
+  let draft = {};
+  try{ draft = JSON.parse(sessionStorage.getItem(DRAFT_KEY) || '{}'); }catch(e){ draft = {}; }
+
+  const inputs = {
+    hhSize: $('#fHHSize'), dep: $('#fDep'), filing: $('#fFiling'),
+    income: $('#fIncome'), emp: $('#fEmp'), rx: $('#fRx')
+  };
+  Object.entries(inputs).forEach(([k,el])=>{
+    if(draft[k] && el){ el.value = draft[k]; if(el.tagName==='SELECT') el.classList.remove('placeholder'); }
+  });
+  if(draft.insured){
+    $$('.seg-yn button').forEach(b=>b.classList.toggle('active', b.dataset.yn === draft.insured));
+  }
+
+  inputs.income.addEventListener('input', e=>{
+    const raw = e.target.value.replace(/\D/g,'').slice(0,8);
+    e.target.value = raw ? '$' + Number(raw).toLocaleString() : '';
+  });
+
+  ['fFiling','fEmp'].forEach(id=>{
+    const el = document.getElementById(id);
+    el.addEventListener('change', ()=>{
+      if(el.value) el.classList.remove('placeholder'); else el.classList.add('placeholder');
+      persist();
+    });
+  });
+
+  $$('.seg-yn button').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      $$('.seg-yn button').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      persist();
+    });
+  });
+
+  function persist(){
+    Object.assign(draft, {
+      hhSize: inputs.hhSize.value, dep: inputs.dep.value, filing: inputs.filing.value,
+      income: inputs.income.value, emp: inputs.emp.value, rx: inputs.rx.value.trim(),
+      insured: $('.seg-yn button.active')?.dataset.yn || 'no'
+    });
+    sessionStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+  }
+  Object.values(inputs).forEach(el=> el.addEventListener('input', persist));
+
+  $('#btnNext').addEventListener('click', ()=>{ persist(); window.location.href = 'add-deal-4.html'; });
+  $('#btnBack').addEventListener('click', ()=>{ persist(); window.location.href = 'add-deal-2.html'; });
+})();
+</script>
+
+</body>
+</html>

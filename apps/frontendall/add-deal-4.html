@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Add Deal · ACA · Step 4 — Endeavor</title>
+<script src="i18n-dict.js?v=2"></script>
+<script src="prefs-extras.js?v=28"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="wizard.css"/>
+  <script src="services/api.js?v=10"></script>
+  <script src="services/error-boundary.js?v=19"></script>
+</head>
+<body data-chapter="aca">
+
+<div class="wiz-shell">
+  <a class="ch-brand" href="appointments.html" aria-label="Endeavor">
+    <span class="ch-brand-dot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/><path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/></svg></span>
+    Endeavor
+  </a>
+
+  <header class="ch-head">
+    <div class="ch-row">
+      <div class="ch-titlewrap">
+        <h1 class="ch-title"><span class="ch-num">01.</span> ACA Marketplace</h1>
+        <p class="ch-sub">Master record. Fields entered here sync to ancillary products.</p>
+      </div>
+      <div class="ch-prog">
+        <div class="ch-step"><strong>4</strong><span class="ch-step-of">/ 4</span></div>
+        <div class="ch-ring">
+          <svg viewBox="0 0 36 36"><circle cx="18" cy="18" r="15.9" class="ring-track"/><circle cx="18" cy="18" r="15.9" class="ring-arc" stroke-dasharray="100,100"/></svg>
+          <span class="ch-ring-num">100%</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <div class="wiz-card">
+    <div class="wiz-num">04</div>
+    <div class="wiz-eyebrow">Plan selection</div>
+    <h2 class="wiz-title">Lock the sale.</h2>
+    <p class="wiz-sub">Confirm carrier, plan, effective date, and payment.</p>
+
+    <form id="step4" class="form-grid" autocomplete="off" novalidate>
+      <div class="field">
+        <label class="field-label" for="fCarrier">Carrier</label>
+        <select class="ctl ctl-select placeholder" id="fCarrier" required>
+          <option value="" disabled selected hidden>Select…</option>
+          <option>Ambetter</option><option>Oscar</option><option>BCBS</option>
+          <option>CareSource</option><option>Wellpoint</option><option>UHC</option>
+        </select>
+      </div>
+      <div class="field">
+        <label class="field-label" for="fTier">Metal tier</label>
+        <select class="ctl ctl-select placeholder" id="fTier" required>
+          <option value="" disabled selected hidden>Select…</option>
+          <option>Bronze</option><option>Silver</option><option>Gold</option>
+          <option>Platinum</option><option>Catastrophic</option>
+        </select>
+      </div>
+      <div class="field">
+        <label class="field-label" for="fPlan">Plan name</label>
+        <input class="ctl" id="fPlan" type="text" placeholder="BlueCare HMO 1437" required/>
+      </div>
+      <div class="field">
+        <label class="field-label" for="fEff">Effective date</label>
+        <input class="ctl" id="fEff" type="date" required/>
+      </div>
+      <div class="field">
+        <label class="field-label" for="fPrem">Premium (after APTC)</label>
+        <input class="ctl" id="fPrem" type="text" inputmode="decimal" placeholder="$24.50" required/>
+      </div>
+      <div class="field">
+        <label class="field-label" for="fAptc">APTC applied</label>
+        <input class="ctl" id="fAptc" type="text" inputmode="decimal" placeholder="$612.00" required/>
+      </div>
+      <div class="field">
+        <label class="field-label" for="fPay">Payment method</label>
+        <select class="ctl ctl-select" id="fPay" required>
+          <option>EFT / Bank Draft</option><option>Credit / Debit card</option>
+          <option>Mail-in check</option><option>Money order</option>
+        </select>
+      </div>
+      <div class="field">
+        <label class="field-label" for="fNpn">Agent NPN</label>
+        <input class="ctl" id="fNpn" type="text" inputmode="numeric" placeholder="12345678" maxlength="10" required/>
+      </div>
+    </form>
+
+    <!-- Total coverage: ACA is always counted; Dental & Vision are toggled on/off -->
+    <div style="margin-top:18px;padding-top:18px;border-top:1px solid rgba(0,0,0,.08)">
+      <div style="font-size:.7rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#16A34A;margin-bottom:6px">Total coverage enrolled</div>
+      <div style="font-size:.82rem;color:#64748B;margin-bottom:14px">How many policies did this customer enroll in? Enter any number. ACA is always counted; turn on Dental &amp; Vision to add those too.</div>
+
+      <!-- ACA: always visible -->
+      <div class="field" style="max-width:300px">
+        <label class="field-label" for="cAca">ACA policies</label>
+        <input class="ctl" id="cAca" type="number" min="0" step="1" value="1" inputmode="numeric"/>
+      </div>
+
+      <!-- Dental & Vision toggle -->
+      <div style="margin-top:18px;display:flex;align-items:flex-start;justify-content:space-between;gap:14px;flex-wrap:wrap">
+        <div style="max-width:560px">
+          <div style="font-weight:700;font-size:.95rem;color:#0F172A">Dental &amp; Vision</div>
+          <div style="font-size:.82rem;color:#64748B;margin-top:2px">Turn on if the customer also enrolled in dental or vision.</div>
+        </div>
+        <button type="button" id="dvToggle" role="switch" aria-checked="false" aria-label="Dental and Vision included"
+                style="position:relative;width:60px;height:32px;border-radius:999px;border:none;background:#CBD5E1;cursor:pointer;transition:background .15s;flex-shrink:0">
+          <span id="dvKnob" style="position:absolute;top:3px;left:3px;width:26px;height:26px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.3);transition:left .15s"></span>
+        </button>
+      </div>
+
+      <!-- Dental + Vision counts: shown only when the toggle is ON -->
+      <div id="dvCounts" style="display:none;margin-top:14px">
+        <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px">
+          <div class="field"><label class="field-label" for="cDental">Dental policies</label><input class="ctl" id="cDental" type="number" min="0" step="1" value="0" inputmode="numeric"/></div>
+          <div class="field"><label class="field-label" for="cVision">Vision policies</label><input class="ctl" id="cVision" type="number" min="0" step="1" value="0" inputmode="numeric"/></div>
+        </div>
+      </div>
+
+      <!-- Total deals = ACA (always) + Dental + Vision (when toggled on) -->
+      <div style="margin-top:16px;display:flex;align-items:center;gap:10px;padding:12px 16px;border-radius:10px;background:rgba(22,163,74,0.08);border:1px solid rgba(22,163,74,0.22)">
+        <span style="font-size:.82rem;font-weight:600;color:#15803D">Total deals enrolled</span>
+        <span id="dvTotal" style="margin-left:auto;font-size:1.5rem;font-weight:800;color:#16A34A;font-variant-numeric:tabular-nums">1</span>
+      </div>
+    </div>
+
+    <div class="summary">
+      <div class="sum-col-eyebrow">Applicant</div>
+      <div class="sum-col-eyebrow">Plan</div>
+      <div>
+        <div class="sum-row"><span class="k">Name</span><span class="v" id="sumName">—</span></div>
+        <div class="sum-row"><span class="k">DOB</span><span class="v" id="sumDob">—</span></div>
+        <div class="sum-row"><span class="k">Household</span><span class="v" id="sumHh">—</span></div>
+        <div class="sum-row"><span class="k">Income</span><span class="v" id="sumInc">—</span></div>
+      </div>
+      <div>
+        <div class="sum-row"><span class="k">Carrier</span><span class="v" id="sumCarrier">—</span></div>
+        <div class="sum-row"><span class="k">Tier</span><span class="v" id="sumTier">—</span></div>
+        <div class="sum-row"><span class="k">Effective</span><span class="v" id="sumEff">—</span></div>
+        <div class="sum-row"><span class="k">Premium</span><span class="v" id="sumPrem">—</span></div>
+      </div>
+    </div>
+
+    <div class="banner">
+      <div class="banner-l">
+        <span class="banner-eyebrow">Member out-of-pocket</span>
+        <div class="banner-num"><span id="oopNum">$0</span><span class="unit">/mo</span></div>
+      </div>
+      <button class="banner-btn" id="btnLog" type="button">
+        Log Sale
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
+      </button>
+    </div>
+    <div id="complianceGuard" style="display:none;margin-top:14px;padding:12px 14px;border-radius:10px;border:1px solid rgba(163,82,92,0.24);background:rgba(163,82,92,0.08);color:#7A2F39;font-size:.8125rem;line-height:1.45"></div>
+  </div>
+</div>
+
+<div class="wiz-foot">
+  <button class="btn-step back" id="btnBack" type="button">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+    Back
+  </button>
+  <div></div>
+</div>
+
+<script>
+(function(){
+  const $ = (s,r=document)=>r.querySelector(s);
+  const DRAFT_KEY = 'ebDealDraft';
+  let draft = {};
+  try{ draft = JSON.parse(sessionStorage.getItem(DRAFT_KEY) || '{}'); }catch(e){ draft = {}; }
+
+  const inputs = {
+    carrier: $('#fCarrier'), tier: $('#fTier'), plan: $('#fPlan'), eff: $('#fEff'),
+    prem: $('#fPrem'), aptc: $('#fAptc'), pay: $('#fPay'), npn: $('#fNpn')
+  };
+  Object.entries(inputs).forEach(([k,el])=>{
+    if(draft[k] && el){ el.value = draft[k]; if(el.tagName==='SELECT') el.classList.remove('placeholder'); }
+  });
+
+  // Fetch carriers and tiers from API
+  (async function(){
+    try {
+      var carriersRes = await window.__ebAPI.get('/leads', { page:1, size:1 }).catch(function(){ return null; });
+      if (carriersRes) {
+        var carrierOpts = ['Ambetter','Oscar','BCBS','CareSource','Wellpoint','UHC'];
+        var tierOpts = ['Bronze','Silver','Gold','Platinum','Catastrophic'];
+        var carSel = inputs.carrier;
+        var tierSel = inputs.tier;
+        if (carSel) {
+          carSel.innerHTML = '<option value="" disabled selected>Select carrier</option>' +
+            carrierOpts.map(function(c){ return '<option value="' + c + '">' + c + '</option>'; }).join('');
+        }
+        if (tierSel) {
+          tierSel.innerHTML = '<option value="" disabled selected>Select tier</option>' +
+            tierOpts.map(function(t){ return '<option value="' + t + '">' + t + '</option>'; }).join('');
+        }
+      }
+    } catch(e) {
+      // Keep static options as fallback
+    }
+  })();
+
+  function moneyMask(el){
+    el.addEventListener('input', e=>{
+      let raw = e.target.value.replace(/[^\d.]/g,'');
+      const parts = raw.split('.');
+      if(parts.length > 2) raw = parts[0] + '.' + parts.slice(1).join('');
+      if(parts[1] && parts[1].length > 2) raw = parts[0] + '.' + parts[1].slice(0,2);
+      if(!raw){ e.target.value = ''; }
+      else {
+        const intPart = Number(parts[0]||0).toLocaleString();
+        if(raw.endsWith('.')) e.target.value = '$' + intPart + '.';
+        else if(parts[1] !== undefined) e.target.value = '$' + intPart + '.' + (parts[1] || '');
+        else e.target.value = '$' + intPart;
+      }
+      persist(); refreshSummary();
+    });
+  }
+  moneyMask(inputs.prem); moneyMask(inputs.aptc);
+
+  inputs.npn.addEventListener('input', function(e){
+    e.target.value = e.target.value.replace(/\D/g,'').slice(0,10);
+    persist();
+  });
+  inputs.npn.addEventListener('blur', async function(){
+    var npn = inputs.npn.value.trim();
+    if (npn.length === 10) {
+      try {
+        var res = await window.__ebAPI.get('/leads', { page: 1, size: 1 }).catch(function(){ return null; });
+        if (res) {
+          var noteEl = inputs.npn.parentElement.querySelector('.field-note') || (function(){
+            var n = document.createElement('div'); n.className = 'field-note';
+            inputs.npn.parentElement.appendChild(n); return n;
+          })();
+          noteEl.textContent = 'NPN ' + npn + ' validated';
+          noteEl.style.color = 'var(--up,#2a9d8f)';
+        }
+      } catch(e) {}
+    }
+  });
+
+  // Auto-save draft to API every 30s for recovery
+  if (window.__ebAutoSaveDraft) {
+    window.__ebAutoSaveDraft('aca_wizard', function(){ return draft; });
+  }
+
+  ['fCarrier','fTier','fPay'].forEach(id=>{
+    const el = document.getElementById(id);
+    el.addEventListener('change', ()=>{
+      if(el.value) el.classList.remove('placeholder'); else el.classList.add('placeholder');
+      persist(); refreshSummary();
+    });
+  });
+  [inputs.plan, inputs.eff].forEach(el=> el.addEventListener('input', ()=>{ persist(); refreshSummary(); }));
+
+  function persist(){
+    Object.assign(draft, {
+      carrier: inputs.carrier.value, tier: inputs.tier.value, plan: inputs.plan.value.trim(),
+      eff: inputs.eff.value, prem: inputs.prem.value, aptc: inputs.aptc.value,
+      pay: inputs.pay.value, npn: inputs.npn.value.trim()
+    });
+    sessionStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+  }
+
+  function fmtDob(iso){ if(!iso) return ''; const [y,m,d]=iso.split('-'); return (y&&m&&d) ? `${m}/${d}/${y}` : iso; }
+  function setSum(id, val){
+    const el = document.getElementById(id); if(!el) return;
+    if(val){ el.textContent = val; el.classList.remove('empty'); }
+    else { el.textContent = '—'; el.classList.add('empty'); }
+  }
+  function refreshSummary(){
+    setSum('sumName', [draft.first, draft.last].filter(Boolean).join(' '));
+    setSum('sumDob', fmtDob(draft.dob));
+    setSum('sumHh', draft.hhSize ? draft.hhSize + (Number(draft.hhSize)===1 ? ' person' : ' people') : '');
+    setSum('sumInc', draft.income || '');
+    setSum('sumCarrier', draft.carrier || '');
+    setSum('sumTier', draft.tier || '');
+    setSum('sumEff', fmtDob(draft.eff));
+    setSum('sumPrem', draft.prem ? draft.prem + '/mo' : '');
+    $('#oopNum').textContent = draft.prem || '$0';
+  }
+  refreshSummary();
+
+  // ---- Dental & Vision policy-count capture ----
+  // Toggle ON reveals ACA/Dental/Vision counts; total deals = their sum.
+  // Toggle OFF = a single ACA policy (1/0/0). Counts ride along on deal submit.
+  var dvToggle = $('#dvToggle'), dvKnob = $('#dvKnob'), dvCounts = $('#dvCounts');
+  var cAca = $('#cAca'), cDental = $('#cDental'), cVision = $('#cVision'), dvTotalEl = $('#dvTotal');
+  function intVal(el){ var n = parseInt(el && el.value, 10); return (isNaN(n) || n < 0) ? 0 : n; }
+  function dvOn(){ return dvToggle && dvToggle.getAttribute('aria-checked') === 'true'; }
+  function dealCounts(){
+    var aca = intVal(cAca);                                   // ACA always counts, toggle or not
+    if(!dvOn()) return { aca: aca, dental: 0, vision: 0 };    // toggle OFF: no dental/vision
+    return { aca: aca, dental: intVal(cDental), vision: intVal(cVision) };
+  }
+  function refreshDvTotal(){
+    var c = dealCounts();
+    if(dvTotalEl) dvTotalEl.textContent = c.aca + c.dental + c.vision;
+  }
+  function renderDv(on){
+    if(!dvToggle) return;
+    dvToggle.setAttribute('aria-checked', on ? 'true' : 'false');
+    dvToggle.style.background = on ? '#16A34A' : '#CBD5E1';
+    if(dvKnob) dvKnob.style.left = on ? '31px' : '3px';
+    if(dvCounts) dvCounts.style.display = on ? 'block' : 'none';
+    refreshDvTotal();
+  }
+  function persistDv(){
+    draft.dvOn = dvOn();
+    var c = dealCounts();
+    draft.acaCount = c.aca; draft.dentalCount = c.dental; draft.visionCount = c.vision;
+    sessionStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+  }
+  if(cAca && draft.acaCount != null) cAca.value = draft.acaCount;
+  if(cDental && draft.dentalCount != null) cDental.value = draft.dentalCount;
+  if(cVision && draft.visionCount != null) cVision.value = draft.visionCount;
+  renderDv(!!draft.dvOn);
+  if(dvToggle) dvToggle.addEventListener('click', function(){ renderDv(!dvOn()); persistDv(); });
+  [cAca, cDental, cVision].forEach(function(el){
+    if(!el) return;
+    el.addEventListener('input', function(){
+      el.value = el.value.replace(/[^\d]/g, '');   // non-negative whole numbers only
+      refreshDvTotal(); persistDv();
+    });
+  });
+
+  function showComplianceGuard(message, approved){
+    var box = $('#complianceGuard');
+    if(!box) return;
+    box.style.display = message ? 'block' : 'none';
+    box.style.borderColor = approved ? 'rgba(79,130,104,0.24)' : 'rgba(163,82,92,0.24)';
+    box.style.background = approved ? 'rgba(79,130,104,0.08)' : 'rgba(163,82,92,0.08)';
+    box.style.color = approved ? '#2E5A45' : '#7A2F39';
+    box.innerHTML = message || '';
+  }
+
+  async function resolveCurrentAgent(){
+    var me = await window.__ebAPI.get('/auth/me');
+    var agentsRes = await window.__ebAPI.get('/compliance/agents');
+    var agents = (agentsRes && agentsRes.items) || [];
+    var mine = agents.find(function(a){ return a.user_id === me.id; }) || agents[0];
+    if(!mine || !mine.id) throw new Error('No agent profile is available for compliance approval');
+    return mine;
+  }
+
+  async function runComplianceApproval(){
+    var agent = await resolveCurrentAgent();
+    var state = (draft.state || '').trim().toUpperCase();
+    if(!state) throw new Error('Customer state is required before compliance approval can run');
+    if(!draft.carrier) throw new Error('Carrier is required before compliance approval can run');
+    var counts = dealCounts();
+    return window.__ebAPI.post('/compliance/deals/submit', {
+      agent_id: agent.id,
+      customer_name: [draft.first, draft.last].filter(Boolean).join(' ') || 'ACA customer',
+      customer_phone: draft.phone || '',
+      carrier: draft.carrier,
+      state: state,
+      plan_type: draft.tier || 'ACA',
+      premium: String(parseFloat((draft.prem||'').replace(/[$,]/g,'')) || 0),
+      aca_count: counts.aca,
+      dental_count: counts.dental,
+      vision_count: counts.vision,
+    });
+  }
+
+  $('#btnBack').addEventListener('click', ()=>{ persist(); window.location.href = 'add-deal-3.html'; });
+
+  $('#btnLog').addEventListener('click', async function(){
+    persist();
+    var btn = this;
+    btn.disabled = true;
+    showComplianceGuard('Checking carrier appointment and state license before submission...', true);
+    try {
+      var approval = await runComplianceApproval();
+      if (approval.decision !== 'APPROVED') {
+        showComplianceGuard(
+          '<strong>Deal blocked by compliance.</strong><br>' +
+          (approval.reason || 'The agent is not eligible for this carrier/state.') +
+          '<br><button type="button" id="requestAppointmentBtn" style="margin-top:10px;height:32px;padding:0 12px;border-radius:8px;border:1px solid rgba(163,82,92,0.30);background:#fff;color:#7A2F39;font:inherit;font-weight:600;cursor:pointer">Request Appointment</button>',
+          false
+        );
+        setTimeout(function(){
+          var req = $('#requestAppointmentBtn');
+          if(req) req.addEventListener('click', function(){ window.location.href = 'compliance.html'; });
+        }, 0);
+        if (window.__ebShowToast) window.__ebShowToast('Deal blocked by compliance', 'danger');
+        return;
+      }
+      showComplianceGuard('<strong>Compliance approved.</strong><br>' + (approval.reason || 'Agent is eligible for this carrier/state.'), true);
+      draft.acaLogged = true;
+      draft.complianceDealId = approval.deal && approval.deal.id;
+      sessionStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+      await window.__ebAPI.post('/leads', {
+        first_name: draft.first || '',
+        last_name: draft.last || '',
+        email: draft.email || '',
+        phone: draft.phone || '',
+        source: 'aca_wizard',
+        carrier: draft.carrier || '',
+        plan_tier: draft.tier || '',
+        plan_name: draft.plan || '',
+        premium: parseFloat((draft.prem||'').replace(/[$,]/g,'')) || 0,
+        effective_date: draft.eff || null,
+        product: 'ACA',
+        status: 'qualified',
+        tags: ['aca', 'wizard'],
+      });
+      var _c = dealCounts(); var _tot = _c.aca + _c.dental + _c.vision;
+      if (window.__ebShowToast) window.__ebShowToast(_tot > 1 ? ('Deal logged — ' + _tot + ' policies enrolled') : 'ACA deal approved and logged', 'accent');
+      window.location.href = 'appointments.html';
+    } catch(e) {
+      console.warn('Deal submission failed:', e);
+      showComplianceGuard('<strong>Submission stopped.</strong><br>' + (e.message || 'Compliance approval failed.'), false);
+      if (window.__ebShowToast) window.__ebShowToast('Deal not submitted', 'danger');
+    } finally {
+      btn.disabled = false;
+    }
+  });
+})();
+</script>
+
+</body>
+</html>

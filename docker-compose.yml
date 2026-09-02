@@ -1,0 +1,127 @@
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: launchpad
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Backend API
+  backend-api:
+    build:
+      context: ./apps/backend-api
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    # Load local secrets/config (SignWell key, etc.) from the repo-root .env.
+    # The explicit `environment:` below still overrides these (e.g. DB/Redis
+    # hosts point at the compose services, not whatever the .env says).
+    env_file:
+      - .env
+    environment:
+      POSTGRES_URL: postgresql://postgres:postgres@postgres:5432/launchpad
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      JWT_SECRET: dev-secret-change-in-production
+      NODE_ENV: development
+      APP_URL: http://localhost:3000
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./apps/backend-api:/app
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  # Frontend
+  frontend:
+    build:
+      context: ./apps/frontendall
+      dockerfile: Dockerfile
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend-api
+    volumes:
+      - ./apps/frontendall:/usr/share/nginx/html:ro
+
+  # Celery Worker (Background Jobs)
+  worker:
+    build:
+      context: .
+      dockerfile: apps/workers/Dockerfile
+    environment:
+      POSTGRES_URL: postgresql://postgres:postgres@postgres:5432/launchpad
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      JWT_SECRET: dev-secret-change-in-production
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: celery -A workers.celery_app worker --loglevel=info --concurrency=4 -Q sms,ai,booking,reminders,followups,ingestion,analytics,system
+
+  # Dedicated realtime SMS worker — consumes ONLY the sms + ingestion queues so
+  # inbound polling (every 5s) and lead-pool ingest (every 60s) always have free
+  # slots and can never wait behind slow AI/LLM generation on the main worker.
+  worker-sms:
+    build:
+      context: .
+      dockerfile: apps/workers/Dockerfile
+    environment:
+      POSTGRES_URL: postgresql://postgres:postgres@postgres:5432/launchpad
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      JWT_SECRET: dev-secret-change-in-production
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: celery -A workers.celery_app worker --loglevel=info --concurrency=2 -Q sms,ingestion -n sms@%h
+
+  # Celery Beat (Periodic Tasks)
+  celery-beat:
+    build:
+      context: .
+      dockerfile: apps/workers/Dockerfile
+    environment:
+      POSTGRES_URL: postgresql://postgres:postgres@postgres:5432/launchpad
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      JWT_SECRET: dev-secret-change-in-production
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: celery -A workers.celery_app beat --loglevel=info
+
+volumes:
+  postgres_data:
+  redis_data:

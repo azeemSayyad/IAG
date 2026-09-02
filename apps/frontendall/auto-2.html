@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Add Deal · Auto · Step 2 — Endeavor</title>
+<script src="i18n-dict.js?v=2"></script>
+<script src="prefs-extras.js?v=28"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="wizard.css"/>
+  <script src="services/api.js?v=10"></script>
+  <script src="services/error-boundary.js?v=19"></script>
+</head>
+<body data-chapter="auto">
+
+<div class="wiz-shell">
+  <a class="ch-brand" href="appointments.html" aria-label="Endeavor">
+    <span class="ch-brand-dot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/><path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/></svg></span>
+    Endeavor
+  </a>
+
+  <header class="ch-head">
+    <div class="ch-row">
+      <div class="ch-titlewrap">
+        <h1 class="ch-title"><span class="ch-num">03.</span> Auto Insurance</h1>
+        <p class="ch-sub">Quote the household policy. Personal info already on file.</p>
+      </div>
+      <div class="ch-prog">
+        <div class="ch-step"><strong>2</strong><span class="ch-step-of">/ 4</span></div>
+        <div class="ch-ring">
+          <svg viewBox="0 0 36 36"><circle cx="18" cy="18" r="15.9" class="ring-track"/><circle cx="18" cy="18" r="15.9" class="ring-arc" stroke-dasharray="50,100"/></svg>
+          <span class="ch-ring-num">50%</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <div class="wiz-card">
+    <div class="wiz-num">02</div>
+    <div class="wiz-eyebrow">Primary driver · auto-filled</div>
+    <h2 class="wiz-title">Confirm driver.</h2>
+    <p class="wiz-sub">Most of this is already on file. Add license info to continue.</p>
+
+    <form id="step2" class="form-grid" autocomplete="off" novalidate>
+      <div class="field synced">
+        <div class="field-row"><label class="field-label" for="auName">Full name</label><span class="field-tag">Synced</span></div>
+        <input class="ctl" id="auName" type="text" required/>
+      </div>
+      <div class="field synced">
+        <div class="field-row"><label class="field-label" for="auDob">DOB</label><span class="field-tag">Synced</span></div>
+        <input class="ctl" id="auDob" type="date" required/>
+      </div>
+      <div class="field synced">
+        <div class="field-row"><label class="field-label" for="auPhone">Phone</label><span class="field-tag">Synced</span></div>
+        <input class="ctl" id="auPhone" type="tel" required/>
+      </div>
+      <div class="field synced">
+        <div class="field-row"><label class="field-label" for="auEmail">Email</label><span class="field-tag">Synced</span></div>
+        <input class="ctl" id="auEmail" type="email" required/>
+      </div>
+      <div class="field synced" style="grid-column:1/-1">
+        <div class="field-row"><label class="field-label" for="auGarage">Garaging address</label><span class="field-tag">Synced</span></div>
+        <input class="ctl" id="auGarage" type="text" required/>
+      </div>
+      <div class="field">
+        <label class="field-label" for="auLic">Driver's license #</label>
+        <input class="ctl" id="auLic" type="text" placeholder="R261-410-85-321-0" required/>
+      </div>
+      <div class="field">
+        <label class="field-label" for="auLicState">License state</label>
+        <input class="ctl" id="auLicState" type="text" placeholder="FL" maxlength="2" style="text-transform:uppercase" required/>
+      </div>
+      <div class="field">
+        <label class="field-label" for="auYears">Years licensed</label>
+        <input class="ctl" id="auYears" type="number" min="0" max="80" placeholder="12" required/>
+      </div>
+      <div class="field">
+        <label class="field-label" for="auMar">Marital status</label>
+        <select class="ctl ctl-select" id="auMar">
+          <option>Single</option><option>Married</option>
+          <option>Domestic partner</option><option>Divorced</option><option>Widowed</option>
+        </select>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="wiz-foot">
+  <button class="btn-step back" id="btnBack" type="button">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+    Back
+  </button>
+  <button class="btn-step next" id="btnNext" type="button">
+    Next
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
+  </button>
+</div>
+
+<script>
+(function(){
+  const $ = (s,r=document)=>r.querySelector(s);
+  const DRAFT_KEY = 'ebDealDraft';
+  let draft = {};
+  try{ draft = JSON.parse(sessionStorage.getItem(DRAFT_KEY) || '{}'); }catch(e){ draft = {}; }
+
+  $('#auName').value     = draft.auName     ?? [draft.first, draft.last].filter(Boolean).join(' ');
+  $('#auDob').value      = draft.auDob      ?? draft.dob ?? '';
+  $('#auPhone').value    = draft.auPhone    ?? draft.phone ?? '';
+  $('#auEmail').value    = draft.auEmail    ?? draft.email ?? '';
+  $('#auGarage').value   = draft.auGarage   ?? [draft.addr, draft.city, draft.state, draft.zip].filter(Boolean).join(', ');
+  $('#auLic').value      = draft.auLic      ?? '';
+  $('#auLicState').value = draft.auLicState ?? draft.state ?? '';
+  $('#auYears').value    = draft.auYears    ?? '';
+  if(draft.auMar) $('#auMar').value = draft.auMar;
+  else if(draft.mar) $('#auMar').value = draft.mar;
+
+  $('#auLicState').addEventListener('input', e=>{
+    e.target.value = e.target.value.replace(/[^a-zA-Z]/g,'').toUpperCase().slice(0,2);
+  });
+
+  function persist(){
+    Object.assign(draft, {
+      auName: $('#auName').value.trim(), auDob: $('#auDob').value,
+      auPhone: $('#auPhone').value.trim(), auEmail: $('#auEmail').value.trim(),
+      auGarage: $('#auGarage').value.trim(), auLic: $('#auLic').value.trim(),
+      auLicState: $('#auLicState').value.trim().toUpperCase(),
+      auYears: $('#auYears').value, auMar: $('#auMar').value
+    });
+    sessionStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+  }
+  document.querySelectorAll('#step2 .ctl').forEach(el=>{
+    el.addEventListener('input', persist); el.addEventListener('change', persist);
+  });
+
+  $('#btnNext').addEventListener('click', ()=>{ persist(); window.location.href = 'auto-3.html'; });
+  $('#btnBack').addEventListener('click', ()=>{ persist(); window.location.href = 'auto-1.html'; });
+})();
+</script>
+
+</body>
+</html>

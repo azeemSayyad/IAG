@@ -1,0 +1,24 @@
+# Railway/Nixpacks build for the Python monorepo (backend-api shares the `app`
+# package with workers). Used by the web, worker, and beat services.
+[phases.setup]
+nixPkgs = ["python311", "gcc", "postgresql"]
+
+[phases.install]
+cmds = [
+  "python -m venv /opt/venv",
+  ". /opt/venv/bin/activate && pip install --upgrade pip",
+  ". /opt/venv/bin/activate && pip install -r apps/backend-api/requirements.txt -r apps/workers/requirements.txt",
+]
+
+# This is a PYTHON app. The repo has a root package.json (for local TS tooling),
+# which makes Nixpacks auto-add an `npm run build` step — but there is no npm in
+# this image. Override the build phase to a no-op so the deploy does not run npm.
+[phases.build]
+cmds = []
+
+[start]
+# Overridden per-service by the Procfile process (web / worker / beat) or the
+# service Start Command in the Railway dashboard. Uses the venv's bin explicitly
+# (the venv is not on PATH automatically). Migrations run here at DEPLOY time
+# (DATABASE_URL is present), NOT during build (where there is no DB to reach).
+cmd = "bash scripts/start_all_in_one.sh"

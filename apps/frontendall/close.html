@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Deal Closed — Endeavor</title>
+<script src="i18n-dict.js?v=2"></script>
+<script src="prefs-extras.js?v=28"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="wizard.css"/>
+<style>
+.done-card{padding:48px 48px 36px;text-align:center;max-width:780px;margin:0 auto}
+.done-tick{width:60px;height:60px;border-radius:50%;background:var(--c);display:inline-flex;align-items:center;justify-content:center;margin:0 auto 16px;box-shadow:0 1px 2px rgba(0,0,0,0.10),0 10px 24px var(--c-soft)}
+.done-tick svg{width:28px;height:28px;color:#FFF;stroke-width:2.6}
+.done-eyebrow{color:var(--c);font-size:.6875rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase;margin-bottom:14px}
+.done-title{font-size:2.6rem;font-weight:800;line-height:1.1;letter-spacing:-0.025em;color:var(--text-strong);margin-bottom:14px}
+.done-title em{font-style:normal;color:var(--c)}
+.done-sub{color:var(--text-muted);font-size:.9375rem;line-height:1.55;max-width:46ch;margin:0 auto 28px}
+
+.commission{background:#1A1F2A;color:#FFF;border-radius:14px;padding:22px 24px 20px;text-align:left;box-shadow:0 1px 2px rgba(0,0,0,0.2),0 18px 40px rgba(0,0,0,0.30);margin-bottom:18px}
+.com-head{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:18px;flex-wrap:wrap}
+.com-l{display:flex;flex-direction:column;gap:6px}
+.com-eyebrow{font-size:.6875rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--c2)}
+.com-num{font-size:2.6rem;font-weight:800;letter-spacing:-0.025em;font-variant-numeric:tabular-nums;line-height:1}
+.com-r{text-align:right;color:rgba(255,255,255,0.85)}
+.com-bound{font-size:.9375rem;font-weight:500}
+.com-life{font-size:.6875rem;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:rgba(255,255,255,0.50);margin-top:4px}
+
+.com-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.com-cell{background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.06);border-radius:10px;padding:14px}
+.com-cell-head{display:inline-flex;align-items:center;gap:6px;font-size:.6875rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:rgba(255,255,255,0.78);margin-bottom:8px}
+.com-cell-dot{width:7px;height:7px;border-radius:50%}
+.com-cell[data-prod="aca"] .com-cell-dot{background:#2EB389}
+.com-cell[data-prod="dv"]  .com-cell-dot{background:#9460E8}
+.com-cell[data-prod="auto"].com-cell-dot,
+.com-cell[data-prod="auto"] .com-cell-dot{background:#E87B45}
+.com-cell-num{font-size:1.5rem;font-weight:700;letter-spacing:-0.015em;font-variant-numeric:tabular-nums;color:#FFF;line-height:1;margin-bottom:6px}
+.com-cell-status{font-size:.75rem;color:rgba(255,255,255,0.60);font-weight:500}
+
+.client-row{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:18px}
+.client-box{background:#FFF;border:1px solid var(--border);border-radius:12px;padding:14px 16px;text-align:left}
+.cb-label{font-size:.6875rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--text-muted);margin-bottom:4px}
+.cb-val{font-size:.9375rem;font-weight:600;color:var(--text-strong);letter-spacing:-0.005em}
+.cb-sub{font-size:.75rem;color:var(--text-muted);margin-top:2px}
+
+.drop{display:block;padding:18px 18px 16px;background:#FAF7F1;border:1px solid var(--border);border-radius:12px;text-align:left;margin-bottom:22px}
+.drop-head{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+.drop-icon{width:34px;height:34px;border-radius:9px;background:var(--c-soft);display:inline-flex;align-items:center;justify-content:center;color:var(--c);flex-shrink:0}
+.drop-icon svg{width:16px;height:16px;stroke-width:2}
+.drop-title{font-size:.875rem;font-weight:600;color:var(--text-strong);letter-spacing:-0.005em}
+.drop-sub{font-size:.75rem;color:var(--text-muted);margin-top:2px;line-height:1.4}
+.drop-zone{background:#FFF;border:1.5px dashed var(--border-hover);border-radius:9px;padding:14px;display:flex;align-items:center;justify-content:center;gap:8px;font-size:.8125rem;color:var(--text-muted);cursor:pointer;transition:border-color 150ms var(--ease),background 150ms var(--ease)}
+.drop-zone:hover{border-color:var(--c);background:var(--c-soft)}
+.drop-zone .upload-link{color:var(--c);font-weight:600}
+/* Dark mode: page-local (close.html-scoped) so .drop here doesn't fill the
+   transparent upload-leads dropzone that shares the .drop class. */
+html[data-mode="dark"] .client-box{background:rgba(24,28,36,0.78) !important;border-color:rgba(255,255,255,0.08) !important;color:#D5DAE2}
+html[data-mode="dark"] .drop{background:rgba(255,255,255,0.03) !important;border-color:rgba(255,255,255,0.08) !important}
+html[data-mode="dark"] .drop-zone{background:rgba(255,255,255,0.04) !important;border-color:rgba(255,255,255,0.14) !important}
+
+.done-actions{display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap}
+.btn-done{height:42px;padding:0 18px;display:inline-flex;align-items:center;gap:8px;border-radius:10px;font-family:inherit;font-size:.875rem;font-weight:600;cursor:pointer;transition:transform 150ms var(--ease),background 200ms var(--ease),box-shadow 200ms var(--ease),color 150ms var(--ease)}
+.btn-done.ghost{background:#FFF;color:var(--text-strong);border:1px solid var(--border)}
+.btn-done.ghost:hover{background:#FAF7F1;border-color:var(--border-hover);transform:translateY(-1px)}
+.btn-done.soft{background:#E87B45;color:#FFF;border:none;box-shadow:0 1px 2px rgba(184,72,23,0.18),0 6px 18px rgba(216,94,32,0.22)}
+.btn-done.soft:hover{background:#D85E20;transform:translateY(-1px)}
+.btn-done.solid{background:#D85E20;color:#FFF;border:none;box-shadow:0 1px 2px rgba(184,72,23,0.20),0 6px 18px rgba(216,94,32,0.28)}
+.btn-done.solid:hover{background:#B24817;transform:translateY(-1px)}
+.btn-done svg{width:14px;height:14px;stroke-width:2.4}
+
+@media (max-width:760px){
+  .done-card{padding:34px 22px 28px}
+  .done-title{font-size:1.875rem}
+  .com-grid{grid-template-columns:1fr}
+  .client-row{grid-template-columns:1fr}
+  .com-num{font-size:2rem}
+  .com-head{gap:10px}
+  .com-r{text-align:left}
+  .done-actions{flex-direction:column-reverse;align-items:stretch;gap:8px}
+  .btn-done{width:100%;justify-content:center;height:44px}
+}
+@media (max-width:480px){
+  .done-card{padding:26px 16px 22px}
+  .done-tick{width:52px;height:52px;margin-bottom:12px}
+  .done-tick svg{width:24px;height:24px}
+  .done-eyebrow{font-size:.625rem;margin-bottom:10px}
+  .done-title{font-size:1.5rem;line-height:1.15;margin-bottom:10px}
+  .done-sub{font-size:.875rem;margin-bottom:20px}
+  .commission{padding:16px 16px 14px}
+  .com-num{font-size:1.75rem}
+  .com-eyebrow{font-size:.625rem}
+  .com-cell{padding:11px}
+  .com-cell-head{font-size:.625rem;margin-bottom:6px}
+  .com-cell-num{font-size:1.25rem}
+  .com-cell-status{font-size:.6875rem}
+  .client-box{padding:12px 14px}
+  .cb-label{font-size:.625rem}
+  .cb-val{font-size:.875rem}
+  .cb-sub{font-size:.6875rem}
+  .drop{padding:14px 14px 12px}
+  .drop-head{gap:8px;margin-bottom:10px}
+  .drop-icon{width:30px;height:30px;border-radius:8px}
+  .drop-icon svg{width:14px;height:14px}
+  .drop-title{font-size:.8125rem}
+  .drop-sub{font-size:.6875rem}
+  .drop-zone{padding:12px;font-size:.75rem;flex-wrap:wrap;text-align:center}
+  .btn-done{height:42px;font-size:.8125rem}
+}
+</style>
+  <script src="services/api.js?v=10"></script>
+  <script src="services/error-boundary.js?v=19"></script>
+</head>
+<body data-chapter="done">
+
+<div class="wiz-shell">
+  <a class="ch-brand" href="appointments.html" aria-label="Endeavor">
+    <span class="ch-brand-dot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/><path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/></svg></span>
+    Endeavor
+  </a>
+
+  <div class="wiz-card done-card">
+    <div class="done-tick">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>
+    </div>
+    <div class="done-eyebrow">Deal closed</div>
+    <h1 class="done-title">Boom.<br/><em>You crushed it.</em></h1>
+    <p class="done-sub">Everything's been logged to the CRM and policies have been submitted. Here's what hit the books on this one.</p>
+
+    <div class="commission">
+      <div class="com-head">
+        <div class="com-l">
+          <span class="com-eyebrow">Total commission</span>
+          <div class="com-num" id="comTotal">$0</div>
+        </div>
+        <div class="com-r">
+          <div class="com-bound"><span id="comBound">0</span> products bound</div>
+          <div class="com-life">Lifetime policy value — <span id="comLifetime">$0</span></div>
+        </div>
+      </div>
+      <div class="com-grid">
+        <div class="com-cell" data-prod="aca">
+          <div class="com-cell-head"><span class="com-cell-dot"></span> ACA Health</div>
+          <div class="com-cell-num" id="acaCom">$0</div>
+          <div class="com-cell-status" id="acaStatus">Not closed</div>
+        </div>
+        <div class="com-cell" data-prod="dv">
+          <div class="com-cell-head"><span class="com-cell-dot"></span> Dental + Vision</div>
+          <div class="com-cell-num" id="dvCom">$0</div>
+          <div class="com-cell-status" id="dvStatus">Not added</div>
+        </div>
+        <div class="com-cell" data-prod="auto">
+          <div class="com-cell-head"><span class="com-cell-dot"></span> Auto</div>
+          <div class="com-cell-num" id="autoCom">$0</div>
+          <div class="com-cell-status" id="autoStatus">Not bound</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="client-row">
+      <div class="client-box">
+        <div class="cb-label">Client</div>
+        <div class="cb-val" id="clientName">Unnamed client</div>
+        <div class="cb-sub" id="clientSub">No contact on file</div>
+      </div>
+      <div class="client-box">
+        <div class="cb-label">Deal reference</div>
+        <div class="cb-val" id="dealRef">QD-XXXXX</div>
+        <div class="cb-sub" id="dealStamp">—</div>
+      </div>
+    </div>
+
+    <div class="drop">
+      <div class="drop-head">
+        <div class="drop-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M5 10v2a7 7 0 0 0 14 0v-2"/><path d="M12 19v3"/></svg>
+        </div>
+        <div>
+          <div class="drop-title">Attach call recording</div>
+          <div class="drop-sub">Required for CMS compliance. MP3, WAV, M4A.</div>
+        </div>
+      </div>
+      <label class="drop-zone" for="recFile" id="dropZone">
+        <span class="upload-link">Click to upload</span>
+        <span>or drag and drop a file here</span>
+        <input type="file" id="recFile" accept="audio/*" hidden/>
+      </label>
+    </div>
+
+    <div class="done-actions">
+      <button class="btn-done ghost" id="btnNewDeal" type="button">+ New Deal</button>
+      <button class="btn-done soft" id="btnConfirmRec" type="button">
+        Confirm Recording
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
+      </button>
+      <button class="btn-done solid" id="btnCopy" type="button">Copy Summary</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  const $ = (s,r=document)=>r.querySelector(s);
+  const DRAFT_KEY = 'ebDealDraft';
+  let draft = {};
+  try{ draft = JSON.parse(sessionStorage.getItem(DRAFT_KEY) || '{}'); }catch(e){ draft = {}; }
+
+  // Commission per-product.
+  var acaCom  = draft.acaLogged  ? 264 : 0;
+  var dvCom   = draft.dvLogged   ?  80 : 0;
+  var autoCom = draft.autoLogged ? 120 : 0;
+  // Try fetching real commission values from API
+  window.__ebAPI.get('/admin/analytics/ai/timing').catch(function(){ return null; }).then(function(resp){
+    if (resp && resp.commissions) {
+      acaCom = draft.acaLogged ? (resp.commissions.aca || 264) : 0;
+      dvCom = draft.dvLogged ? (resp.commissions.dv || 80) : 0;
+      autoCom = draft.autoLogged ? (resp.commissions.auto || 120) : 0;
+    }
+    updateTotals();
+  });
+  function updateTotals(){
+    var t = acaCom + dvCom + autoCom;
+    var b = (draft.acaLogged?1:0) + (draft.dvLogged?1:0) + (draft.autoLogged?1:0);
+    var lf = (acaCom*12) + (dvCom*12) + (autoCom*12);
+    $('#comTotal').textContent = '$' + t.toLocaleString();
+    $('#comBound').textContent = b;
+    $('#comLifetime').textContent = '$' + lf.toLocaleString();
+    $('#acaCom').textContent = '$' + acaCom.toLocaleString();
+    $('#dvCom').textContent = '$' + dvCom.toLocaleString();
+    $('#autoCom').textContent = '$' + autoCom.toLocaleString();
+  }
+
+  $('#comTotal').textContent  = '$' + total.toLocaleString();
+  $('#comBound').textContent  = bound;
+  $('#comLifetime').textContent = '$' + lifetime.toLocaleString();
+  $('#acaCom').textContent  = '$' + acaCom.toLocaleString();
+  $('#dvCom').textContent   = '$' + dvCom.toLocaleString();
+  $('#autoCom').textContent = '$' + autoCom.toLocaleString();
+  $('#acaStatus').textContent  = acaCom  > 0 ? 'Closed'    : 'Not closed';
+  $('#dvStatus').textContent   = dvCom   > 0 ? 'Added'     : 'Not added';
+  $('#autoStatus').textContent = autoCom > 0 ? 'Bound'     : 'Not bound';
+
+  const name = [draft.first, draft.last].filter(Boolean).join(' ');
+  $('#clientName').textContent = name || 'Unnamed client';
+  $('#clientSub').textContent  = draft.email || draft.phone || 'No contact on file';
+
+  // Deal ref: deterministic-ish suffix derived from current minute.
+  const now = new Date();
+  const ref = 'QD-' + Math.abs(now.getTime() % 1000000).toString(36).toUpperCase().padStart(5,'X');
+  $('#dealRef').textContent = ref;
+  $('#dealStamp').textContent = now.toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'}) + ' · ' + now.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
+
+  // Drop zone preview.
+  const dz = $('#dropZone'); const fi = $('#recFile');
+  fi.addEventListener('change', ()=>{
+    const f = fi.files && fi.files[0];
+    if(f) dz.querySelector('.upload-link').textContent = f.name;
+  });
+  dz.addEventListener('dragover', e=>{ e.preventDefault(); dz.style.borderColor = 'var(--c)'; dz.style.background='var(--c-soft)'; });
+  dz.addEventListener('dragleave', ()=>{ dz.style.borderColor=''; dz.style.background=''; });
+  dz.addEventListener('drop', e=>{
+    e.preventDefault(); dz.style.borderColor=''; dz.style.background='';
+    if(e.dataTransfer.files[0]){ fi.files = e.dataTransfer.files; dz.querySelector('.upload-link').textContent = e.dataTransfer.files[0].name; }
+  });
+
+  $('#btnNewDeal').addEventListener('click', async function(){
+    try {
+      await window.__ebAPI.post('/leads', {
+        first_name: draft.first || '',
+        last_name: draft.last || '',
+        email: draft.email || '',
+        phone: draft.phone || '',
+        source: 'manual',
+        custom_fields: { deal_ref: ref, estimated_commission: acaCom + dvCom + autoCom },
+      });
+      sessionStorage.removeItem('ebDealDraft');
+      window.location.href = 'add-deal.html';
+    } catch(e) {
+      console.warn('Deal submission failed:', e);
+      alert('Deal submission failed: ' + (e.message || 'backend unavailable'));
+    }
+  });
+
+  $('#btnConfirmRec').addEventListener('click', async function(){
+    try {
+      var name = [draft.first, draft.last].filter(Boolean).join(' ') || 'New deal';
+      await window.__ebAPI.post('/leads', {
+        first_name: draft.first || '',
+        last_name: draft.last || '',
+        email: draft.email || '',
+        phone: draft.phone || '',
+        source: 'recording',
+        custom_fields: { deal_ref: ref, estimated_commission: acaCom + dvCom + autoCom, recording_confirmed: true },
+      });
+      sessionStorage.removeItem('ebDealDraft');
+      var role = localStorage.getItem('ebRole') || 'agent';
+      window.location.href = role === 'agent' ? 'appointments.html' : 'ask-the-brain.html';
+    } catch(e) {
+      console.warn('Deal submission failed:', e);
+      alert('Deal submission failed: ' + (e.message || 'backend unavailable'));
+    }
+  });
+
+  $('#btnCopy').addEventListener('click', async ()=>{
+    const lines = [
+      `Deal ${ref} — ${name || 'Unnamed client'}`,
+      `Closed: ${now.toLocaleString()}`,
+      `Total commission: $${total.toLocaleString()}`,
+      `Products bound: ${bound}`,
+      acaCom  ? `· ACA Health — $${acaCom} · ${draft.carrier || ''} ${draft.tier || ''}` : `· ACA Health — not closed`,
+      dvCom   ? `· Dental + Vision — $${dvCom} · ${draft.dvCarrier || ''}`              : `· Dental + Vision — not added`,
+      autoCom ? `· Auto — $${autoCom} · ${draft.auCarrier || ''}`                       : `· Auto — not bound`
+    ].join('\n');
+    try{ await navigator.clipboard.writeText(lines); $('#btnCopy').textContent = 'Copied!'; setTimeout(()=>{ $('#btnCopy').textContent = 'Copy Summary'; }, 1600); }
+    catch(e){ alert(lines); }
+  });
+})();
+</script>
+
+</body>
+</html>

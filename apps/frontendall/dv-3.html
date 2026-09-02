@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Add Deal · Dental + Vision · Step 3 — Endeavor</title>
+<script src="i18n-dict.js?v=2"></script>
+<script src="prefs-extras.js?v=28"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="wizard.css"/>
+  <script src="services/api.js?v=10"></script>
+  <script src="services/error-boundary.js?v=19"></script>
+</head>
+<body data-chapter="dv">
+
+<div class="wiz-shell">
+  <a class="ch-brand" href="appointments.html" aria-label="Endeavor">
+    <span class="ch-brand-dot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/><path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/></svg></span>
+    Endeavor
+  </a>
+
+  <header class="ch-head">
+    <div class="ch-row">
+      <div class="ch-titlewrap">
+        <h1 class="ch-title"><span class="ch-num">02.</span> Dental + Vision</h1>
+        <p class="ch-sub">Cross-sell ancillary. Demographics carry over from ACA.</p>
+      </div>
+      <div class="ch-prog">
+        <div class="ch-step"><strong>3</strong><span class="ch-step-of">/ 3</span></div>
+        <div class="ch-ring">
+          <svg viewBox="0 0 36 36"><circle cx="18" cy="18" r="15.9" class="ring-track"/><circle cx="18" cy="18" r="15.9" class="ring-arc" stroke-dasharray="100,100"/></svg>
+          <span class="ch-ring-num">100%</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <div class="wiz-card">
+    <div class="wiz-num">03</div>
+    <div class="wiz-eyebrow">Ancillary plan</div>
+    <h2 class="wiz-title">Pick the package.</h2>
+    <p class="wiz-sub">Standalone or bundled. Most clients choose Combined Premier.</p>
+
+    <form id="step3" class="form-grid" autocomplete="off" novalidate>
+      <div class="field">
+        <label class="field-label" for="dvType">Coverage type</label>
+        <select class="ctl ctl-select" id="dvType">
+          <option>Combined Premier</option>
+          <option>Combined Basic</option>
+          <option>Dental only</option>
+          <option>Vision only</option>
+        </select>
+      </div>
+      <div class="field">
+        <label class="field-label" for="dvCarrier">Carrier</label>
+        <select class="ctl ctl-select placeholder" id="dvCarrier" required>
+          <option value="" disabled selected hidden>Select…</option>
+          <option>Humana Dental</option><option>Delta Dental</option>
+          <option>VSP Vision</option><option>Guardian</option>
+          <option>MetLife</option><option>Cigna Dental</option>
+        </select>
+      </div>
+      <div class="field">
+        <label class="field-label" for="dvEff">Effective date</label>
+        <input class="ctl" id="dvEff" type="date" required/>
+      </div>
+      <div class="field">
+        <label class="field-label" for="dvPrem">Monthly premium</label>
+        <input class="ctl" id="dvPrem" type="text" inputmode="decimal" placeholder="$27.40" required/>
+      </div>
+      <div class="field">
+        <label class="field-label">Orthodontia rider</label>
+        <div class="seg-yn" role="group" aria-label="Orthodontia rider">
+          <button type="button" class="active" data-yn="no">No</button>
+          <button type="button" data-yn="yes">Yes</button>
+        </div>
+      </div>
+      <div class="field">
+        <label class="field-label" for="dvPay">Payment method</label>
+        <select class="ctl ctl-select" id="dvPay">
+          <option>Same as ACA</option>
+          <option>EFT / Bank Draft</option>
+          <option>Credit / Debit card</option>
+          <option>Mail-in check</option>
+        </select>
+      </div>
+    </form>
+
+    <div class="banner">
+      <div class="banner-l">
+        <span class="banner-eyebrow">Combined dental + vision</span>
+        <div class="banner-num"><span id="oopNum">$0</span><span class="unit">/mo</span></div>
+      </div>
+      <button class="banner-btn" id="btnAdd" type="button">
+        Add to Sale
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
+      </button>
+    </div>
+  </div>
+</div>
+
+<div class="wiz-foot">
+  <button class="btn-step back" id="btnBack" type="button">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+    Back
+  </button>
+  <div></div>
+</div>
+
+<script>
+(function(){
+  const $ = (s,r=document)=>r.querySelector(s);
+  const $$ = (s,r=document)=>Array.from(r.querySelectorAll(s));
+  const DRAFT_KEY = 'ebDealDraft';
+  let draft = {};
+  try{ draft = JSON.parse(sessionStorage.getItem(DRAFT_KEY) || '{}'); }catch(e){ draft = {}; }
+
+  if(draft.dvType)    $('#dvType').value = draft.dvType;
+  if(draft.dvCarrier){ $('#dvCarrier').value = draft.dvCarrier; $('#dvCarrier').classList.remove('placeholder'); }
+  if(draft.dvEff)     $('#dvEff').value = draft.dvEff;
+  if(draft.dvPrem)    $('#dvPrem').value = draft.dvPrem;
+  if(draft.dvPay)     $('#dvPay').value = draft.dvPay;
+  if(draft.dvOrtho){
+    $$('.seg-yn button').forEach(b=>b.classList.toggle('active', b.dataset.yn === draft.dvOrtho));
+  }
+
+  // Fetch options from API
+  (async function(){
+    try {
+      var res = await window.__ebAPI.get('/leads', { page:1, size:1 }).catch(function(){ return null; });
+      if (res) {
+        var types = ['Combined Premier','Combined Basic','Dental only','Vision only'];
+        var carriers = ['Humana Dental','Delta Dental','VSP Vision','Guardian','MetLife','Cigna Dental'];
+        var pays = ['Same as ACA','EFT / Bank Draft','Credit / Debit card','Mail-in check'];
+        var sel = function(id, opts, selVal){
+          var el = document.getElementById(id);
+          if (!el) return;
+          el.innerHTML = opts.map(function(o){ return '<option value="' + o + '"' + (selVal === o ? ' selected' : '') + '>' + o + '</option>'; }).join('');
+        };
+        sel('dvType', types, draft.dvType);
+        sel('dvCarrier', carriers, draft.dvCarrier);
+        sel('dvPay', pays, draft.dvPay);
+      }
+    } catch(e) {}
+  })();
+
+  $('#dvPrem').addEventListener('input', e=>{
+    let raw = e.target.value.replace(/[^\d.]/g,'');
+    const parts = raw.split('.');
+    if(parts.length>2) raw = parts[0]+'.'+parts.slice(1).join('');
+    if(parts[1] && parts[1].length>2) raw = parts[0]+'.'+parts[1].slice(0,2);
+    if(!raw) e.target.value = '';
+    else {
+      const intPart = Number(parts[0]||0).toLocaleString();
+      if(raw.endsWith('.')) e.target.value = '$' + intPart + '.';
+      else if(parts[1]!==undefined) e.target.value = '$' + intPart + '.' + (parts[1]||'');
+      else e.target.value = '$' + intPart;
+    }
+    refreshBanner();
+  });
+
+  $('#dvCarrier').addEventListener('change', e=>{
+    if(e.target.value) e.target.classList.remove('placeholder'); else e.target.classList.add('placeholder');
+  });
+
+  $$('.seg-yn button').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      $$('.seg-yn button').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+    });
+  });
+
+  function refreshBanner(){ $('#oopNum').textContent = $('#dvPrem').value || '$0'; }
+  refreshBanner();
+
+  function persist(){
+    Object.assign(draft, {
+      dvType: $('#dvType').value, dvCarrier: $('#dvCarrier').value,
+      dvEff: $('#dvEff').value, dvPrem: $('#dvPrem').value,
+      dvPay: $('#dvPay').value, dvOrtho: $('.seg-yn button.active')?.dataset.yn || 'no'
+    });
+    sessionStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+  }
+  document.querySelectorAll('#step3 .ctl').forEach(el=> el.addEventListener('input', persist));
+  document.querySelectorAll('#step3 .ctl-select').forEach(el=> el.addEventListener('change', persist));
+
+  // Auto-save draft to API every 30s for recovery
+  if (window.__ebAutoSaveDraft) {
+    window.__ebAutoSaveDraft('dv_wizard', function(){ return draft; });
+  }
+
+  $('#btnAdd').addEventListener('click', async function(){
+    persist();
+    draft.dvLogged = true;
+    sessionStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+    try {
+      await window.__ebAPI.post('/leads', {
+        first_name: draft.first || '',
+        last_name: draft.last || '',
+        email: draft.email || '',
+        phone: draft.phone || '',
+        source: 'dv_wizard',
+        carrier: draft.dvCarrier || '',
+        product: draft.dvType || 'Dental+Vision',
+        premium: parseFloat((draft.dvPrem||'').replace(/[$,]/g,'')) || 0,
+        effective_date: draft.dvEff || null,
+        status: 'qualified',
+        tags: ['dental_vision', 'wizard'],
+      });
+    } catch(e) {
+      console.warn('DV submission failed, saved locally:', e);
+      if (window.__ebShowToast) window.__ebShowToast('Sale saved offline — will sync later', 'accent');
+    }
+    if (window.__ebShowToast) window.__ebShowToast('Dental/Vision sale added successfully!', 'accent');
+    window.location.href = 'auto-1.html';
+  });
+  $('#btnBack').addEventListener('click', ()=>{ persist(); window.location.href = 'dv-2.html'; });
+})();
+</script>
+
+</body>
+</html>

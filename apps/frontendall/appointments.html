@@ -1,0 +1,1880 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Appointments — Endeavor</title>
+<script>
+(function(){try{
+const FM={sm:'14px',md:'16px',lg:'18px',xl:'20px'};
+const TM={
+warm:{a:'#C97B3A',a2:'#E0995E',ah:'#B26A2D',b1:'rgba(224,153,94,.40)',b2:'rgba(201,123,58,.32)',b3:'rgba(255,200,150,.22)',g:'linear-gradient(135deg,#FFFBF5 0%,#FFEFDC 50%,#FFF6E9 100%)',gl:'rgba(178,106,45,.08)'},
+forest:{a:'#4F8268',a2:'#6B9F86',ah:'#3D6651',b1:'rgba(107,159,134,.40)',b2:'rgba(79,130,104,.32)',b3:'rgba(180,220,200,.22)',g:'linear-gradient(135deg,#F5FBF7 0%,#E0F1E6 50%,#E8F4ED 100%)',gl:'rgba(63,109,84,.08)'},
+indigo:{a:'#5E7BA8',a2:'#7B96BD',ah:'#4A6488',b1:'rgba(123,150,189,.40)',b2:'rgba(94,123,168,.32)',b3:'rgba(180,200,230,.22)',g:'linear-gradient(135deg,#F5F7FB 0%,#DCE4F1 50%,#E5EBF4 100%)',gl:'rgba(74,100,136,.08)'},
+rose:{a:'#A3525C',a2:'#B97077',ah:'#82414B',b1:'rgba(185,112,119,.40)',b2:'rgba(163,82,92,.32)',b3:'rgba(230,180,190,.22)',g:'linear-gradient(135deg,#FBF5F6 0%,#F1DCDF 50%,#F4E5E8 100%)',gl:'rgba(130,65,75,.08)'},
+slate:{a:'#2D3340',a2:'#5A6275',ah:'#1A1F2A',b1:'rgba(90,98,117,.45)',b2:'rgba(45,51,64,.38)',b3:'rgba(150,156,170,.28)',g:'linear-gradient(135deg,#B8BCC5 0%,#9DA3AD 50%,#ABB0BA 100%)',gl:'rgba(26,31,42,.14)'},
+amber:{a:'#9C7842',a2:'#B89058',ah:'#7C5E2F',b1:'rgba(184,144,88,.40)',b2:'rgba(156,120,66,.32)',b3:'rgba(245,220,180,.22)',g:'linear-gradient(135deg,#FBF7F0 0%,#F0E5D0 50%,#F4EBDB 100%)',gl:'rgba(124,94,47,.08)'}
+};
+window.__ebApplyFont=function(v){document.documentElement.style.fontSize=FM[v]||'16px';};
+window.__ebApplyTheme=function(v){
+var t=TM[v]||TM.warm,D=document.documentElement;
+D.style.setProperty('--accent',t.a);
+D.style.setProperty('--accent-2',t.a2);
+D.style.setProperty('--accent-hover',t.ah);
+var st=document.getElementById('ebPrefsTheme');
+if(!st){st=document.createElement('style');st.id='ebPrefsTheme';document.head.appendChild(st);}
+st.textContent='body::before{background:'+t.g+' !important}body::after{background:radial-gradient(ellipse 95% 85% at 50% 50%,transparent 55%,'+t.gl+' 100%) !important}.sb-brand-dot{background:linear-gradient(135deg,'+t.a+','+t.a2+') !important}.usage-fill{background:linear-gradient(90deg,'+t.a+','+t.a2+') !important}.av-circle{background:linear-gradient(135deg,'+t.a+','+t.a2+') !important}';
+};
+window.__ebApplyFont(localStorage.getItem('ebFontSize')||'md');
+window.__ebApplyTheme(localStorage.getItem('ebTheme')||'warm');
+}catch(e){}})();
+</script>
+<script src="i18n-dict.js?v=2"></script>
+<script src="prefs-extras.js?v=28"></script>
+<script src="coach.js" defer></script>
+<script src="tour.js" defer></script>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#DDD8CE;--bg-grad-1:#E2DCD0;--bg-grad-2:#D2CDC2;
+  --border:rgba(26,31,42,0.07);--border-hover:rgba(26,31,42,0.14);--border-soft:rgba(26,31,42,0.06);
+  --text-strong:#1A1F2A;--text:#2D3340;--text-muted:rgba(26,31,42,0.60);--text-faint:rgba(26,31,42,0.42);
+  --accent:#C97B3A;--accent-2:#E0995E;--accent-hover:#B26A2D;
+  --up:#4F8268;--down:#A3525C;--pending:#9C7842;
+  --sidebar-w:220px;--topbar-h:64px;
+  --ease:cubic-bezier(0.4,0,0.2,1);
+}
+html,body{height:100%}
+body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;position:relative;overflow-x:hidden;-webkit-font-smoothing:antialiased}
+body::before{content:'';position:fixed;inset:-15%;z-index:-3;background:linear-gradient(135deg, #FFFBF5 0%, #FFEFDC 50%, #FFF6E9 100%);animation:bgDrift 22s ease-in-out infinite;transform-origin:center;will-change:transform}
+body::after{content:'';position:fixed;inset:-10%;z-index:-2;pointer-events:none;background:radial-gradient(ellipse 95% 85% at 50% 50%, transparent 55%, rgba(178,106,45,0.08) 100%);animation:bgFloat 28s ease-in-out infinite reverse;transform-origin:center;will-change:transform}
+@keyframes bgDrift{0%{transform:scale(1) translate(0,0) rotate(0deg)}20%{transform:scale(1.10) translate(-3.5%,2.5%) rotate(0.6deg)}40%{transform:scale(1.06) translate(3%,-3%) rotate(-0.5deg)}60%{transform:scale(1.12) translate(-2.5%,-3.5%) rotate(0.7deg)}80%{transform:scale(1.08) translate(3%,2%) rotate(-0.4deg)}100%{transform:scale(1) translate(0,0) rotate(0deg)}}
+@keyframes bgFloat{0%,100%{transform:scale(1) translate(0,0)}50%{transform:scale(1.08) translate(2%,-2%)}}
+@media (prefers-reduced-motion:reduce){body::before,body::after{animation:none}}
+
+.sidebar{position:fixed;top:0;left:0;width:var(--sidebar-w);height:100vh;background:rgba(255,255,255,0.55);backdrop-filter:blur(22px) saturate(160%);-webkit-backdrop-filter:blur(22px) saturate(160%);border-right:1px solid var(--border);display:flex;flex-direction:column;padding:0 12px 12px;z-index:40}
+.sb-brand{height:var(--topbar-h);display:flex;align-items:center;gap:10px;padding:0 10px;font-weight:600;font-size:1.0625rem;letter-spacing:-0.015em;color:var(--text);border-bottom:1px solid var(--border-soft);margin:0 -12px 12px}
+.sb-brand-dot{width:26px;height:26px;border-radius:8px;background:linear-gradient(135deg,#C97B3A,#E0995E);box-shadow:0 1px 2px rgba(178,106,45,0.30),inset 0 1px 0 rgba(255,255,255,0.22);flex-shrink:0;display:flex;align-items:center;justify-content:center}
+.sb-brand-dot svg{width:14px;height:14px;color:#fff;stroke-width:1.8}
+.sb-nav{display:flex;flex-direction:column;gap:2px;flex:1;width:100%}
+.sb-item{width:100%;height:38px;border-radius:8px;padding:0 10px;display:flex;align-items:center;gap:10px;color:var(--text-muted);font-family:inherit;font-size:.875rem;font-weight:500;cursor:pointer;text-decoration:none;transition:color 160ms var(--ease),background 160ms var(--ease);position:relative}
+.sb-item:hover{color:var(--text);background:rgba(26,31,42,0.05)}
+.sb-item.active{background:rgba(201,123,58,0.10);color:var(--text)}
+.sb-item.active svg{color:var(--accent)}
+.sb-item svg{width:17px;height:17px;stroke-width:1.7;flex-shrink:0}
+.sb-tip{font-size:.875rem;font-weight:500}
+.sb-badge{margin-left:auto;min-width:20px;height:18px;padding:0 6px;border-radius:9px;background:var(--accent);color:#fff;font-size:.6875rem;font-weight:600;display:inline-flex;align-items:center;justify-content:center;font-variant-numeric:tabular-nums}
+.sb-lock{margin-left:auto;font-size:.625rem;font-weight:700;color:var(--text-faint);letter-spacing:.06em;text-transform:uppercase}
+.sb-featured{background:linear-gradient(135deg,rgba(201,123,58,0.10),rgba(224,153,94,0.04));border:1px solid rgba(201,123,58,0.20);margin-bottom:6px}
+.sb-featured:hover{background:linear-gradient(135deg,rgba(201,123,58,0.16),rgba(224,153,94,0.08))}
+.sb-featured svg{color:var(--accent)}
+.sb-featured .sb-tip{font-weight:600;color:var(--text)}
+.sb-group{display:flex;flex-direction:column;width:100%;margin-top:6px}
+.sb-group-head{width:100%;height:32px;display:flex;align-items:center;gap:8px;padding:0 10px;background:transparent;border:none;font-family:inherit;font-size:.6875rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-faint);cursor:pointer;border-radius:6px;transition:color 120ms var(--ease)}
+.sb-group-head:hover{color:var(--text-muted)}
+.sb-group-head .sb-chev{margin-left:auto;width:11px;height:11px;transition:transform 220ms var(--ease);stroke-width:2}
+.sb-group.open .sb-group-head .sb-chev{transform:rotate(90deg)}
+.sb-group-body{display:flex;flex-direction:column;gap:2px;max-height:0;overflow:hidden;transition:max-height 280ms var(--ease)}
+.sb-group.open .sb-group-body{max-height:600px}
+.sb-bottom{display:flex;flex-direction:column;gap:2px;padding-top:10px;margin-top:8px;border-top:1px solid var(--border);width:100%}
+
+.topbar{position:fixed;top:0;left:var(--sidebar-w);right:0;height:var(--topbar-h);background:rgba(255,255,255,0.55);backdrop-filter:blur(22px) saturate(160%);-webkit-backdrop-filter:blur(22px) saturate(160%);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 22px;gap:18px;z-index:30}
+.brand{display:flex;align-items:center;gap:10px;font-weight:500;font-size:1rem;letter-spacing:-0.01em;color:var(--text)}
+.menu-toggle{display:none;width:36px;height:36px;border-radius:9px;background:transparent;border:1px solid var(--border);color:var(--text);cursor:pointer;align-items:center;justify-content:center;margin-right:4px}
+.menu-toggle svg{width:18px;height:18px}
+.sb-overlay{display:none;position:fixed;inset:0;background:rgba(26,31,42,0.35);z-index:35}
+.sb-overlay.open{display:block}
+.search{flex:1;max-width:520px;margin-left:24px;display:flex;align-items:center;gap:10px;height:38px;padding:0 14px;background:rgba(255,255,255,0.65);border:none;border-radius:10px;color:var(--text-muted);transition:background 150ms var(--ease),box-shadow 200ms var(--ease);cursor:text}
+.search:hover{background:rgba(255,255,255,0.8)}
+.search:focus-within{background:rgba(255,255,255,0.92);box-shadow:0 0 0 3px rgba(26,31,42,0.08)}
+.search svg{width:16px;height:16px;flex-shrink:0;stroke-width:1.6}
+.search input{flex:1;background:transparent;border:none;outline:none;color:var(--text);font-family:inherit;font-size:.8125rem}
+.search input::placeholder{color:var(--text-faint)}
+.search kbd{font-family:inherit;font-size:.6875rem;color:var(--text-muted);background:rgba(255,255,255,0.85);border:none;border-radius:4px;padding:2px 6px}
+.tb-right{display:flex;align-items:center;gap:10px;margin-left:auto}
+.btn-new{height:36px;padding:0 14px;display:inline-flex;align-items:center;gap:6px;background:var(--accent);color:#fff;border:none;border-radius:9px;font-family:inherit;font-size:.8125rem;font-weight:500;cursor:pointer;box-shadow:0 1px 2px rgba(178,106,45,0.18),0 4px 14px rgba(201,123,58,0.22);transition:transform 150ms var(--ease),background 200ms var(--ease),box-shadow 200ms var(--ease)}
+.btn-new:hover{background:var(--accent-hover);transform:translateY(-1px);box-shadow:0 1px 2px rgba(178,106,45,0.20),0 6px 18px rgba(201,123,58,0.30)}
+.btn-new svg{width:14px;height:14px}
+.icon-btn{width:36px;height:36px;border-radius:9px;background:rgba(255,255,255,0.6);border:none;color:var(--text-muted);display:inline-flex;align-items:center;justify-content:center;cursor:pointer;position:relative;transition:color 150ms var(--ease),background 150ms var(--ease)}
+.icon-btn:hover{color:var(--text);background:rgba(255,255,255,0.85)}
+.icon-btn svg{width:16px;height:16px;stroke-width:1.6}
+.icon-btn .dot{position:absolute;top:8px;right:8px;width:7px;height:7px;border-radius:50%;background:#1A1F2A;border:2px solid #E7E9EE}
+.avatar{width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#2A2F3A,#1A1F2A);display:inline-flex;align-items:center;justify-content:center;font-weight:600;font-size:.75rem;color:#fff;border:1px solid rgba(0,0,0,0.18);cursor:pointer;box-shadow:0 4px 12px rgba(26,31,42,0.22)}
+
+.main{margin-left:var(--sidebar-w);padding:calc(var(--topbar-h) + 22px) 22px 28px}
+.page-hdr{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:18px;gap:12px;flex-wrap:wrap}
+.page-hdr h1{font-size:1.625rem;font-weight:600;letter-spacing:-0.015em;line-height:1.15;color:var(--text-strong)}
+.page-hdr .sub{color:var(--text-muted);font-size:.875rem;margin-top:6px;line-height:1.45;max-width:60ch}
+.live-status{display:inline-flex;align-items:center;gap:8px;color:var(--text-muted);font-size:.8125rem;font-variant-numeric:tabular-nums}
+.live-dot{width:8px;height:8px;border-radius:50%;background:var(--up);animation:livePulse 1.8s ease-in-out infinite;flex-shrink:0}
+.live-status.ok{color:var(--up);font-weight:500}
+.live-status.flash .live-dot{animation:liveFlash 600ms ease-out}
+@keyframes livePulse{0%{box-shadow:0 0 0 0 rgba(79,130,104,0.45)}70%{box-shadow:0 0 0 6px rgba(79,130,104,0)}100%{box-shadow:0 0 0 0 rgba(79,130,104,0)}}
+@keyframes liveFlash{0%{transform:scale(1);box-shadow:0 0 0 0 rgba(79,130,104,0.7)}50%{transform:scale(1.6);box-shadow:0 0 0 8px rgba(79,130,104,0)}100%{transform:scale(1);box-shadow:0 0 0 0 rgba(79,130,104,0)}}
+.hdr-r{display:inline-flex;align-items:center;gap:14px;flex-wrap:wrap}
+.btn-add-deal{height:36px;padding:0 16px;display:inline-flex;align-items:center;justify-content:center;background:var(--accent);color:#fff;border:none;border-radius:9px;font-family:inherit;font-size:.8125rem;font-weight:500;letter-spacing:.005em;cursor:pointer;box-shadow:0 1px 2px rgba(178,106,45,0.18),0 4px 14px rgba(201,123,58,0.22);transition:transform 150ms var(--ease),background 200ms var(--ease),box-shadow 200ms var(--ease)}
+.btn-add-deal:hover{background:var(--accent-hover);transform:translateY(-1px);box-shadow:0 1px 2px rgba(178,106,45,0.20),0 6px 18px rgba(201,123,58,0.30)}
+.btn-add-deal:active{transform:translateY(0)}
+
+/* Agent-only: expected income for today + progress line of completed deals */
+.agent-day{margin-bottom:18px;background:#FFFFFF;border:1px solid var(--border);border-radius:14px;padding:16px 18px 14px;box-shadow:0 1px 2px rgba(26,31,42,0.04),0 4px 12px rgba(26,31,42,0.04);position:relative}
+.ad-row{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:12px;flex-wrap:wrap}
+.ad-l{display:flex;flex-direction:column;gap:6px;min-width:0}
+.ad-label{font-size:.6875rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--accent)}
+.ad-num{font-size:1.75rem;font-weight:600;color:var(--text-strong);letter-spacing:-0.015em;font-variant-numeric:tabular-nums;line-height:1}
+.ad-num .ad-currency{color:var(--text-muted);font-weight:500;margin-right:2px}
+.ad-r{display:flex;align-items:center;flex-shrink:0}
+.ad-buffer{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border-radius:999px;background:rgba(201,123,58,0.10);border:1px solid rgba(201,123,58,0.22);color:#A35E26;font-size:.6875rem;font-weight:600;letter-spacing:.01em;white-space:nowrap}
+.ad-progress{display:flex;flex-direction:column;gap:6px}
+.ad-bar{position:relative;height:6px;border-radius:3px;background:#EFEDE7;overflow:hidden}
+.ad-bar-fill{position:absolute;left:0;top:0;bottom:0;width:0;background:linear-gradient(90deg,var(--accent),var(--accent-2));border-radius:3px;transition:width 700ms cubic-bezier(0.4,0,0.2,1);box-shadow:0 0 0 1px rgba(201,123,58,0.12)}
+.ad-meta{display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:.75rem;color:var(--text-muted);flex-wrap:wrap}
+.ad-meta strong{color:var(--text-strong);font-weight:600;font-variant-numeric:tabular-nums}
+@media (max-width:600px){
+  .agent-day{padding:14px 14px 12px}
+  .ad-num{font-size:1.5rem}
+}
+
+.card{background:#FFFFFF;border:1px solid var(--border);border-radius:16px;padding:18px;position:relative;overflow:hidden;box-shadow:0 1px 2px rgba(26,31,42,0.04),0 2px 8px rgba(26,31,42,0.04)}
+
+.summary-wrap{position:relative;margin-bottom:18px}
+.summary-blob{position:absolute;top:-40px;left:50%;transform:translateX(-50%);width:min(960px,90%);height:240px;background:radial-gradient(ellipse,rgba(255,148,76,0.32),rgba(255,178,118,0.18) 45%,transparent 75%);filter:blur(36px);z-index:0;pointer-events:none}
+.summary{position:relative;z-index:1;display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+.tile{display:flex;flex-direction:column;gap:6px}
+.card.tile{background:rgba(255,255,255,0.42);backdrop-filter:blur(20px) saturate(160%);-webkit-backdrop-filter:blur(20px) saturate(160%);border:1px solid rgba(255,255,255,0.55);box-shadow:0 1px 2px rgba(26,31,42,0.05),0 6px 18px rgba(178,106,45,0.08)}
+.card.tile:hover{background:rgba(255,255,255,0.55);border-color:rgba(255,255,255,0.75)}
+.tile-label{font-size:.8125rem;color:var(--text-muted)}
+.tile-num{font-size:1.875rem;font-weight:600;line-height:1.05;letter-spacing:-0.025em;font-variant-numeric:tabular-nums}
+.tile-meta{font-size:.75rem;color:var(--text-muted);display:inline-flex;align-items:center;gap:5px}
+.tile-trend{display:inline-flex;align-items:center;gap:3px;font-size:.75rem;font-weight:500;color:var(--up);font-variant-numeric:tabular-nums}
+.tile-trend.down{color:var(--down)}
+.tile-trend svg{width:11px;height:11px;stroke-width:2}
+
+/* Calendar card */
+.cal-card{padding:0;margin-bottom:18px}
+.cal-head{padding:14px 18px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;border-bottom:1px solid var(--border-soft)}
+.cal-head-l{display:flex;align-items:center;gap:10px}
+.today-btn{display:inline-flex;align-items:center;gap:5px;height:32px;padding:0 12px;background:#FFFFFF;border:1px solid var(--border);border-radius:8px;font-family:inherit;font-size:.75rem;font-weight:600;color:var(--text);cursor:pointer;transition:background 130ms var(--ease),border-color 130ms var(--ease)}
+.today-btn:hover{background:#F6F4EF;border-color:var(--border-hover)}
+.cal-nav{display:flex;align-items:center;gap:2px}
+.cal-nav-btn{width:30px;height:30px;border-radius:7px;background:transparent;border:none;color:var(--text-muted);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;transition:color 130ms var(--ease),background 130ms var(--ease)}
+.cal-nav-btn:hover{color:var(--text);background:#F6F4EF}
+.cal-nav-btn svg{width:14px;height:14px;stroke-width:2}
+.cal-week-label{font-size:.9375rem;font-weight:600;letter-spacing:-0.005em;padding:0 6px;min-width:0;white-space:nowrap}
+.view-toggle{display:inline-flex;align-items:center;gap:2px;background:#F0F0EC;border:1px solid var(--border-soft);border-radius:9px;padding:3px}
+.vt-btn{background:transparent;border:none;cursor:pointer;padding:5px 12px;border-radius:6px;font-family:inherit;font-size:.75rem;font-weight:500;color:var(--text-muted);transition:color 150ms var(--ease),background 150ms var(--ease)}
+.vt-btn:hover{color:var(--text)}
+.vt-btn.active{background:#fff;color:var(--text);box-shadow:0 1px 2px rgba(26,31,42,0.06)}
+
+/* Calendar grid — horizontally scrollable wrapper so 7 days never compress */
+.cal-scroll{overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;border-bottom-left-radius:inherit;border-bottom-right-radius:inherit}
+.cal-scroll::-webkit-scrollbar{height:8px}
+.cal-scroll::-webkit-scrollbar-thumb{background:rgba(26,31,42,0.18);border-radius:4px}
+.cal-scroll::-webkit-scrollbar-track{background:transparent}
+.cal-grid{display:grid;grid-template-columns:120px repeat(7,minmax(108px,1fr));position:relative;min-width:880px}
+.cal-corner{background:#FBFAF7;border-bottom:1px solid var(--border-soft);border-right:1px solid var(--border-soft)}
+.cal-day-head{
+  padding:10px 8px;background:#FBFAF7;border-bottom:1px solid var(--border-soft);
+  text-align:center;display:flex;flex-direction:column;align-items:center;gap:3px;
+  cursor:pointer;transition:background 130ms var(--ease);
+}
+.cal-day-head:hover{background:#F2F0EB}
+.cal-day-head.today{background:rgba(201,123,58,0.08)}
+.cal-day-head + .cal-day-head, .cal-day-head{border-left:1px solid var(--border-soft)}
+.cal-day-head:first-of-type{border-left:none}
+.cal-day-name{font-size:.625rem;color:var(--text-muted);font-weight:600;letter-spacing:.06em;text-transform:uppercase}
+.cal-day-num{font-size:1rem;font-weight:600;color:var(--text-strong);font-variant-numeric:tabular-nums;line-height:1}
+.cal-day-head.today .cal-day-num{
+  width:26px;height:26px;border-radius:50%;background:var(--accent);color:#fff;
+  display:inline-flex;align-items:center;justify-content:center;font-size:.8125rem;
+}
+.cal-time-cell{
+  padding:12px 14px;text-align:left;
+  border-right:1px solid var(--border-soft);border-bottom:1px solid var(--border-soft);
+  min-height:96px;display:flex;flex-direction:column;justify-content:flex-start;align-items:flex-start;gap:3px;
+  background:#FBFAF7;
+}
+.cal-time-cell .ct-label{font-size:.8125rem;color:var(--text);font-weight:600;letter-spacing:-0.005em;line-height:1.1;white-space:nowrap}
+.cal-time-cell .ct-range{font-size:.6875rem;color:var(--text-muted);font-weight:500;letter-spacing:.01em;font-variant-numeric:tabular-nums;white-space:nowrap}
+.cal-cell{
+  border-bottom:1px solid var(--border-soft);
+  border-left:1px solid var(--border-soft);
+  min-height:96px;
+  padding:6px;
+  display:flex;flex-direction:column;gap:4px;
+  cursor:pointer;transition:background 130ms var(--ease);
+}
+.cal-cell:first-of-type{border-left:none}
+.cal-cell:hover{background:#FBFAF7}
+.cal-cell.weekend{background:#FBFAF7}
+
+.appt-block{
+  padding:6px 8px;border-radius:6px;
+  border-left:3px solid var(--accent);
+  background:rgba(201,123,58,0.10);
+  font-size:.6875rem;
+  line-height:1.25;
+  cursor:pointer;
+  transition:transform 130ms var(--ease),box-shadow 130ms var(--ease);
+}
+.appt-block:hover{transform:translateY(-1px);box-shadow:0 4px 10px rgba(26,31,42,0.10)}
+.appt-block .ab-time{font-weight:700;color:var(--text);font-variant-numeric:tabular-nums;font-size:.625rem;letter-spacing:.01em}
+.appt-block .ab-name{font-weight:600;color:var(--text-strong);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
+.appt-block .ab-agent{color:var(--text-muted);font-size:.5625rem;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.appt-block.confirmed{border-left-color:var(--up);background:rgba(79,130,104,0.10)}
+.appt-block.pending{border-left-color:var(--pending);background:rgba(178,119,38,0.10)}
+.appt-block.completed{border-left-color:#525964;background:rgba(82,89,100,0.10);opacity:.78}
+.appt-block.completed .ab-name{text-decoration:line-through;text-decoration-color:var(--text-faint);text-decoration-thickness:1px}
+.appt-block.noshow{border-left-color:var(--down);background:rgba(163,82,92,0.10)}
+
+/* Cell density: stack scrolls internally, "+N more" badge jumps to day view */
+.cal-cell-stack{display:flex;flex-direction:column;gap:4px;width:100%;min-width:0;max-height:none}
+.cal-cell.dense .cal-cell-stack{max-height:200px;overflow-y:auto;scrollbar-width:thin;padding-right:2px}
+.cal-cell.dense .cal-cell-stack::-webkit-scrollbar{width:4px}
+.cal-cell.dense .cal-cell-stack::-webkit-scrollbar-thumb{background:rgba(26,31,42,0.18);border-radius:2px}
+.cal-cell-more{display:inline-flex;align-items:center;justify-content:center;width:fit-content;padding:2px 7px;border-radius:5px;background:rgba(201,123,58,0.12);color:var(--accent);font-size:.625rem;font-weight:700;letter-spacing:.02em;cursor:pointer;border:1px solid rgba(201,123,58,0.28);margin-top:2px}
+.cal-cell-more:hover{background:rgba(201,123,58,0.20)}
+
+/* Calendar density / view buttons */
+.cal-min-btn,.cal-exp-btn{display:inline-flex;align-items:center;justify-content:center;gap:5px;height:30px;padding:0 10px;border-radius:8px;background:#FFFFFF;border:1px solid var(--border);font-family:inherit;font-size:.7188rem;font-weight:600;color:var(--text-muted);cursor:pointer;transition:background 130ms var(--ease),color 130ms var(--ease),border-color 130ms var(--ease)}
+.cal-min-btn:hover,.cal-exp-btn:hover{background:#F6F4EF;color:var(--text);border-color:var(--border-hover)}
+.cal-min-btn svg,.cal-exp-btn svg{width:13px;height:13px;stroke-width:2;transition:transform 200ms var(--ease)}
+.cal-card.minimized .cal-min-btn svg{transform:rotate(-90deg)}
+/* Minimized: keep a clear minimum visible height so the mini-strip never
+   collapses too small to read. */
+.cal-card.minimized{min-height:96px}
+/* Expanded: a taller calendar with a roomier week grid + day list. */
+.cal-card.expanded .cal-day-list{max-height:calc(100vh - 220px)}
+.cal-card.expanded .cal-grid{min-height:calc(100vh - 260px)}
+.cal-card.expanded .cal-scroll{overflow-y:auto;max-height:calc(100vh - 200px)}
+.cal-card.expanded .cal-exp-btn svg{transform:rotate(180deg)}
+
+/* Minimized state: hide grid + agenda, show compact day-strip with counts */
+.cal-card.minimized .cal-scroll,
+.cal-card.minimized .cal-day-wrap{display:none !important}
+.cal-card.minimized .cal-mini-strip{display:flex}
+.cal-mini-strip{display:none;padding:10px 14px;gap:6px;overflow-x:auto;-webkit-overflow-scrolling:touch;background:#FBFAF7;border-bottom-left-radius:inherit;border-bottom-right-radius:inherit}
+.cal-mini-strip::-webkit-scrollbar{height:6px}
+.cal-mini-strip::-webkit-scrollbar-thumb{background:rgba(26,31,42,0.16);border-radius:3px}
+.cal-mini-day{flex:1 1 0;min-width:74px;background:#FFFFFF;border:1px solid var(--border-soft);border-radius:9px;padding:8px 10px;display:flex;flex-direction:column;gap:2px;cursor:pointer;transition:background 130ms var(--ease),border-color 130ms var(--ease),transform 130ms var(--ease)}
+.cal-mini-day:hover{background:#F6F4EF;border-color:var(--border-hover);transform:translateY(-1px)}
+.cal-mini-day.today{border-color:rgba(201,123,58,0.45);background:rgba(201,123,58,0.05)}
+.cal-mini-day .mn-name{font-size:.5938rem;color:var(--text-muted);font-weight:600;letter-spacing:.06em;text-transform:uppercase}
+.cal-mini-day .mn-num{font-size:1rem;font-weight:600;color:var(--text-strong);font-variant-numeric:tabular-nums;line-height:1.1}
+.cal-mini-day .mn-row{display:flex;align-items:center;gap:4px;margin-top:4px;flex-wrap:wrap}
+.cal-mini-day .mn-count{font-size:.6875rem;font-weight:600;color:var(--text);font-variant-numeric:tabular-nums}
+.cal-mini-day .mn-pip{display:inline-block;width:5px;height:5px;border-radius:50%}
+.cal-mini-day .mn-pip.confirmed{background:var(--up)}
+.cal-mini-day .mn-pip.pending{background:var(--pending)}
+.cal-mini-day .mn-pip.completed{background:#525964}
+.cal-mini-day .mn-pip.noshow{background:var(--down)}
+
+/* Day view: single column with 30-min rows, scrollable */
+.cal-day-wrap{display:none;border-top:1px solid var(--border-soft)}
+.cal-card[data-view="day"] .cal-day-wrap{display:block}
+.cal-card[data-view="day"] .cal-scroll{display:none}
+.cal-day-head-row{display:flex;align-items:center;justify-content:space-between;padding:12px 18px;border-bottom:1px solid var(--border-soft);background:#FBFAF7;gap:10px;flex-wrap:wrap}
+.cal-day-head-row .cdh-title{font-size:.9375rem;font-weight:600;letter-spacing:-0.005em;color:var(--text-strong)}
+.cal-day-head-row .cdh-sub{font-size:.75rem;color:var(--text-muted);margin-top:2px}
+.cal-day-head-row .cdh-pick{display:flex;align-items:center;gap:2px}
+.cal-day-list{max-height:560px;overflow-y:auto;scrollbar-width:thin;padding:14px 18px;display:flex;flex-direction:column;gap:8px}
+.cal-day-list::-webkit-scrollbar{width:6px}
+.cal-day-list::-webkit-scrollbar-thumb{background:rgba(26,31,42,0.16);border-radius:3px}
+.cal-day-empty{padding:32px 18px;text-align:center;font-size:.8125rem;color:var(--text-muted)}
+.cal-day-appt{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;padding:12px 14px;border-radius:10px;background:#FFFFFF;border:1px solid var(--border-soft);cursor:pointer;transition:box-shadow 130ms var(--ease),transform 130ms var(--ease)}
+.cal-day-appt:hover{box-shadow:0 4px 12px rgba(26,31,42,0.08);transform:translateY(-1px)}
+.cal-day-appt.completed{opacity:.7}
+.cal-day-appt .cda-l{min-width:0;display:flex;flex-direction:column;gap:2px}
+.cal-day-appt .cda-name{font-size:.8438rem;font-weight:600;color:var(--text-strong);letter-spacing:-0.005em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cal-day-appt .cda-meta{font-size:.6875rem;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cal-day-appt .cda-r{display:flex;align-items:center;gap:8px;flex-shrink:0}
+.cal-day-appt .cda-time{font-size:.75rem;font-weight:600;color:var(--text);font-variant-numeric:tabular-nums;white-space:nowrap}
+
+/* Agenda card */
+.agenda-card{padding:0}
+.agenda-head{padding:14px 18px;display:flex;flex-direction:column;align-items:stretch;gap:10px;border-bottom:1px solid var(--border-soft)}
+.agenda-title{font-size:1.0625rem;font-weight:600;letter-spacing:-0.005em}
+.agenda-sub{font-size:.75rem;color:var(--text-muted);margin-top:2px}
+.legend{display:flex;align-items:center;gap:12px;flex-wrap:wrap;font-size:.6875rem;color:var(--text-muted)}
+.legend-item{display:inline-flex;align-items:center;gap:5px}
+.legend-dot{width:8px;height:8px;border-radius:3px;background:var(--up)}
+.legend-dot.pending{background:var(--pending)}
+.legend-dot.completed{background:#525964}
+.legend-dot.noshow{background:var(--down)}
+.legend-dot.slot{background:rgba(26,31,42,0.15)}
+
+.chips{display:flex;gap:6px;flex-wrap:wrap;padding:12px 18px;border-bottom:1px solid var(--border-soft);background:#FBFAF7}
+.chip{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:999px;background:#FFFFFF;border:1px solid var(--border-soft);font-family:inherit;font-size:.75rem;font-weight:600;color:var(--text-muted);cursor:pointer;letter-spacing:.01em;transition:background 150ms var(--ease),color 150ms var(--ease),border-color 150ms var(--ease)}
+.chip:hover{color:var(--text);border-color:var(--border-hover)}
+.chip.active{background:rgba(201,123,58,0.10);color:var(--text);border-color:rgba(201,123,58,0.30)}
+.chip.active .chip-count{color:var(--accent)}
+.chip-count{font-variant-numeric:tabular-nums;color:var(--text-faint);font-weight:600;font-size:.6875rem}
+
+.agenda-list{padding:8px 18px 18px}
+/* Side-by-side row: calendar/appointment card (left) + Upcoming agenda (right) */
+.appt-split{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:16px;align-items:start}
+.appt-split > .card{margin-bottom:0}
+@media(min-width:1101px){.appt-split .agenda-split{grid-template-columns:1fr}}
+@media(max-width:1100px){.appt-split{grid-template-columns:1fr}}
+/* Split Upcoming view: Scheduled (left) + Call now (right) */
+.agenda-split{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.agenda-pane{min-width:0;border:1px solid var(--border-soft);border-radius:12px;padding:6px 8px 10px;background:var(--surface,#fff)}
+.agenda-pane.callnow{border-color:#F5C9A3;background:linear-gradient(180deg,#FFF7F0,#fff)}
+.pane-h{display:flex;align-items:center;gap:8px;font-weight:700;font-size:.82rem;padding:9px 8px 10px;color:var(--text)}
+.agenda-pane.callnow .pane-h{color:#B45309}
+.pane-n{margin-left:auto;font-size:.72rem;color:var(--text-muted);background:rgba(0,0,0,.06);border-radius:20px;padding:1px 9px}
+.pane-empty{padding:26px 12px;text-align:center;color:var(--text-faint);font-size:.8rem}
+.ap-card{border:1px solid var(--border-soft);border-radius:10px;padding:11px 12px;margin:8px 2px;background:#fff;display:flex;flex-direction:column;gap:7px}
+.agenda-pane.callnow .ap-card{border-color:#F0D2B4}
+.ap-top{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.ap-time{font-size:.74rem;font-weight:600;color:var(--text-muted)}
+.ap-name{font-size:.95rem;font-weight:700;letter-spacing:-0.005em}
+.ap-meta{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.ap-phone{font-size:.78rem;color:var(--text-muted)}
+.ar-state{font-size:.7rem;color:var(--text-muted);background:rgba(0,0,0,.05);border-radius:6px;padding:1px 7px;white-space:nowrap}
+.ap-actions{display:flex;flex-wrap:wrap;gap:6px;margin-top:2px}
+.ar-call{display:inline-flex;align-items:center;gap:5px;height:28px;padding:0 11px;border:1px solid var(--border);border-radius:8px;background:#fff;font:600 .72rem inherit;color:var(--accent);cursor:pointer;white-space:nowrap}
+@media(max-width:1000px){.agenda-split{grid-template-columns:1fr}}
+.appt-row{
+  display:grid;grid-template-columns:120px minmax(0,1.6fr) minmax(0,1fr) minmax(0,1fr) 220px;gap:20px;
+  padding:0;border-top:1px solid var(--border-soft);align-items:stretch;
+  height:64px;min-width:0;
+}
+.appt-row > *{min-width:0}
+.appt-row:first-child{border-top:none}
+.ar-time{display:flex;align-items:center;gap:8px;font-variant-numeric:tabular-nums;min-width:0;white-space:nowrap;height:100%;overflow:hidden}
+.ar-time .day{font-size:.625rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--text-faint);line-height:1}
+.ar-time .t{font-size:.9375rem;font-weight:400;color:var(--text-muted);letter-spacing:-0.005em;line-height:1}
+.appt-row.today .ar-time .t{font-weight:600;color:var(--text-strong)}
+.appt-row.today .ar-time .day{color:var(--accent)}
+.ar-cust{display:flex;align-items:center;gap:10px;min-width:0;flex-wrap:nowrap;height:100%}
+.ar-cust > .status-pill{margin-left:auto;flex-shrink:0}
+.ar-name{font-size:.875rem;font-weight:600;color:var(--text-strong);letter-spacing:-0.005em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1}
+.status-pill{flex-shrink:0}
+.ar-plan-v,.ar-agent-v{
+  display:flex;align-items:center;
+  font-size:.8125rem;color:var(--text-muted);font-weight:400;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  line-height:1;height:100%;min-width:0;
+}
+.status-pill{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:6px;font-size:.6875rem;font-weight:600;letter-spacing:.01em;border:1px solid transparent;white-space:nowrap}
+.status-pill .sd{width:5px;height:5px;border-radius:50%;flex-shrink:0}
+.status-pill.confirmed{background:rgba(79,130,104,0.10);color:#2E5A45;border-color:rgba(79,130,104,0.24)}
+.status-pill.confirmed .sd{background:var(--up)}
+.status-pill.pending{background:rgba(178,119,38,0.10);color:#7A5320;border-color:rgba(178,119,38,0.24)}
+.status-pill.pending .sd{background:var(--pending)}
+.status-pill.completed{background:rgba(82,89,100,0.08);color:var(--text-muted);border-color:rgba(82,89,100,0.20)}
+.status-pill.completed .sd{background:#525964}
+.status-pill.noshow{background:rgba(163,82,92,0.10);color:#7A2F39;border-color:rgba(163,82,92,0.24)}
+.status-pill.noshow .sd{background:var(--down)}
+.status-pill.slot{background:rgba(26,31,42,0.04);color:var(--text-muted);border-color:var(--border-soft);border-style:dashed}
+.status-pill.slot .sd{background:rgba(26,31,42,0.20)}
+.ar-actions{display:flex;align-items:center;gap:6px;flex-wrap:nowrap;justify-content:flex-end;white-space:nowrap}
+.ar-btn{display:inline-flex;align-items:center;gap:5px;padding:7px 11px;border-radius:8px;font-family:inherit;font-size:.7188rem;font-weight:600;cursor:pointer;border:1px solid var(--border);background:#FFFFFF;color:var(--text);white-space:nowrap;transition:background 130ms var(--ease),border-color 130ms var(--ease),color 130ms var(--ease)}
+.ar-btn:hover{background:#F6F4EF;border-color:var(--border-hover)}
+.ar-btn svg{width:11px;height:11px;stroke-width:1.8;color:var(--text-muted)}
+.ar-btn:hover svg{color:var(--text)}
+.ar-btn.icon-only{padding:7px 9px}
+.ar-btn.icon-only svg{width:14px;height:14px}
+.ar-btn.primary{background:var(--accent);color:#fff;border-color:var(--accent);box-shadow:0 1px 2px rgba(178,106,45,0.18),0 4px 12px rgba(201,123,58,0.22)}
+.ar-btn.primary:hover{background:var(--accent-hover);border-color:var(--accent-hover)}
+.ar-btn.primary svg{color:#fff}
+.ar-btn.danger:hover{background:rgba(163,82,92,0.08);border-color:rgba(163,82,92,0.40);color:#7A2F39}
+.ar-btn.danger:hover svg{color:#7A2F39}
+.ar-btn.book{background:rgba(201,123,58,0.06);border-color:rgba(201,123,58,0.30);color:var(--accent)}
+.ar-btn.book:hover{background:rgba(201,123,58,0.12);border-color:rgba(201,123,58,0.50)}
+.ar-btn.book svg{color:var(--accent)}
+
+/* FAB */
+.fab-wrap{position:fixed;bottom:22px;right:22px;display:flex;align-items:center;gap:10px;z-index:50}
+.fab-quote{font-size:.8125rem;color:var(--text);font-weight:500;background:#FFFFFF;border:1px solid var(--border);border-radius:999px;padding:8px 14px;box-shadow:0 4px 14px rgba(26,31,42,0.10);animation:fadeShift 5s ease-in-out infinite}
+@keyframes fadeShift{0%,100%{opacity:.7;transform:translateY(0)}50%{opacity:1;transform:translateY(-1px)}}
+.fab{width:56px;height:56px;border-radius:50%;background:var(--accent);color:#fff;border:none;cursor:pointer;box-shadow:0 1px 2px rgba(178,106,45,0.30),0 8px 24px rgba(201,123,58,0.40),inset 0 1px 0 rgba(255,255,255,0.18);display:flex;align-items:center;justify-content:center;transition:transform 150ms var(--ease),background 200ms var(--ease)}
+.fab:hover{background:var(--accent-hover);transform:translateY(-2px) scale(1.04)}
+.fab svg{width:22px;height:22px;stroke-width:1.8}
+
+/* Toast */
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);background:#1A1F2A;color:#fff;padding:12px 18px;border-radius:10px;font-size:.8125rem;font-weight:500;letter-spacing:-0.005em;box-shadow:0 10px 30px rgba(26,31,42,0.30);opacity:0;pointer-events:none;transition:opacity 200ms var(--ease),transform 200ms var(--ease);z-index:80;display:flex;align-items:center;gap:10px;max-width:90vw}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0);pointer-events:auto}
+.toast svg{width:15px;height:15px;color:#4F8268;stroke-width:2.2}
+.toast.accent svg{color:#E0995E}
+.toast.danger svg{color:#A3525C}
+
+/* Reschedule mini modal */
+.modal-bg{position:fixed;inset:0;background:rgba(26,31,42,0.40);opacity:0;pointer-events:none;transition:opacity 200ms var(--ease);z-index:60}
+.modal-bg.open{opacity:1;pointer-events:auto}
+.modal{position:fixed;top:50%;left:50%;transform:translate(-50%,-48%);width:min(440px,92vw);background:#FFFFFF;border:1px solid var(--border);border-radius:14px;box-shadow:0 20px 60px rgba(26,31,42,0.25);z-index:70;opacity:0;pointer-events:none;transition:opacity 200ms var(--ease),transform 200ms var(--ease)}
+.modal.open{transform:translate(-50%,-50%);opacity:1;pointer-events:auto}
+.modal-head{padding:16px 20px 12px;border-bottom:1px solid var(--border-soft);display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.modal-title{font-size:1rem;font-weight:600;letter-spacing:-0.005em}
+.modal-sub{font-size:.75rem;color:var(--text-muted);margin-top:2px}
+.modal-close{width:28px;height:28px;border-radius:7px;background:#F6F4EF;border:1px solid var(--border-soft);color:var(--text);cursor:pointer;display:inline-flex;align-items:center;justify-content:center}
+.modal-close svg{width:13px;height:13px;stroke-width:2}
+.modal-body{padding:14px 20px}
+.modal-row{display:flex;flex-direction:column;gap:6px;margin-bottom:12px}
+.modal-row label{font-size:.6875rem;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--text-muted)}
+.modal-row input,.modal-row select{height:36px;padding:0 12px;background:#FFFFFF;border:1px solid var(--border);border-radius:8px;font-family:inherit;font-size:.8125rem;color:var(--text);outline:none}
+.modal-row textarea{min-height:74px;padding:10px 12px;background:#FFFFFF;border:1px solid var(--border);border-radius:8px;font-family:inherit;font-size:.8125rem;color:var(--text);outline:none;resize:vertical}
+.modal-row input:focus,.modal-row select:focus,.modal-row textarea:focus{border-color:rgba(201,123,58,0.45);box-shadow:0 0 0 3px rgba(201,123,58,0.08)}
+.modal-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-bottom:12px}
+.disp-choice{min-height:54px;border:1px solid var(--border);background:#fff;border-radius:8px;padding:8px 10px;text-align:left;font-family:inherit;color:var(--text);cursor:pointer;display:flex;flex-direction:column;gap:3px;transition:background 130ms var(--ease),border-color 130ms var(--ease),box-shadow 130ms var(--ease)}
+.disp-choice:hover{background:#F8F6F1;border-color:var(--border-hover)}
+.disp-choice.active{border-color:rgba(201,123,58,0.55);background:rgba(201,123,58,0.10);box-shadow:0 0 0 3px rgba(201,123,58,0.08)}
+.disp-choice strong{font-size:.8125rem;font-weight:700}
+.disp-choice span{font-size:.6875rem;color:var(--text-muted);line-height:1.25}
+.modal-two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.modal-hint{font-size:.75rem;color:var(--text-muted);line-height:1.45;margin-bottom:12px}
+.modal-foot{padding:12px 20px;border-top:1px solid var(--border-soft);display:flex;justify-content:flex-end;gap:8px;background:#FBFAF7;border-bottom-left-radius:14px;border-bottom-right-radius:14px}
+.modal-btn{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:8px;font-family:inherit;font-size:.75rem;font-weight:600;cursor:pointer;border:1px solid var(--border);background:#FFFFFF;color:var(--text);transition:background 130ms var(--ease),border-color 130ms var(--ease)}
+.modal-btn:hover{background:#F6F4EF;border-color:var(--border-hover)}
+.modal-btn.primary{background:var(--accent);color:#fff;border-color:var(--accent);box-shadow:0 1px 2px rgba(178,106,45,0.18),0 4px 12px rgba(201,123,58,0.22)}
+.modal-btn.primary:hover{background:var(--accent-hover);border-color:var(--accent-hover)}
+
+@media (max-width:1200px){
+  .summary{grid-template-columns:repeat(2,1fr)}
+}
+@media (max-width:1100px){
+  /* Drop the 5-col agenda layout into a stacked card before things crash */
+  .appt-row{
+    grid-template-columns:1fr;
+    grid-template-areas:'time' 'cust' 'plan' 'agent' 'actions';
+    gap:6px;
+    height:auto;
+    padding:14px 2px;
+  }
+  .appt-row:first-child{padding-top:6px}
+  .ar-time{grid-area:time;height:auto}
+  .ar-cust{grid-area:cust;height:auto;display:flex;align-items:center;gap:10px}
+  /* Name fills the row, status pill aligns to the right edge so every row's
+     pill sits at the same x-position regardless of name length. */
+  .ar-cust .ar-name{flex:1 1 auto;min-width:0}
+  .ar-cust > .status-pill{margin-left:auto;flex-shrink:0}
+  .ar-plan-v{grid-area:plan;height:auto}
+  .ar-agent-v{grid-area:agent;height:auto}
+  .ar-actions{grid-area:actions;height:auto;justify-content:flex-start;flex-wrap:wrap;margin-top:4px}
+  .ar-plan-v::before{content:'Plan · ';color:var(--text-faint);font-weight:600;margin-right:6px;font-size:.6875rem;letter-spacing:.04em;text-transform:uppercase}
+  .ar-agent-v::before{content:'Agent · ';color:var(--text-faint);font-weight:600;margin-right:6px;font-size:.6875rem;letter-spacing:.04em;text-transform:uppercase}
+}
+@media (max-width:820px){
+  :root{--sidebar-w:0px}
+  .sidebar{transform:translateX(-100%);transition:transform 200ms var(--ease);width:220px}
+  .sidebar.open{transform:translateX(0)}
+  .topbar{left:0;padding:0 14px}
+  .menu-toggle{display:inline-flex}
+  .main{margin-left:0;padding:calc(var(--topbar-h) + 12px) 12px 80px}
+  .summary{grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:14px}
+  .search{display:none}
+  .cal-day-name{font-size:.5625rem}
+  .cal-day-num{font-size:.875rem}
+  .appt-block{font-size:.625rem;padding:3px 5px}
+  .ar-actions{justify-content:flex-start}
+}
+@media (max-width:520px){
+  .summary{grid-template-columns:1fr 1fr;gap:10px}
+  .tile-num{font-size:1.5rem}
+  .cal-week-label{min-width:auto;font-size:.875rem}
+  .fab-wrap{bottom:14px;right:14px;gap:8px}
+  .fab{width:50px;height:50px}
+  .fab svg{width:20px;height:20px}
+  .fab-quote{font-size:.75rem;padding:6px 12px}
+}
+@media (max-width:480px){
+  .main{padding:calc(var(--topbar-h) + 10px) 10px 70px}
+  .page-hdr{flex-direction:column;align-items:flex-start;gap:10px}
+  .page-hdr h1{font-size:1.25rem}
+  .page-hdr .sub{font-size:.8125rem}
+  .summary{grid-template-columns:1fr;gap:8px}
+  .tile{padding:12px}
+  .tile-num{font-size:1.375rem}
+  .cal-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .cal-grid{min-width:560px}
+  .cal-toolbar{flex-wrap:wrap;gap:8px}
+  .today-btn{flex:1;justify-content:center}
+  .appt-row{padding:11px;grid-template-columns:1fr}
+  .ar-time{flex-direction:row;gap:6px;align-items:baseline}
+  .ar-actions{flex-wrap:wrap;gap:6px}
+  .ar-btn{flex:1;justify-content:center;min-width:0}
+  .modal{width:100vw;max-width:none;border-radius:0;left:0;top:0;transform:none;height:auto;max-height:100vh}
+  .modal.open{transform:none}
+  .modal-head{padding:14px 14px 10px}
+  .modal-body{padding:12px 14px}
+  .modal-foot{padding:12px 14px;flex-direction:column-reverse;gap:8px}
+  .modal-foot .modal-btn{width:100%;justify-content:center}
+}
+</style>
+  <script src="services/api.js?v=10"></script>
+  <script src="services/call-now-popup.js?v=1"></script>
+  <script src="services/error-boundary.js?v=19"></script>
+  <script src="services/softphone.js?v=1"></script>
+</head>
+<body>
+
+<div class="sb-overlay" id="sbOverlay"></div>
+
+<aside class="sidebar" id="sidebar">
+  <a class="sb-brand" href="ask-the-brain.html" style="text-decoration:none">
+    <span class="sb-brand-dot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/><path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/></svg></span>
+    <span>Endeavor</span>
+  </a>
+  <nav class="sb-nav">
+    <a class="sb-item sb-featured" href="ask-the-brain.html" aria-label="Ask the Brain">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/><path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/></svg>
+      <span class="sb-tip">Ask the Brain</span>
+    </a>
+    <a class="sb-item" id="navCeo" href="ceo-dashboard.html" aria-label="CEO Dashboard">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 1 18 0"/><path d="M12 12l4-2"/><circle cx="12" cy="12" r="1.6"/></svg>
+      <span class="sb-tip">CEO Dashboard</span>
+
+    </a>
+    <a class="sb-item" id="navUpload" href="upload-leads.html" aria-label="Upload leads">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 8 5-5 5 5"/><path d="M5 17v2a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-2"/></svg>
+      <span class="sb-tip">Upload Leads</span>
+    </a>
+    <a class="sb-item" href="notifications.html" aria-label="Notifications">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 7 3 9H3c0-2 3-2 3-9Z"/><path d="M10 21a2 2 0 0 0 4 0"/></svg>
+      <span class="sb-tip">Notifications</span>
+      <span class="sb-badge" style="display:none">0</span>
+    </a>
+    <div class="sb-group" id="sbWorkspaces">
+      <button class="sb-group-head" type="button">
+        Workspaces
+        <svg class="sb-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg>
+      </button>
+      <div class="sb-group-body">
+        <a class="sb-item" href="my-team.html" aria-label="My Team">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="7" r="4"/><path d="M3 21c0-3.5 3-6 6-6s6 2.5 6 6"/><path d="M16 3.5a4 4 0 0 1 0 7.5"/><path d="M22 21c0-3-2-5-5-5.5"/></svg>
+          <span class="sb-tip">My Team</span>
+        </a>
+        <a class="sb-item" href="inbox.html" aria-label="Inbox">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h6l2 3h2l2-3h6"/><path d="M3 7l2 12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2l2-12"/><path d="M5 7l2-3h10l2 3"/></svg>
+          <span class="sb-tip">Inbox</span>
+          <span class="sb-badge" style="display:none">0</span>
+        </a>
+        <a class="sb-item" href="deals.html" aria-label="Deals">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 3 7v6c0 5 4 8 9 9 5-1 9-4 9-9V7Z"/><path d="M9 12l2 2 4-4"/></svg>
+          <span class="sb-tip">Deals</span>
+        </a>
+        <a class="sb-item active" href="appointments.html" aria-label="Appointments">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 11h18"/></svg>
+          <span class="sb-tip">Appointments</span>
+        </a>
+        <a class="sb-item" href="analytics.html" aria-label="Analytics">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 15l4-6 4 4 5-7"/></svg>
+          <span class="sb-tip">Analytics</span>
+        </a>
+        <a class="sb-item" href="qa-review.html" aria-label="QA Review">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9 12l2 2 4-4"/><path d="M21 12c0 5-4 8.5-9 9-5-.5-9-4-9-9V5l9-3 9 3v7Z"/></svg>
+          <span class="sb-tip">QA Review</span>
+        </a>
+      </div>
+    </div>
+  </nav>
+  <div class="sb-bottom">
+    <a class="sb-item" href="settings.html" aria-label="Settings">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.8-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1A1.6 1.6 0 0 0 9 19.4a1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.8 1.6 1.6 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1A1.6 1.6 0 0 0 4.6 9a1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3H9a1.6 1.6 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1c0 .6.4 1.2 1 1.5a1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8V9c.3.6.9 1 1.5 1H21a2 2 0 1 1 0 4h-.1c-.6 0-1.2.4-1.5 1Z"/></svg>
+      <span class="sb-tip">Settings</span>
+    </a>
+    <a class="sb-item sb-logout" href="login.html" aria-label="Log out" title="Log out">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></svg>
+      <span class="sb-tip">Log out</span>
+    </a>
+  </div>
+</aside>
+
+<header class="topbar">
+  <button class="menu-toggle" id="menuToggle" aria-label="Open menu">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+  </button>
+  <div class="search">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+    <input placeholder="Search appointments…"/>
+    <kbd>⌘K</kbd>
+  </div>
+  <div class="tb-right">
+    <button class="icon-btn" aria-label="Notifications" type="button">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 7 3 9H3c0-2 3-2 3-9Z"/><path d="M10 21a2 2 0 0 0 4 0"/></svg>
+      <span class="dot"></span>
+    </button>
+    <button class="avatar" type="button" aria-label="Account">AW</button>
+  </div>
+</header>
+
+<main class="main">
+
+  <div class="page-hdr">
+    <div>
+      <h1>Appointments</h1>
+      <div class="hdr-meta" style="font-size:.8125rem;color:var(--text-muted);margin-top:4px"><span id="pageScope"></span></div>
+    </div>
+    <div class="hdr-r">
+      <div class="live-status" id="liveStatus">
+        <span class="live-dot" aria-hidden="true"></span>
+        <span id="liveStatusText">Updated just now</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Agent-only expected income + progress line. Hidden by default; the
+       inline JS below removes it for non-agent roles. -->
+  <div class="agent-day" id="agentDay" hidden>
+    <div class="ad-row">
+      <div class="ad-l">
+        <span class="ad-label">Expected income today</span>
+        <div class="ad-num"><span class="ad-currency">$</span><span id="adNum">0</span></div>
+      </div>
+      <div class="ad-r">
+        <span class="ad-buffer">&minus; 20% cancellation</span>
+      </div>
+    </div>
+    <div class="ad-progress">
+      <div class="ad-bar"><div class="ad-bar-fill" id="adFill"></div></div>
+      <div class="ad-meta">
+        <span><strong id="adDone">0</strong> of <strong id="adTotal">0</strong> appointments completed today</span>
+        <span id="adPct">0%</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="summary-wrap">
+  <div class="summary-blob" aria-hidden="true"></div>
+  <div class="summary">
+    <div class="card tile">
+      <div class="tile-label">Today</div>
+      <div class="tile-num" id="sumToday">—</div>
+      <div class="tile-meta"><span id="sumTodayMeta">— upcoming · — completed</span></div>
+    </div>
+    <div class="card tile">
+      <div class="tile-label">This week</div>
+      <div class="tile-num" id="sumWeek">—</div>
+      <div class="tile-meta"><span class="tile-trend"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m5 15 7-7 7 7"/></svg>12%</span> vs last week</div>
+    </div>
+    <div class="card tile">
+      <div class="tile-label">No-shows · this week</div>
+      <div class="tile-num" id="sumNoshow">—</div>
+      <div class="tile-meta"><span id="sumNoshowMeta">— rebooked</span></div>
+    </div>
+    <div class="card tile">
+      <div class="tile-label">Available slots · today</div>
+      <div class="tile-num" id="sumSlots">—</div>
+      <div class="tile-meta">9 AM – 6 PM window</div>
+    </div>
+  </div>
+  </div>
+
+  <div class="appt-split">
+  <!-- Calendar -->
+  <div class="card cal-card" id="calCard">
+    <div class="cal-head">
+      <div class="cal-head-l">
+        <div class="cal-nav">
+          <button class="cal-nav-btn" id="navPrev" aria-label="Previous"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg></button>
+          <button class="cal-nav-btn" id="navNext" aria-label="Next"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></button>
+        </div>
+        <div class="cal-week-label" id="weekLabel">—</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-left:auto">
+        <div class="view-toggle">
+          <button class="vt-btn active" type="button" data-view="day">Day</button>
+          <button class="vt-btn" type="button" data-view="week">Week</button>
+        </div>
+        <button class="today-btn" id="addApptBtn" type="button" style="border-color:rgba(201,123,58,0.40);color:var(--accent)">+ Add Appointment</button>
+      </div>
+    </div>
+    <div id="calBody">
+      <div class="cal-scroll">
+        <div class="cal-grid" id="calGrid"></div>
+      </div>
+      <div class="cal-day-wrap" id="calDayWrap">
+        <div class="cal-day-head-row">
+          <div>
+            <div class="cdh-title" id="dayTitle">—</div>
+            <div class="cdh-sub" id="daySub">—</div>
+          </div>
+        </div>
+        <div class="cal-day-list" id="calDayList"></div>
+      </div>
+      <div class="cal-mini-strip" id="calMiniStrip"></div>
+    </div>
+  </div>
+
+  <!-- Agenda list -->
+  <div class="card agenda-card">
+    <div class="agenda-head">
+      <div style="flex:1;min-width:0;display:flex;align-items:baseline;justify-content:space-between;gap:12px">
+        <div class="agenda-title" id="agendaTitle">All appointments · this week</div>
+        <div class="agenda-sub" id="agendaSub" style="margin-top:0;text-align:right;white-space:nowrap">—</div>
+      </div>
+      <div class="legend">
+        <span class="legend-item"><span class="legend-dot"></span> Confirmed</span>
+        <span class="legend-item"><span class="legend-dot pending"></span> Pending</span>
+        <span class="legend-item"><span class="legend-dot completed"></span> Completed</span>
+        <span class="legend-item"><span class="legend-dot noshow"></span> No-show</span>
+        <span class="legend-item"><span class="legend-dot slot"></span> Available slot</span>
+      </div>
+    </div>
+    <div class="chips" id="agendaChips">
+      <button class="chip active" data-filter="upcoming">Upcoming <span class="chip-count" id="cc-upcoming">0</span></button>
+      <button class="chip" data-filter="completed">Completed <span class="chip-count" id="cc-completed">0</span></button>
+      <button class="chip" data-filter="noshow">No-shows <span class="chip-count" id="cc-noshow">0</span></button>
+      <button class="chip" data-filter="slot">Available slots <span class="chip-count" id="cc-slot">0</span></button>
+    </div>
+    <div class="agenda-list" id="agendaList"></div>
+  </div>
+  </div>
+
+</main>
+
+<!-- Reschedule modal -->
+<div class="modal-bg" id="modalBg"></div>
+<div class="modal" id="rescheduleModal">
+  <div class="modal-head">
+    <div>
+      <div class="modal-title">Reschedule appointment</div>
+      <div class="modal-sub" id="reSub">—</div>
+    </div>
+    <button class="modal-close" id="reClose" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+  </div>
+  <div class="modal-body">
+    <div class="modal-row">
+      <label>Date</label>
+      <input type="date" id="reDate"/>
+    </div>
+    <div class="modal-row">
+      <label>Time</label>
+      <select id="reTime">
+        <option value="08:00">8:00 AM</option>
+        <option value="08:30">8:30 AM</option>
+        <option value="09:00">9:00 AM</option>
+        <option value="09:30">9:30 AM</option>
+        <option value="10:00">10:00 AM</option>
+        <option value="10:30">10:30 AM</option>
+        <option value="11:00">11:00 AM</option>
+        <option value="11:30">11:30 AM</option>
+        <option value="12:00">12:00 PM</option>
+        <option value="12:30">12:30 PM</option>
+        <option value="13:00">1:00 PM</option>
+        <option value="13:30">1:30 PM</option>
+        <option value="15:00">3:00 PM</option>
+        <option value="15:30">3:30 PM</option>
+        <option value="16:00">4:00 PM</option>
+        <option value="16:30">4:30 PM</option>
+        <option value="17:00">5:00 PM</option>
+        <option value="17:30">5:30 PM</option>
+        <option value="18:00">6:00 PM</option>
+        <option value="18:30">6:30 PM</option>
+        <option value="19:00">7:00 PM</option>
+        <option value="19:30">7:30 PM</option>
+        <option value="20:00">8:00 PM</option>
+        <option value="20:30">8:30 PM</option>
+      </select>
+    </div>
+  </div>
+  <div class="modal-foot">
+    <button class="modal-btn" type="button" id="reCancel">Cancel</button>
+    <button class="modal-btn primary" type="button" id="reSave">Save changes</button>
+  </div>
+</div>
+
+<!-- Add appointment modal (manual booking by the agent) -->
+<div class="modal" id="addApptModal">
+  <div class="modal-head">
+    <div>
+      <div class="modal-title">Add appointment</div>
+      <div class="modal-sub">Book a 15-minute appointment with an existing lead (Eastern time).</div>
+    </div>
+    <button class="modal-close" id="aaClose" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+  </div>
+  <div class="modal-body">
+    <div class="modal-row">
+      <label>Customer</label>
+      <select id="aaLead"><option value="">Loading leads…</option></select>
+    </div>
+    <div class="modal-row">
+      <label>Date</label>
+      <input type="date" id="aaDate"/>
+    </div>
+    <div class="modal-row">
+      <label>Time (ET)</label>
+      <input type="time" id="aaTime" step="900"/>
+    </div>
+  </div>
+  <div class="modal-foot">
+    <button class="modal-btn" type="button" id="aaCancel">Cancel</button>
+    <button class="modal-btn primary" type="button" id="aaSave">Book appointment</button>
+  </div>
+</div>
+
+<!-- Finish appointment / disposition modal -->
+<div class="modal" id="dispositionModal">
+  <div class="modal-head">
+    <div>
+      <div class="modal-title">Finish appointment</div>
+      <div class="modal-sub" id="dispSub">—</div>
+    </div>
+    <button class="modal-close" id="dispClose" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+  </div>
+  <div class="modal-body">
+    <div class="modal-hint">Choose the final call result. The customer, phone number, appointment slot, and agent are saved with the disposition for admin reporting.</div>
+    <div class="modal-grid" id="dispChoices"></div>
+    <div class="modal-two">
+      <div class="modal-row">
+        <label>Customer picked up</label>
+        <select id="dispPicked">
+          <option value="">Use disposition default</option>
+          <option value="true">Yes</option>
+          <option value="false">No</option>
+        </select>
+      </div>
+      <div class="modal-row">
+        <label>Insurance sold</label>
+        <select id="dispSold">
+          <option value="">Use disposition default</option>
+          <option value="true">Yes</option>
+          <option value="false">No</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-two">
+      <div class="modal-row">
+        <label>Call duration</label>
+        <input id="dispDuration" type="number" min="0" placeholder="Seconds"/>
+      </div>
+      <div class="modal-row">
+        <label>Premium</label>
+        <input id="dispPremium" type="number" min="0" step="0.01" placeholder="Optional"/>
+      </div>
+    </div>
+    <div class="modal-two">
+      <div class="modal-row">
+        <label>Carrier</label>
+        <input id="dispCarrier" placeholder="Optional"/>
+      </div>
+      <div class="modal-row">
+        <label>Policy number</label>
+        <input id="dispPolicy" placeholder="Optional"/>
+      </div>
+    </div>
+    <div class="modal-row">
+      <label>Notes</label>
+      <textarea id="dispNotes" placeholder="What happened on the call?"></textarea>
+    </div>
+  </div>
+  <div class="modal-foot">
+    <button class="modal-btn" type="button" id="dispCancel">Cancel</button>
+    <button class="modal-btn primary" type="button" id="dispSave">Save disposition</button>
+  </div>
+</div>
+
+<div class="fab-wrap">
+  <div class="fab-quote" id="fabQuote">Ask the brain</div>
+  <button class="fab" id="fabAssistant" type="button" aria-label="AI Assistant — Ask">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/>
+      <path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/>
+      <path d="M9 12h.01M15 12h.01"/>
+    </svg>
+  </button>
+</div>
+
+<div class="toast" id="toast">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+  <span id="toastMsg">Done</span>
+</div>
+
+<script>
+(function(){
+  const $ = q => document.querySelector(q);
+  const $$ = q => document.querySelectorAll(q);
+  const sb = $('#sidebar'), sbo = $('#sbOverlay');
+  $('#menuToggle')?.addEventListener('click',()=>{sb.classList.add('open');sbo.classList.add('open')});
+
+  // Workspaces collapsible (auto-open if active item is inside)
+  const wkGroup = document.getElementById('sbWorkspaces');
+  if(wkGroup){
+    const hasActiveInside = !!wkGroup.querySelector('.sb-item.active');
+    const savedOpen = localStorage.getItem('ebSbWorkspaces');
+    if(hasActiveInside || savedOpen === 'open'){ wkGroup.classList.add('open'); }
+    const wkHead = wkGroup.querySelector('.sb-group-head');
+    wkHead?.addEventListener('click', ()=>{
+      wkGroup.classList.toggle('open');
+      localStorage.setItem('ebSbWorkspaces', wkGroup.classList.contains('open') ? 'open' : 'closed');
+    });
+  }
+
+  sbo?.addEventListener('click',()=>{sb.classList.remove('open');sbo.classList.remove('open')});
+
+  // === Role-aware personalization ===
+  const ROLE = (localStorage.getItem('ebRole') || 'admin');
+  const ROLE_FAB = {
+    agent: ['Ask','How do I close my hottest deal today?','Where am I losing time?','What should I do next?','Who should I follow up with?','Brief me on my biggest deal'],
+    lead:  ['Ask','Who needs coaching this week?','How is my team trending?','Where is my team losing deals?','Which teammate had the best week?','What changed in my team this week?'],
+    head:  ['Ask','Which team is underperforming?','Where should I reallocate budget?','Which leader needs support?','Compare my teams'],
+    admin: ['Ask','Show me org-wide health',"What is the biggest risk this week?",'Plan a 10-day improvement push','Where are integrations failing?','Summarize the company for me']
+  };
+  // Plain labels — the real "N appointments today" is appended by refreshSummary().
+  const ROLE_SCOPE = { agent: 'Your calendar', lead: 'Your team', head: 'Region', admin: 'Org-wide' };
+  window.__ROLE_FAB_QUOTES = ROLE_FAB[ROLE] || ROLE_FAB.admin;
+  const ceoLink = document.querySelector('#navCeo');
+  if(ceoLink && ROLE !== 'admin' && ROLE !== 'dev'){ ceoLink.style.display = 'none'; }
+  const ps = document.querySelector('#pageScope');
+  if(ps) ps.innerHTML = (ROLE_SCOPE[ROLE] || ROLE_SCOPE.admin);
+
+  // Agent view: hide the 4 summary tiles at the top of the page and
+  // surface a daily-income / progress banner instead.
+  if(ROLE === 'agent'){
+    const sw = document.querySelector('.summary-wrap');
+    if(sw) sw.remove();
+    const ad = document.querySelector('#agentDay');
+    if(ad) ad.hidden = false;
+    const btnAdd = document.querySelector('#btnAddDeal');
+    if(btnAdd) btnAdd.hidden = false;
+  } else {
+    // Non-agents never see the agent banner — remove it so the DOM is clean.
+    const ad = document.querySelector('#agentDay');
+    if(ad) ad.remove();
+    const btnAdd = document.querySelector('#btnAddDeal');
+    if(btnAdd) btnAdd.remove();
+  }
+
+  // Add-Deal CTA: open the multi-step enrollment wizard.
+  const btnAddDeal = document.querySelector('#btnAddDeal');
+  if(btnAddDeal){
+    btnAddDeal.addEventListener('click', ()=>{
+      window.location.href = 'add-deal.html';
+    });
+  }
+
+  if(sessionStorage.getItem('ebDealJustLogged') === '1'){
+    sessionStorage.removeItem('ebDealJustLogged');
+    window.__ebDealLoggedFlash = true;
+  }
+
+
+  let toastT;
+  function toast(msg, kind){
+    const t=$('#toast'); $('#toastMsg').textContent=msg;
+    t.classList.remove('accent','danger');
+    if(kind==='accent') t.classList.add('accent');
+    if(kind==='danger') t.classList.add('danger');
+    t.classList.add('show');
+    clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('show'),2400);
+  }
+
+  function pad(n){return String(n).padStart(2,'0')}
+  function fmtTime(hhmm){
+    const [h,m]=hhmm.split(':').map(Number);
+    const ampm = h>=12?'PM':'AM';
+    const hh = h===0?12 : h>12?h-12 : h;
+    return `${hh}:${pad(m)} ${ampm}`;
+  }
+  function fmtDate(d){return d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}
+  function fmtDayShort(d){return d.toLocaleDateString('en-US',{weekday:'short'}).toUpperCase()}
+  // Agents work in Eastern time — render any UTC instant in America/New_York so
+  // the calendar never shows the viewer's local (e.g. IST) clock.
+  function etParts(d){
+    try {
+      return {
+        date: d.toLocaleDateString('en-CA', {timeZone:'America/New_York'}),          // YYYY-MM-DD
+        hm:   d.toLocaleTimeString('en-GB', {timeZone:'America/New_York', hour:'2-digit', minute:'2-digit', hour12:false})  // HH:MM
+      };
+    } catch(e){
+      return { date: isoDate(d), hm: pad(d.getHours())+':'+pad(d.getMinutes()) };
+    }
+  }
+  function nowET(){ return etParts(new Date()); }
+  function notPastET(a){
+    const n = nowET();
+    if(a.date > n.date) return true;
+    if(a.date < n.date) return false;
+    return a.start >= n.hm;
+  }
+  function initials(name){return name.split(/\s+/).slice(0,2).map(w=>w[0]||'').join('').toUpperCase()}
+  function isoDate(d){
+    var y = d.getFullYear();
+    var m = ('0' + (d.getMonth() + 1)).slice(-2);
+    var day = ('0' + d.getDate()).slice(-2);
+    return y + '-' + m + '-' + day;
+  }
+
+  // === "Today" — always the current date/time in EASTERN (Florida), regardless
+  // of the viewer's browser timezone. Returns a Date carrying the ET wall-clock
+  // as its LOCAL fields, so getDate()/getDay()/getHours()/getMinutes() all read ET
+  // (e.g. an agent in India still sees Florida's "today" and current time). ===
+  function getToday(){
+    const n = nowET();                          // { date:'YYYY-MM-DD', hm:'HH:MM' } in ET
+    return new Date(n.date + 'T' + n.hm + ':00');
+  }
+
+  // Week starts Monday
+  function startOfWeek(d){
+    const x = new Date(d); x.setHours(0,0,0,0);
+    const dow = x.getDay(); // 0 Sun .. 6 Sat
+    const diff = dow===0 ? -6 : 1-dow;
+    x.setDate(x.getDate()+diff);
+    return x;
+  }
+  function addDays(d,n){const x=new Date(d);x.setDate(x.getDate()+n);return x}
+
+  var TODAY_CACHED = getToday();
+var weekStart = startOfWeek(TODAY_CACHED);
+
+  // Appointments — populated from real API
+  var appts = [];
+  var dispositionOptions = [];
+
+  var PLAN_VALUE = {};
+  function planValue(p){ return PLAN_VALUE[p] || 0; }
+  function fmtMoney(n){ return Math.round(n).toLocaleString(); }
+
+  // === Render summary tiles ===
+  function refreshSummary(){
+    const today = nowET().date;                 // ET "today" (matches ET-rendered appts)
+    const wkStart = isoDate(weekStart);
+    const wkEnd = isoDate(addDays(weekStart,6));
+    const todayItems = appts.filter(a=>a.date===today);
+    // Real header count for EVERY role (was a hardcoded ROLE_SCOPE count).
+    const ps = document.querySelector('#pageScope');
+    if(ps){
+      var roleNow = 'agent'; try { roleNow = localStorage.getItem('ebRole')||'agent'; } catch(e){}
+      ps.textContent = (ROLE_SCOPE[roleNow] || ROLE_SCOPE.admin) + ' · ' + todayItems.length + ' appointment' + (todayItems.length===1?'':'s') + ' today';
+    }
+    const weekItems  = appts.filter(a=>a.date>=wkStart && a.date<=wkEnd);
+    const noShowWk   = weekItems.filter(a=>a.status==='noshow').length;
+    const upcomingToday  = todayItems.filter(a=>a.status==='confirmed'||a.status==='pending').length;
+    const completedToday = todayItems.filter(a=>a.status==='completed').length;
+    // Open slots still bookable TODAY (time-aware: after the 9 PM cutoff this is
+    // 0, matching the agenda) rather than a flat capacity minus bookings.
+    const slotsToday = slotsForDay(isoDate(getToday())).length;
+    // Non-agent summary tiles (may have been removed from DOM for agents)
+    const elT = $('#sumToday');
+    if(elT){
+      elT.textContent  = todayItems.length;
+      $('#sumTodayMeta').textContent = `${upcomingToday} upcoming · ${completedToday} completed`;
+      $('#sumWeek').textContent   = weekItems.length;
+      $('#sumNoshow').textContent = noShowWk;
+      $('#sumNoshowMeta').textContent = `${Math.max(0,noShowWk-1)} rebooked`;
+      $('#sumSlots').textContent  = Math.max(0, slotsToday);
+    }
+    refreshAgentDay(todayItems, completedToday);
+  }
+
+  // Agent-only: expected income today + completion progress
+  function refreshAgentDay(todayItems, completedToday){
+    const ad = $('#agentDay');
+    if(!ad || ad.hidden) return;
+    // Gross income from every appointment today that didn't no-show.
+    const earning = todayItems.filter(a => a.status !== 'noshow');
+    const gross = earning.reduce((sum,a) => sum + planValue(a.plan), 0);
+    // 20% cancellation buffer applied to the gross.
+    const expected = Math.round(gross * 0.80);
+    const total = todayItems.length;
+    const done = completedToday;
+    const pct = total > 0 ? Math.round((done/total)*100) : 0;
+    $('#adNum').textContent   = fmtMoney(expected);
+    $('#adDone').textContent  = done;
+    $('#adTotal').textContent = total;
+    $('#adPct').textContent   = pct + '%';
+    // Animate the fill width from its current value to the new pct.
+    requestAnimationFrame(()=>{ $('#adFill').style.width = pct + '%'; });
+  }
+
+  // === Calendar view + minimize/expand state ===
+  let calView = localStorage.getItem('ebCalView') || 'day';       // 'week' | 'day' — default Day view
+  let calMinimized = localStorage.getItem('ebCalMinimized') === 'true';
+  let calExpanded = localStorage.getItem('ebCalExpanded') === 'true';
+  // Mutually exclusive: minimizing clears expanded, expanding clears minimized
+  if(calMinimized && calExpanded) calExpanded = false;
+  let dayCursor = isoDate(getToday());  // anchor for day view
+  const MAX_CELL_VISIBLE = 8;       // cap blocks shown per cell before "+N more" (raised so the week view shows all of a day's appointments)
+
+  function applyCalChrome(){
+    const card = $('#calCard');
+    card.setAttribute('data-view', calView);
+    card.classList.toggle('minimized', calMinimized);
+    card.classList.toggle('expanded', calExpanded);
+    $$('.view-toggle .vt-btn').forEach(b=>b.classList.toggle('active', b.dataset.view===calView));
+    const lbl = $('#calMinLabel'); if(lbl) lbl.textContent = calMinimized ? 'Expand' : 'Minimize';
+    const mb = $('#calMinBtn'); if(mb){ mb.setAttribute('aria-expanded', String(!calMinimized)); mb.title = calMinimized ? 'Expand calendar' : 'Collapse calendar'; }
+    const elbl = $('#calExpLabel'); if(elbl) elbl.textContent = calExpanded ? 'Restore' : 'Expand';
+    const eb = $('#calExpBtn'); if(eb){ eb.setAttribute('aria-pressed', String(calExpanded)); eb.title = calExpanded ? 'Restore default size' : 'Expand calendar'; }
+  }
+
+  function renderCal(){
+    applyCalChrome();
+    if(calMinimized){ renderMiniStrip(); return; }
+    if(calView === 'day'){ renderDayView(); return; }
+    renderWeekView();
+  }
+
+  // === Mini strip (collapsed state) ===
+  function renderMiniStrip(){
+    const strip = $('#calMiniStrip');
+    strip.innerHTML = '';
+    const ws = weekStart;
+    $('#weekLabel').textContent = `${ws.toLocaleDateString('en-US',{month:'long'})} ${ws.getDate()} — ${addDays(ws,6).getDate()}, ${addDays(ws,6).getFullYear()}`;
+    for(let i=0;i<7;i++){
+      const d = addDays(ws, i);
+      const iso = isoDate(d);
+      const items = appts.filter(a => a.date === iso);
+      const conf = items.filter(a=>a.status==='confirmed').length;
+      const pend = items.filter(a=>a.status==='pending').length;
+      const comp = items.filter(a=>a.status==='completed').length;
+      const ns   = items.filter(a=>a.status==='noshow').length;
+      const cell = document.createElement('div');
+      cell.className = 'cal-mini-day' + (iso===isoDate(getToday())?' today':'');
+      cell.innerHTML =
+        `<span class="mn-name">${fmtDayShort(d)}</span>` +
+        `<span class="mn-num">${d.getDate()}</span>` +
+        `<div class="mn-row">` +
+          `<span class="mn-count">${items.length}</span>` +
+          (conf?`<span class="mn-pip confirmed" title="${conf} confirmed"></span>`:'') +
+          (pend?`<span class="mn-pip pending" title="${pend} pending"></span>`:'') +
+          (comp?`<span class="mn-pip completed" title="${comp} completed"></span>`:'') +
+          (ns  ?`<span class="mn-pip noshow" title="${ns} no-show"></span>`:'') +
+        `</div>`;
+      cell.addEventListener('click', ()=>{
+        dayCursor = iso;
+        calView = 'day';
+        calMinimized = false;
+        localStorage.setItem('ebCalView', calView);
+        localStorage.setItem('ebCalMinimized', 'false');
+        renderCal();
+      });
+      strip.appendChild(cell);
+    }
+  }
+
+  // === Day view (chronological list of appointments — no empty time slots) ===
+  function renderDayView(){
+    const list = $('#calDayList');
+    list.innerHTML = '';
+    const d = new Date(dayCursor + 'T00:00:00');
+    const todayIso = isoDate(getToday());
+    const dayItems = appts.filter(a => a.date === dayCursor)
+      .slice().sort((a,b)=> a.start < b.start ? -1 : 1);
+    $('#dayTitle').textContent = d.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'});
+    $('#daySub').textContent = `${dayItems.length} appointment${dayItems.length===1?'':'s'}` + (dayCursor===todayIso ? ' today' : '');
+    $('#weekLabel').textContent = d.toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'}) + (dayCursor===todayIso ? ' (Today)' : '');
+
+    if(dayItems.length === 0){
+      const empty = document.createElement('div');
+      empty.className = 'cal-day-empty';
+      empty.textContent = 'No appointments scheduled for this day.';
+      list.appendChild(empty);
+      return;
+    }
+
+    dayItems.forEach(a => {
+      const el = document.createElement('div');
+      el.className = 'cal-day-appt ' + a.status;
+      el.innerHTML =
+        `<div class="cda-l">` +
+          `<div class="cda-name">${a.cust}</div>` +
+          `<div class="cda-meta">${a.plan} · ${a.agent}${a.channel?(' · '+a.channel):''}</div>` +
+        `</div>` +
+        `<div class="cda-r">` +
+          `<span class="cda-time">${fmtTime(a.start)}</span>` +
+          `<span class="status-pill ${a.status}"><span class="sd"></span>${statusLabel(a.status)}</span>` +
+        `</div>`;
+      el.addEventListener('click', (e)=>{ e.stopPropagation(); scrollToAppt(a.id); });
+      list.appendChild(el);
+    });
+  }
+
+  // === Calendar week render ===
+  const SLOTS = [
+    {label:'Morning',       range:'8 AM – 12 PM',  startH:8,  endH:12},
+    {label:'Afternoon',     range:'12 PM – 5 PM',  startH:12, endH:17},
+    {label:'Evening',       range:'5 PM – 9 PM',   startH:17, endH:21},
+  ];
+  function renderWeekView(){
+    const grid = $('#calGrid');
+    grid.innerHTML = '';
+
+    // Corner
+    const corner = document.createElement('div');
+    corner.className = 'cal-corner';
+    grid.appendChild(corner);
+
+    // Day headers — click jumps into the focused Day view for that date
+    for(let i=0;i<7;i++){
+      const d = addDays(weekStart,i);
+      const head = document.createElement('div');
+      head.className = 'cal-day-head' + (isoDate(d)===isoDate(getToday())?' today':'');
+      head.innerHTML = `<span class="cal-day-name">${fmtDayShort(d)}</span><span class="cal-day-num">${d.getDate()}</span>`;
+      head.dataset.date = isoDate(d);
+      head.title = 'Open day view';
+      head.addEventListener('click',()=>{
+        dayCursor = isoDate(d);
+        calView = 'day';
+        localStorage.setItem('ebCalView', calView);
+        renderCal();
+        selectDay(isoDate(d));
+      });
+      grid.appendChild(head);
+    }
+
+    // 4 slot rows
+    SLOTS.forEach(slot=>{
+      const t = document.createElement('div');
+      t.className = 'cal-time-cell';
+      t.innerHTML = `<span class="ct-label">${slot.label}</span><span class="ct-range">${slot.range}</span>`;
+      grid.appendChild(t);
+
+      for(let i=0;i<7;i++){
+        const d = addDays(weekStart,i);
+        const dow = d.getDay();
+        const cell = document.createElement('div');
+        cell.className = 'cal-cell' + ((dow===0||dow===6)?' weekend':'');
+        cell.dataset.date = isoDate(d);
+        cell.dataset.slotStart = slot.startH;
+
+        // Find appts in this date + slot
+        const items = appts
+          .filter(a => a.date===isoDate(d))
+          .filter(a => {const sh = parseInt(a.start.split(':')[0],10); return sh>=slot.startH && sh<slot.endH})
+          .sort((a,b)=>a.start<b.start?-1:1);
+
+        const stack = document.createElement('div');
+        stack.className = 'cal-cell-stack';
+        if(items.length > MAX_CELL_VISIBLE) cell.classList.add('dense');
+
+        items.forEach(a=>{
+          const block = document.createElement('div');
+          block.className = 'appt-block ' + a.status;
+          block.innerHTML = `
+            <div class="ab-time">${fmtTime(a.start)}</div>
+            <div class="ab-name">${a.cust}</div>
+            <div class="ab-agent">${a.agent}</div>`;
+          block.addEventListener('click',(e)=>{e.stopPropagation();scrollToAppt(a.id)});
+          stack.appendChild(block);
+        });
+
+        // Week view shows EVERY appointment for the day: all items are rendered
+        // into the stack above, and when a cell is crowded the `.dense` class
+        // makes it scroll (no truncation, no misleading "+N more"). Double-click
+        // the cell to jump into the full Day view.
+        if(items.length > MAX_CELL_VISIBLE){
+          cell.title = `${items.length} appointments — scroll to see all, or double-click to open Day view`;
+          cell.addEventListener('dblclick',(e)=>{
+            e.stopPropagation();
+            dayCursor = isoDate(d);
+            calView = 'day';
+            localStorage.setItem('ebCalView', calView);
+            renderCal();
+          });
+        }
+        cell.appendChild(stack);
+
+        cell.addEventListener('click',(e)=>{
+          if(e.target.closest('.appt-block') || e.target.closest('.cal-cell-more')) return;
+          toast(`New appointment · ${fmtDayShort(d)} ${d.getDate()} · ${slot.label} (${slot.range})`, 'accent');
+        });
+        grid.appendChild(cell);
+      }
+    });
+
+    // Week label
+    const ws = weekStart, we = addDays(weekStart,6);
+    const sameMonth = ws.getMonth()===we.getMonth();
+    $('#weekLabel').textContent = sameMonth
+      ? `${ws.toLocaleDateString('en-US',{month:'long'})} ${ws.getDate()} — ${we.getDate()}, ${we.getFullYear()}`
+      : `${ws.toLocaleDateString('en-US',{month:'short'})} ${ws.getDate()} — ${we.toLocaleDateString('en-US',{month:'short'})} ${we.getDate()}, ${we.getFullYear()}`;
+  }
+
+  function scrollToAppt(id){
+    const el = document.querySelector(`[data-row-id="${id}"]`);
+    if(el){el.scrollIntoView({behavior:'smooth',block:'center'}); el.style.background='rgba(201,123,58,0.06)'; setTimeout(()=>el.style.background='',900)}
+  }
+
+  // === Agenda render ===
+  let agendaFilter = 'upcoming';
+  // Open bookable slots for ONE specific day. Agent works 10:00 AM – 7:00 PM
+  // Eastern in 15-minute slots, lunch 2:00–3:00 PM excluded. Returns [] for
+  // past days, weekends, and (for today) any time already gone; hides slots
+  // already taken by a live appointment so we never double-book.
+  function slotsForDay(iso){
+    const slots = [];
+    const todayIso = isoDate(getToday());
+    if(iso < todayIso) return slots;                 // never past days
+    const dow = new Date(iso + 'T00:00:00').getDay();
+    if(dow === 0 || dow === 6) return slots;         // skip weekends (matches the booking engine)
+    const isToday = (iso === todayIso);
+    const now = getToday();
+    const nowMins = now.getHours() * 60 + now.getMinutes();
+    const taken = new Set(
+      appts.filter(a => a.date === iso && a.status !== 'cancelled' && a.status !== 'noshow')
+           .map(a => a.start)
+    );
+    const START = 8 * 60, END = 21 * 60, STEP = 15;  // 08:00–21:00, 15-min
+    const LUNCH_START = 14 * 60, LUNCH_END = 15 * 60;  // 2–3 PM excluded
+    for(let mins = START; mins < END; mins += STEP){
+      if(mins >= LUNCH_START && mins < LUNCH_END) continue;   // lunch
+      if(isToday && mins <= nowMins) continue;                // never past times
+      const t = String(Math.floor(mins/60)).padStart(2,'0') + ':' + String(mins%60).padStart(2,'0');
+      if(taken.has(t)) continue;                              // hide booked
+      slots.push({ id:`SLOT-${iso}-${t}`, date:iso, start:t, end:'', cust:'Available slot', plan:'Open', agent:'ET', status:'slot' });
+    }
+    return slots;
+  }
+
+  function genAvailableSlots(){
+    // Show the selected day's open slots. When the agent is on TODAY (the
+    // default) and today has none left — after the 9 PM cutoff, a weekend, or a
+    // fully-booked day — roll forward to the next business day that actually has
+    // availability so the view is never an empty dead end. If the agent has
+    // explicitly navigated to a specific day, respect that day as-is.
+    const todayIso = isoDate(getToday());
+    const selected = (calView === 'day') ? dayCursor : todayIso;
+    let slots = slotsForDay(selected);
+    if(slots.length === 0 && selected === todayIso){
+      const probe = new Date(todayIso + 'T00:00:00');
+      for(let i = 0; i < 14 && slots.length === 0; i++){
+        probe.setDate(probe.getDate() + 1);
+        slots = slotsForDay(isoDate(probe));
+      }
+    }
+    return slots;
+  }
+  function matchAgenda(a){
+    if(agendaFilter==='upcoming') return (a.status==='confirmed'||a.status==='pending') && notPastET(a);
+    if(agendaFilter==='completed') return a.status==='completed';
+    if(agendaFilter==='noshow')    return a.status==='noshow';
+    if(agendaFilter==='slot')      return a.status==='slot';
+    return true;
+  }
+  function statusLabel(s){return s==='confirmed'?'Confirmed':s==='pending'?'Pending':s==='completed'?'Completed':s==='noshow'?'No-show':s==='slot'?'Available':s}
+
+  // Compact card used by the split Upcoming view (Scheduled + Call now panes).
+  // Reuses the same data-act buttons so all existing handlers (finish/confirm/
+  // reschedule/remind/cancel/webcall) work unchanged.
+  function agendaRowHTML(a){
+    const d = new Date(a.date+'T00:00:00');
+    const isSlot = a.status==='slot';
+    const actions = isSlot ? `
+      <button class="ar-btn book" data-act="book" data-id="${a.id}" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>Book this slot</button>` : `
+      <button class="ar-btn primary" data-act="finish" data-id="${a.id}" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>${a.status==='completed'?'Disposition':'Finish'}</button>
+      ${a.status==='confirmed'||a.status==='completed' ? '' : `<button class="ar-btn" data-act="confirm" data-id="${a.id}" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Confirm</button>`}
+      <button class="ar-btn icon-only" data-act="reschedule" data-id="${a.id}" type="button" title="Reschedule"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></button>
+      <button class="ar-btn icon-only" data-act="remind" data-id="${a.id}" type="button" title="Send Reminder"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 7 3 9H3c0-2 3-2 3-9Z"/><path d="M10 21a2 2 0 0 0 4 0"/></svg></button>
+      <button class="ar-btn danger" data-act="cancel" data-id="${a.id}" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>Cancel</button>`;
+    const callBtn = (a.lead_id && !isSlot)
+      ? `<button class="ar-call" type="button" data-act="webcall" data-id="${a.id}" title="Call ${a.cust}"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6A19.79 19.79 0 0 1 2.12 4.18 2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92Z"/></svg>Call</button>`
+      : '';
+    return `<div class="ap-card${a.call_now?' callnow':''}" data-row-id="${a.id}">
+      <div class="ap-top"><span class="ap-time">${fmtDayShort(d)} ${d.getDate()} · ${fmtTime(a.start)}</span><span class="status-pill ${a.status}"><span class="sd"></span>${statusLabel(a.status)}</span></div>
+      <div class="ap-name">${a.cust}</div>
+      <div class="ap-meta">${a.phone?`<span class="ap-phone">${a.phone}</span>`:''}${a.state?`<span class="ar-state">${a.state}</span>`:''}</div>
+      <div class="ap-actions">${callBtn}${actions}</div>
+    </div>`;
+  }
+
+  function renderAgenda(){
+    const allSlots = genAvailableSlots();
+    const merged = (agendaFilter==='slot') ? allSlots : appts;
+    const list = merged.filter(matchAgenda).slice().sort((a,b)=>{
+      if(a.date!==b.date) return a.date<b.date?-1:1;
+      return a.start<b.start?-1:1;
+    });
+
+    // When "Available slots" has rolled forward past today (after hours / weekend),
+    // name the day it's showing so the agent isn't confused about the date.
+    let slotTitle = 'Available slots';
+    if(agendaFilter==='slot' && allSlots.length){
+      const sd = allSlots[0].date;
+      if(sd !== isoDate(getToday())){
+        const dd = new Date(sd + 'T00:00:00');
+        slotTitle = 'Available slots · ' + fmtDayShort(dd) + ' ' + dd.getDate();
+      }
+    }
+    $('#agendaTitle').textContent = agendaFilter==='upcoming'
+      ? 'Upcoming'
+      : agendaFilter==='completed' ? 'Completed'
+      : agendaFilter==='noshow'    ? 'No-shows'
+      : slotTitle;
+    $('#agendaSub').textContent = `${list.length} item${list.length===1?'':'s'}`;
+
+    // Chip counts use the SAME predicates as the list above, so the badge always
+    // matches what's shown (no more "1" badge over an empty list).
+    $('#cc-upcoming').textContent  = appts.filter(a=>(a.status==='confirmed'||a.status==='pending') && (a.call_now || notPastET(a))).length;
+    $('#cc-completed').textContent = appts.filter(a=>a.status==='completed').length;
+    $('#cc-noshow').textContent    = appts.filter(a=>a.status==='noshow').length;
+    $('#cc-slot').textContent      = allSlots.length;
+
+    // UPCOMING is split into two panes: Scheduled (replies 1/2/3) on the left,
+    // Call now (reply 4 -> booking_source ai_sms_call_now) on the right. Call-now
+    // appointments start "now" so they're not filtered by not-past; they show
+    // until the agent finishes/cancels them. Other tabs keep the single list.
+    if(agendaFilter==='upcoming'){
+      const byDT = (a,b)=> a.date!==b.date ? (a.date<b.date?-1:1) : (a.start<b.start?-1:1);
+      const sched   = appts.filter(a=>(a.status==='confirmed'||a.status==='pending') && notPastET(a) && !a.call_now).sort(byDT);
+      const callnow = appts.filter(a=>a.call_now && (a.status==='confirmed'||a.status==='pending')).sort(byDT);
+      $('#agendaTitle').textContent = 'Upcoming';
+      $('#agendaSub').textContent = (sched.length+callnow.length) + ' item' + ((sched.length+callnow.length)===1?'':'s');
+      const pane = (title,cn,rows,empty)=> '<div class="agenda-pane'+(cn?' callnow':'')+'">'
+        + '<div class="pane-h">'+title+'<span class="pane-n">'+rows.length+'</span></div>'
+        + (rows.length ? rows.map(agendaRowHTML).join('') : '<div class="pane-empty">'+empty+'</div>')
+        + '</div>';
+      $('#agendaList').innerHTML = '<div class="agenda-split">'
+        + pane('Scheduled', false, sched, 'No scheduled appointments.')
+        + pane('📞 Call now', true, callnow, 'No call-now requests.')
+        + '</div>';
+      return;
+    }
+
+    $('#agendaList').innerHTML = list.length ? list.map(a=>{
+      const d = new Date(a.date+'T00:00:00');
+      const isSlot = a.status==='slot';
+      const actions = isSlot ? `
+        <button class="ar-btn book" data-act="book" data-id="${a.id}" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+          Book this slot
+        </button>` : `
+        ${a.status==='completed' ? `
+        <button class="ar-btn primary" data-act="finish" data-id="${a.id}" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+          Disposition
+        </button>` : `
+        <button class="ar-btn primary" data-act="finish" data-id="${a.id}" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+          Finish
+        </button>`}
+        ${a.status==='confirmed'||a.status==='completed' ? '' : `
+        <button class="ar-btn primary" data-act="confirm" data-id="${a.id}" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+          Confirm
+        </button>`}
+        <button class="ar-btn icon-only" data-act="reschedule" data-id="${a.id}" type="button" title="Reschedule" aria-label="Reschedule">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+        </button>
+        <button class="ar-btn icon-only" data-act="remind" data-id="${a.id}" type="button" title="Send Reminder" aria-label="Send Reminder">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 7 3 9H3c0-2 3-2 3-9Z"/><path d="M10 21a2 2 0 0 0 4 0"/></svg>
+        </button>
+        <button class="ar-btn danger" data-act="cancel" data-id="${a.id}" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+          Cancel
+        </button>
+      `;
+
+      const isToday = a.date === isoDate(getToday());
+      return `
+        <div class="appt-row${isToday?' today':''}" data-row-id="${a.id}">
+          <div class="ar-time">
+            <span class="day">${fmtDayShort(d)} · ${d.getDate()}</span>
+            <span class="t">${fmtTime(a.start)}</span>
+          </div>
+          <div class="ar-cust">
+            <span class="ar-name">${a.cust}</span>
+            ${(a.lead_id && a.status!=='slot') ? `<button class="ar-call" type="button" data-act="webcall" data-id="${a.id}" title="Call ${a.cust} from the system" style="display:inline-flex;align-items:center;gap:5px;height:26px;padding:0 10px;border:1px solid var(--border);border-radius:7px;background:#fff;font:600 .72rem inherit;color:var(--accent);cursor:pointer;white-space:nowrap;flex-shrink:0"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6A19.79 19.79 0 0 1 2.12 4.18 2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92Z"/></svg>Call</button>` : (a.phone ? `<a class="ar-phone" href="tel:${String(a.phone).replace(/[^+\d]/g,'')}" title="Call ${a.phone}" style="font-size:.75rem;color:var(--text-muted);text-decoration:none;white-space:nowrap;flex-shrink:0">${a.phone}</a>` : '')}
+            <span class="status-pill ${a.status}"><span class="sd"></span>${statusLabel(a.status)}</span>
+          </div>
+          <div class="ar-plan-v">${a.plan}</div>
+          <div class="ar-agent-v">${a.agent}</div>
+          <div class="ar-actions">${actions}</div>
+        </div>`;
+    }).join('') : `<div style="padding:30px 12px;text-align:center;color:var(--text-faint);font-size:.8125rem">Nothing here for this filter.</div>`;
+  }
+
+  function selectDay(iso){
+    agendaFilter = 'upcoming';
+    $$('#agendaChips .chip').forEach(x=>x.classList.toggle('active', x.dataset.filter==='upcoming'));
+    renderAgenda();
+    // Scroll agenda to first appointment of that day
+    const target = document.querySelector(`.appt-row [data-row-id]`);
+    if(target) target.scrollIntoView({behavior:'smooth',block:'start'});
+  }
+
+  // === Action handlers ===
+  $('#agendaList').addEventListener('click', e=>{
+    const b = e.target.closest('[data-act]'); if(!b) return;
+    const id = b.dataset.id, act = b.dataset.act;
+    if(act==='book'){
+      // Open the Add Appointment modal pre-filled with this slot's date/time so
+      // the agent can pick the customer and book it for real.
+      const m = id.match(/SLOT-(\d{4}-\d{2}-\d{2})-(\d{2}:\d{2})/);
+      if(m){ openAddAppt(m[1], m[2]); }
+      return;
+    }
+    const a = appts.find(x=>x.id===id); if(!a) return;
+    if(act==='webcall'){
+      if(window.__ebSoftphone){
+        window.__ebSoftphone.call({ leadId: a.lead_id, appointmentId: a.id, leadName: a.cust });
+      } else {
+        toast('Calling is still loading — try again in a moment', true);
+      }
+      return;
+    }
+    if(act==='confirm'){
+      window.__ebAPI.patch('/appointments/' + encodeURIComponent(id), { status: 'confirmed' }).catch(function(){});
+      a.status = 'confirmed';
+      renderCal(); renderAgenda(); refreshSummary();
+      toast(a.cust + ' · confirmed', 'accent');
+    } else if(act==='reschedule'){
+      openReschedule(a);
+    } else if(act==='finish'){
+      openDisposition(a);
+    } else if(act==='remind'){
+      toast('Sending reminder…');
+      window.__ebAPI.post('/appointments/' + encodeURIComponent(id) + '/notify', { kind: 'reminder' })
+        .then(function(){ toast('Reminder texted to ' + a.cust, 'accent'); })
+        .catch(function(err){ toast('Reminder failed: ' + ((err && err.message) || 'error'), 'danger'); });
+    } else if(act==='cancel'){
+      window.__ebAPI.patch('/appointments/' + encodeURIComponent(id), { status: 'cancelled' }).catch(function(){});
+      const idx = appts.findIndex(x=>x.id===id);
+      if(idx>=0){appts.splice(idx,1); renderCal(); renderAgenda(); refreshSummary(); toast(a.cust + ' · cancelled', 'danger')}
+    }
+  });
+
+  // Filter chips
+  $$('#agendaChips .chip').forEach(c=>{
+    c.addEventListener('click',()=>{
+      $$('#agendaChips .chip').forEach(x=>x.classList.remove('active'));
+      c.classList.add('active');
+      agendaFilter = c.dataset.filter;
+      renderAgenda();
+    });
+  });
+
+  // Calendar nav — Prev/Next step by week in week view, by day in day view
+  $('#navPrev').addEventListener('click',()=>{
+    if(calView === 'day'){
+      const d = new Date(dayCursor + 'T00:00:00');
+      d.setDate(d.getDate() - 1);
+      dayCursor = isoDate(d);
+      weekStart = startOfWeek(d);
+    } else {
+      weekStart = addDays(weekStart,-7);
+    }
+    renderCal(); renderAgenda(); refreshSummary();
+  });
+  $('#navNext').addEventListener('click',()=>{
+    if(calView === 'day'){
+      const d = new Date(dayCursor + 'T00:00:00');
+      d.setDate(d.getDate() + 1);
+      dayCursor = isoDate(d);
+      weekStart = startOfWeek(d);
+    } else {
+      weekStart = addDays(weekStart, 7);
+    }
+    renderCal(); renderAgenda(); refreshSummary();
+  });
+  $('#todayBtn')?.addEventListener('click',()=>{
+    TODAY_CACHED = getToday();
+    weekStart = startOfWeek(TODAY_CACHED);
+    dayCursor = isoDate(TODAY_CACHED);
+    renderCal(); renderAgenda(); refreshSummary();
+  });
+
+  // View toggle (Day / Week)
+  $$('.view-toggle .vt-btn').forEach(b=>{
+    b.addEventListener('click',()=>{
+      const v = b.dataset.view; if(!v) return;
+      calView = v;
+      localStorage.setItem('ebCalView', calView);
+      if(calMinimized){
+        calMinimized = false;
+        localStorage.setItem('ebCalMinimized', 'false');
+      }
+      renderCal();
+    });
+  });
+
+  // Minimize / Restore toggle (collapses calendar into a compact day strip)
+  $('#calMinBtn')?.addEventListener('click',()=>{
+    calMinimized = !calMinimized;
+    if(calMinimized && calExpanded){
+      calExpanded = false;
+      localStorage.setItem('ebCalExpanded', 'false');
+    }
+    localStorage.setItem('ebCalMinimized', String(calMinimized));
+    renderCal();
+  });
+
+  // Expand / Restore toggle (gives the calendar a roomier viewport)
+  $('#calExpBtn')?.addEventListener('click',()=>{
+    calExpanded = !calExpanded;
+    if(calExpanded && calMinimized){
+      calMinimized = false;
+      localStorage.setItem('ebCalMinimized', 'false');
+    }
+    localStorage.setItem('ebCalExpanded', String(calExpanded));
+    renderCal();
+  });
+
+  // Day view inline prev/next
+  $('#dayPrev')?.addEventListener('click',()=>{
+    const d = new Date(dayCursor + 'T00:00:00');
+    d.setDate(d.getDate() - 1);
+    dayCursor = isoDate(d);
+    weekStart = startOfWeek(d);
+    renderCal();
+  });
+  $('#dayNext')?.addEventListener('click',()=>{
+    const d = new Date(dayCursor + 'T00:00:00');
+    d.setDate(d.getDate() + 1);
+    dayCursor = isoDate(d);
+    weekStart = startOfWeek(d);
+    renderCal();
+  });
+
+  // Reschedule modal
+  const modalBg = $('#modalBg'), modal = $('#rescheduleModal');
+  let reTarget = null;
+  function openReschedule(a){
+    reTarget = a;
+    $('#reSub').textContent = `${a.cust} · currently ${new Date(a.date+'T00:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'})} at ${fmtTime(a.start)}`;
+    $('#reDate').value = a.date;
+    $('#reTime').value = a.start;
+    modal.classList.add('open'); modalBg.classList.add('open');
+  }
+  function closeReschedule(){modal.classList.remove('open'); if(!dispModal.classList.contains('open')) modalBg.classList.remove('open')}
+  $('#reClose').addEventListener('click', closeReschedule);
+  $('#reCancel').addEventListener('click', closeReschedule);
+  modalBg.addEventListener('click', ()=>{ closeReschedule(); closeDisposition(); closeAddAppt(); });
+  document.addEventListener('keydown', e=>{if(e.key==='Escape'){ closeReschedule(); closeDisposition(); closeAddAppt(); }});
+  $('#reSave').addEventListener('click',async function(){
+    if(!reTarget) return;
+    var newDate = $('#reDate').value;
+    var newTime = $('#reTime').value;
+    var nextStatus = reTarget.status === 'noshow' ? 'pending' : reTarget.status;
+    try {
+      var newStart = new Date(newDate + 'T' + newTime + ':00');
+      var newEnd = new Date(newStart.getTime() + 15 * 60000);   // 15-minute appointments
+      await window.__ebAPI.patch('/appointments/' + reTarget.id, {
+        status: nextStatus,
+        start_time: newStart.toISOString(),
+        end_time: newEnd.toISOString(),
+      });
+      reTarget.date = newDate;
+      reTarget.start = newTime;
+      reTarget.end = ('0' + newEnd.getHours()).slice(-2) + ':' + ('0' + newEnd.getMinutes()).slice(-2);
+      reTarget.status = nextStatus;
+      var who = reTarget.cust;
+      var apptId = reTarget.id;
+      closeReschedule();
+      renderCal(); renderAgenda(); refreshSummary();
+      toast(who + ' · rescheduled to ' + fmtTime(newTime) + ' — texting customer…', 'accent');
+      // Notify the customer of the new time (reuses the existing SMS boundary).
+      window.__ebAPI.post('/appointments/' + apptId + '/notify', { kind: 'reschedule' })
+        .then(function(){ toast('Reschedule text sent to ' + who, 'accent'); })
+        .catch(function(err){ toast('Saved, but reschedule text failed: ' + ((err && err.message) || 'error'), 'danger'); });
+    } catch(e) {
+      console.warn('Reschedule API failed:', e);
+      toast('Reschedule failed: ' + (e.message || 'backend unavailable'), 'danger');
+    }
+  });
+
+  // === Add appointment modal (manual booking) ===
+  const addApptModal = $('#addApptModal');
+  let _leadsLoaded = false;
+  async function loadLeadsIntoPicker(){
+    if(_leadsLoaded) return;
+    const sel = $('#aaLead');
+    try {
+      const res = await window.__ebAPI.get('/leads', { page: 1, size: 100 });
+      const items = (res && res.items) || [];
+      if(!items.length){ sel.innerHTML = '<option value="">No leads found — upload leads first</option>'; return; }
+      sel.innerHTML = items.map(function(l){
+        const name = ((l.first_name||'') + ' ' + (l.last_name||'')).trim() || l.phone || 'Lead';
+        return '<option value="'+l.id+'">'+name+(l.phone?(' · '+l.phone):'')+'</option>';
+      }).join('');
+      _leadsLoaded = true;
+    } catch(e){
+      sel.innerHTML = '<option value="">Could not load leads</option>';
+    }
+  }
+  function openAddAppt(prefillDate, prefillTime){
+    loadLeadsIntoPicker();
+    $('#aaDate').value = prefillDate || dayCursor || isoDate(getToday());
+    $('#aaDate').min = isoDate(getToday());           // never past
+    $('#aaTime').value = prefillTime || '10:00';
+    addApptModal.classList.add('open'); modalBg.classList.add('open');
+  }
+  function closeAddAppt(){ addApptModal.classList.remove('open'); if(!dispModal.classList.contains('open') && !modal.classList.contains('open')) modalBg.classList.remove('open'); }
+  $('#addApptBtn')?.addEventListener('click', ()=> openAddAppt(dayCursor, ''));
+  $('#aaClose')?.addEventListener('click', closeAddAppt);
+  $('#aaCancel')?.addEventListener('click', closeAddAppt);
+  $('#aaSave')?.addEventListener('click', async function(){
+    const sel = $('#aaLead');
+    const leadId = sel.value;
+    const d = $('#aaDate').value, t = $('#aaTime').value;
+    if(!leadId){ toast('Pick a customer first', 'danger'); return; }
+    if(!d || !t){ toast('Pick a date and time', 'danger'); return; }
+    // Pull the lead's phone from the picker label ("Name · +1...") so we can show it.
+    const optText = (sel.options[sel.selectedIndex] && sel.options[sel.selectedIndex].text) || '';
+    const phMatch = optText.match(/(\+?\d[\d\s\-()]{6,}\d)/);
+    const phone = phMatch ? phMatch[1].trim() : '';
+    // Agent works in Eastern; their browser clock is treated as ET (agents are NY-based).
+    const startLocal = new Date(d + 'T' + t + ':00');
+    try {
+      const created = await window.__ebAPI.post('/agent/appointment', {
+        lead_id: leadId,
+        start_time: startLocal.toISOString(),
+        duration_minutes: 15,
+      });
+      closeAddAppt();
+      const nm = (created && created.lead_name) || 'Customer';
+      appts.push({ id: created.id, date: d, start: t, end: '', cust: nm, phone: phone, plan: 'Manual', agent: 'You', status: 'confirmed' });
+      renderCal(); renderAgenda(); refreshSummary();
+      toast(nm + (phone ? ' (' + phone + ')' : '') + ' · appointment booked for ' + fmtTime(t), 'accent');
+    } catch(e){
+      toast('Could not book: ' + ((e && e.message) || 'error'), 'danger');
+    }
+  });
+
+  // Disposition modal
+  const dispModal = $('#dispositionModal');
+  let dispTarget = null;
+  let selectedDisposition = null;
+  function renderDispositionChoices(){
+    const box = $('#dispChoices');
+    const opts = dispositionOptions.length ? dispositionOptions : [
+      {key:'sale',label:'Sale',description:'Customer picked up and insurance was sold.'},
+      {key:'appointment_set',label:'Appointment Set',description:'Another appointment or follow-up was set.'},
+      {key:'medicare',label:'Medicare',description:'Route to Medicare handling.'},
+      {key:'attempted',label:'Attempted',description:'Customer did not answer.'},
+      {key:'couldnt_sell',label:"Couldn't Sell",description:'Customer picked up but did not buy.'},
+      {key:'unqualified',label:'Unqualified',description:'Not eligible or not a fit.'},
+      {key:'wrong_number',label:'Wrong Number',description:'Bad or incorrect phone number.'}
+    ];
+    box.innerHTML = opts.map(o=>`
+      <button class="disp-choice${selectedDisposition===o.key?' active':''}" data-disp="${o.key}" type="button">
+        <strong>${o.label}</strong>
+        <span>${o.description || ''}</span>
+      </button>
+    `).join('');
+  }
+  function openDisposition(a){
+    dispTarget = a;
+    selectedDisposition = a.disposition || null;
+    $('#dispSub').textContent = `${a.cust} · ${a.phone || 'no phone'} · ${new Date(a.date+'T00:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'})} at ${fmtTime(a.start)}`;
+    $('#dispPicked').value = '';
+    $('#dispSold').value = '';
+    $('#dispDuration').value = '';
+    $('#dispPremium').value = '';
+    $('#dispCarrier').value = '';
+    $('#dispPolicy').value = '';
+    $('#dispNotes').value = '';
+    renderDispositionChoices();
+    dispModal.classList.add('open'); modalBg.classList.add('open');
+  }
+  function closeDisposition(){dispModal.classList.remove('open'); if(!modal.classList.contains('open')) modalBg.classList.remove('open')}
+  $('#dispClose').addEventListener('click', closeDisposition);
+  $('#dispCancel').addEventListener('click', closeDisposition);
+  $('#dispChoices').addEventListener('click', function(e){
+    const b = e.target.closest('[data-disp]'); if(!b) return;
+    selectedDisposition = b.dataset.disp;
+    renderDispositionChoices();
+  });
+  function boolOrNull(value){
+    if(value === 'true') return true;
+    if(value === 'false') return false;
+    return null;
+  }
+  $('#dispSave').addEventListener('click', async function(){
+    if(!dispTarget) return;
+    if(!selectedDisposition){
+      toast('Choose a disposition first', 'danger');
+      return;
+    }
+    const payload = {
+      disposition_key: selectedDisposition,
+      notes: $('#dispNotes').value || null,
+      call_duration_seconds: $('#dispDuration').value ? Number($('#dispDuration').value) : null,
+      sale_carrier: $('#dispCarrier').value || null,
+      premium_amount: $('#dispPremium').value ? Number($('#dispPremium').value) : null,
+      policy_number: $('#dispPolicy').value || null
+    };
+    const picked = boolOrNull($('#dispPicked').value);
+    const sold = boolOrNull($('#dispSold').value);
+    if(picked !== null) payload.customer_picked_up = picked;
+    if(sold !== null) payload.insurance_sold = sold;
+    try {
+      const saved = await window.__ebAPI.post('/appointments/' + encodeURIComponent(dispTarget.id) + '/disposition', payload);
+      dispTarget.status = saved.disposition_key === 'attempted' ? 'noshow' : 'completed';
+      dispTarget.disposition = saved.disposition_key;
+      dispTarget.dispositionLabel = saved.disposition_label;
+      closeDisposition();
+      renderCal(); renderAgenda(); refreshSummary();
+      toast(dispTarget.cust + ' · ' + saved.disposition_label + ' saved', 'accent');
+    } catch(e) {
+      console.warn('Disposition save failed:', e);
+      toast('Disposition failed: ' + (e.message || 'backend unavailable'), 'danger');
+    }
+  });
+
+  // FAB quote rotation
+  const quotes = window.__ROLE_FAB_QUOTES || ['Ask',"What's open today?",'Reschedule a no-show','Send reminders','Find me a slot'];
+  let qi=0;
+  setInterval(()=>{qi=(qi+1)%quotes.length;$('#fabQuote').textContent=quotes[qi]},4400);
+  $('#fabAssistant').addEventListener('click',()=>{window.location.href='ask-the-brain.html'});
+
+  /* === Real data fetching === */
+  async function initAppointments() {
+    try {
+      dispositionOptions = await window.__ebAPI.get('/appointments/dispositions/options').catch(function(){ return []; });
+      var todayIso = isoDate(getToday());   // Eastern "today", not the viewer's tz
+      var weekAgo = new Date(); weekAgo.setDate(weekAgo.getDate() - 14);
+      var nextWeek = new Date(); nextWeek.setDate(nextWeek.getDate() + 14);
+      var apptRes = await window.__ebAPI.get('/appointments', {
+        page: 1, size: 100
+      }).catch(function(){ return null; });
+      var apptItems = (apptRes && apptRes.items) || [];
+      appts = apptItems.map(function(a, idx){
+        var startDate = a.start_time ? new Date(a.start_time) : new Date();
+        var endDate = a.end_time ? new Date(a.end_time) : new Date(startDate.getTime() + 15 * 60000);
+        var sp = etParts(startDate), ep = etParts(endDate);   // show in Eastern (agent tz)
+        return {
+          id: a.id || ('apt-' + idx + '-' + a.lead_name),
+          lead_id: a.lead_id || null,
+          date: sp.date,
+          start: sp.hm,
+          end: ep.hm,
+          cust: a.lead_name || '—',
+          phone: a.lead_phone || '',
+          state: a.lead_state || '',
+          plan: a.plan || '—',
+          agent: a.agent_name || '—',
+          status: a.status || 'pending',
+          disposition: a.disposition || null,
+          channel: a.channel || 'Phone',
+          call_now: a.booking_source === 'ai_sms_call_now',
+        };
+      });
+    } catch(err) {
+      console.warn('Failed to load appointments:', err);
+    }
+    renderCal();
+    refreshSummary();
+    renderAgenda();
+  }
+
+  __ebSafeInit(function(){ return initAppointments(); });
+
+  // ---- Realtime auto-update (no refresh): reload appointments/calendar/counts on relevant events ----
+  (function(){
+    var _t; function reload(){ clearTimeout(_t); _t = setTimeout(function(){ initAppointments().catch(function(){}); }, 450); }
+    ['appointment_created','appointment_updated','appointment_disposition_saved']
+      .forEach(function(ev){ window.addEventListener('launchpad:realtime:' + ev, reload); });
+    try { window.__ebRealtime && window.__ebRealtime.connect(); } catch(e){}
+  })();
+
+  if(window.__ebDealLoggedFlash){
+    window.__ebDealLoggedFlash = false;
+    const ls = document.querySelector('#liveStatus');
+    const lt = document.querySelector('#liveStatusText');
+    if(lt) lt.textContent = 'Deal saved; refresh appointments from backend';
+    if(ls) ls.classList.add('ok','flash');
+    setTimeout(()=>{
+      if(ls) ls.classList.remove('ok','flash');
+      if(lt) lt.textContent = 'Live backend data';
+    }, 2800);
+    toast('Deal saved; appointment appears after backend booking', 'accent');
+  }
+})();
+</script>
+</body>
+</html>

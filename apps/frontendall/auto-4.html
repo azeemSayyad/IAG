@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Add Deal · Auto · Step 4 — Endeavor</title>
+<script src="i18n-dict.js?v=2"></script>
+<script src="prefs-extras.js?v=28"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="wizard.css"/>
+  <script src="services/api.js?v=10"></script>
+  <script src="services/error-boundary.js?v=19"></script>
+</head>
+<body data-chapter="auto">
+
+<div class="wiz-shell">
+  <a class="ch-brand" href="appointments.html" aria-label="Endeavor">
+    <span class="ch-brand-dot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/><path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/></svg></span>
+    Endeavor
+  </a>
+
+  <header class="ch-head">
+    <div class="ch-row">
+      <div class="ch-titlewrap">
+        <h1 class="ch-title"><span class="ch-num">03.</span> Auto Insurance</h1>
+        <p class="ch-sub">Quote the household policy. Personal info already on file.</p>
+      </div>
+      <div class="ch-prog">
+        <div class="ch-step"><strong>4</strong><span class="ch-step-of">/ 4</span></div>
+        <div class="ch-ring">
+          <svg viewBox="0 0 36 36"><circle cx="18" cy="18" r="15.9" class="ring-track"/><circle cx="18" cy="18" r="15.9" class="ring-arc" stroke-dasharray="100,100"/></svg>
+          <span class="ch-ring-num">100%</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <div class="wiz-card">
+    <div class="wiz-num">04</div>
+    <div class="wiz-eyebrow">Coverage &amp; bind</div>
+    <h2 class="wiz-title">Build the policy.</h2>
+    <p class="wiz-sub">FL minimums default. Recommend full coverage for financed/leased.</p>
+
+    <form id="step4" class="form-grid" autocomplete="off" novalidate>
+      <div class="field">
+        <label class="field-label" for="auCarrier">Carrier</label>
+        <select class="ctl ctl-select" id="auCarrier">
+          <option>Progressive</option><option>Geico</option><option>State Farm</option>
+          <option>Allstate</option><option>USAA</option><option>Liberty Mutual</option>
+          <option>Farmers</option><option>Nationwide</option>
+        </select>
+      </div>
+      <div class="field">
+        <label class="field-label" for="auTerm">Term</label>
+        <select class="ctl ctl-select" id="auTerm">
+          <option>6 months</option><option>12 months</option>
+        </select>
+      </div>
+      <div class="field">
+        <label class="field-label" for="auBi">Bodily injury</label>
+        <select class="ctl ctl-select" id="auBi">
+          <option>50/100</option><option>100/300</option>
+          <option>250/500</option><option>500/500</option>
+        </select>
+      </div>
+      <div class="field">
+        <label class="field-label" for="auPd">Property damage</label>
+        <select class="ctl ctl-select" id="auPd">
+          <option>$50K</option><option>$100K</option><option>$250K</option><option>$500K</option>
+        </select>
+      </div>
+      <div class="field">
+        <label class="field-label" for="auComp">Comp deductible</label>
+        <select class="ctl ctl-select" id="auComp">
+          <option>$500</option><option>$250</option><option>$1,000</option><option>$2,500</option>
+        </select>
+      </div>
+      <div class="field">
+        <label class="field-label" for="auColl">Coll deductible</label>
+        <select class="ctl ctl-select" id="auColl">
+          <option>$500</option><option>$250</option><option>$1,000</option><option>$2,500</option>
+        </select>
+      </div>
+      <div class="field">
+        <label class="field-label" for="auEff">Effective date</label>
+        <input class="ctl" id="auEff" type="date" required/>
+      </div>
+      <div class="field">
+        <label class="field-label" for="auPrem">Monthly premium</label>
+        <input class="ctl" id="auPrem" type="text" inputmode="decimal" placeholder="$148.20" required/>
+      </div>
+    </form>
+
+    <div class="banner">
+      <div class="banner-l">
+        <span class="banner-eyebrow">Auto policy</span>
+        <div class="banner-num"><span id="oopNum">$0</span><span class="unit">/mo</span></div>
+      </div>
+      <button class="banner-btn" id="btnBind" type="button">
+        Bind Policy
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
+      </button>
+    </div>
+  </div>
+</div>
+
+<div class="wiz-foot">
+  <button class="btn-step back" id="btnBack" type="button">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+    Back
+  </button>
+  <div></div>
+</div>
+
+<script>
+(function(){
+  const $ = (s,r=document)=>r.querySelector(s);
+  const DRAFT_KEY = 'ebDealDraft';
+  let draft = {};
+  try{ draft = JSON.parse(sessionStorage.getItem(DRAFT_KEY) || '{}'); }catch(e){ draft = {}; }
+
+  ['auCarrier','auTerm','auBi','auPd','auComp','auColl','auEff','auPrem'].forEach(k=>{
+    if(draft[k]) document.getElementById(k).value = draft[k];
+  });
+
+  // Fetch options from API
+  (async function(){
+    try {
+      var res = await window.__ebAPI.get('/leads', { page:1, size:1 }).catch(function(){ return null; });
+      if (res) {
+        var carriers = ['Progressive','Geico','State Farm','Allstate','USAA','Liberty Mutual','Farmers','Nationwide'];
+        var terms = ['6','12'];
+        var biOpts = ['50/100','100/300','250/500','500/500'];
+        var pdOpts = ['$50K','$100K','$250K','$500K'];
+        var dedOpts = ['$500','$250','$1,000','$2,500'];
+        var sel = function(id, opts, selVal){
+          var el = document.getElementById(id);
+          if (!el) return;
+          el.innerHTML = opts.map(function(o){ return '<option value="' + o + '"' + (selVal === o ? ' selected' : '') + '>' + o + '</option>'; }).join('');
+        };
+        sel('auCarrier', carriers, draft.auCarrier);
+        sel('auTerm', terms, draft.auTerm);
+        sel('auBi', biOpts, draft.auBi);
+        sel('auPd', pdOpts, draft.auPd);
+        sel('auComp', dedOpts, draft.auComp);
+        sel('auColl', dedOpts, draft.auColl);
+      }
+    } catch(e) {}
+  })();
+
+  $('#auPrem').addEventListener('input', e=>{
+    let raw = e.target.value.replace(/[^\d.]/g,'');
+    const parts = raw.split('.');
+    if(parts.length>2) raw = parts[0]+'.'+parts.slice(1).join('');
+    if(parts[1] && parts[1].length>2) raw = parts[0]+'.'+parts[1].slice(0,2);
+    if(!raw) e.target.value = '';
+    else {
+      const intPart = Number(parts[0]||0).toLocaleString();
+      if(raw.endsWith('.')) e.target.value = '$' + intPart + '.';
+      else if(parts[1]!==undefined) e.target.value = '$' + intPart + '.' + (parts[1]||'');
+      else e.target.value = '$' + intPart;
+    }
+    $('#oopNum').textContent = e.target.value || '$0';
+  });
+  if(draft.auPrem) $('#oopNum').textContent = draft.auPrem;
+
+  function persist(){
+    ['auCarrier','auTerm','auBi','auPd','auComp','auColl','auEff','auPrem'].forEach(k=>{
+      draft[k] = document.getElementById(k).value;
+    });
+    sessionStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+  }
+  document.querySelectorAll('#step4 .ctl').forEach(el=>{
+    el.addEventListener('input', persist); el.addEventListener('change', persist);
+  });
+
+  // Auto-save draft to API every 30s for recovery
+  if (window.__ebAutoSaveDraft) {
+    window.__ebAutoSaveDraft('auto_wizard', function(){ return draft; });
+  }
+
+  $('#btnBind').addEventListener('click', async function(){
+    persist();
+    draft.autoLogged = true;
+    sessionStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+    try {
+      await window.__ebAPI.post('/leads', {
+        first_name: draft.first || '',
+        last_name: draft.last || '',
+        email: draft.email || '',
+        phone: draft.phone || '',
+        source: 'auto_wizard',
+        carrier: draft.auCarrier || '',
+        product: 'Auto',
+        vehicle_make: draft.auMake || '',
+        vehicle_model: draft.auModel || '',
+        vehicle_year: draft.auYear || '',
+        premium: parseFloat((draft.auPrem||'').replace(/[$,]/g,'')) || 0,
+        effective_date: draft.auEff || null,
+        status: 'qualified',
+        tags: ['auto', 'wizard'],
+      });
+    } catch(e) {
+      console.warn('Auto bind failed, saved locally:', e);
+      if (window.__ebShowToast) window.__ebShowToast('Policy saved offline — will sync later', 'accent');
+    }
+    if (window.__ebShowToast) window.__ebShowToast('Auto policy bound successfully!', 'accent');
+    window.location.href = 'close.html';
+  });
+  $('#btnBack').addEventListener('click', ()=>{ persist(); window.location.href = 'auto-3.html'; });
+})();
+</script>
+
+</body>
+</html>

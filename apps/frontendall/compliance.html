@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Compliance — Endeavor</title>
+<script src="services/api.js?v=10"></script>
+<script src="services/error-boundary.js?v=19"></script>
+<script src="i18n-dict.js?v=2"></script>
+<script src="prefs-extras.js?v=28"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{--border:rgba(26,31,42,.08);--text:#2D3340;--strong:#1A1F2A;--muted:rgba(26,31,42,.62);--faint:rgba(26,31,42,.42);--accent:#C97B3A;--accent-hover:#B26A2D;--sidebar-w:220px;--topbar-h:64px;--ease:cubic-bezier(.4,0,.2,1)}
+html,body{min-height:100%;font-family:Inter,system-ui,sans-serif;color:#20242D;-webkit-font-smoothing:antialiased}
+body{background:linear-gradient(135deg,#FFFBF5 0%,#FFEFDC 52%,#FFF6E9 100%);min-height:100vh}
+.sidebar{position:fixed;top:0;left:0;width:var(--sidebar-w);height:100vh;background:rgba(255,255,255,.58);backdrop-filter:blur(22px) saturate(160%);-webkit-backdrop-filter:blur(22px) saturate(160%);border-right:1px solid var(--border);padding:0 12px 12px;display:flex;flex-direction:column;z-index:40}
+.sb-brand{height:var(--topbar-h);display:flex;align-items:center;gap:10px;padding:0 10px;font-weight:600;font-size:1.0625rem;letter-spacing:-.015em;color:var(--text);text-decoration:none;border-bottom:1px solid var(--border);margin:0 -12px 12px}
+.sb-brand-dot{width:26px;height:26px;border-radius:8px;background:linear-gradient(135deg,#C97B3A,#E0995E);box-shadow:0 1px 2px rgba(178,106,45,.30),inset 0 1px 0 rgba(255,255,255,.22);flex-shrink:0;display:flex;align-items:center;justify-content:center}
+.sb-brand-dot svg{width:14px;height:14px;color:#fff;stroke-width:1.8}
+.sb-nav{display:flex;flex-direction:column;gap:2px;flex:1;width:100%}
+.sb-item{width:100%;height:38px;border-radius:8px;padding:0 10px;display:flex;align-items:center;gap:10px;text-decoration:none;color:var(--muted);font-family:inherit;font-size:.875rem;font-weight:500;cursor:pointer;transition:color 160ms var(--ease),background 160ms var(--ease);position:relative}
+.sb-item:hover{background:rgba(26,31,42,.05);color:var(--text)}
+.sb-item.active{background:rgba(201,123,58,.10);color:var(--text)}
+.sb-item.active svg{color:var(--accent)}
+.sb-item svg{width:17px;height:17px;stroke-width:1.7;flex-shrink:0}
+.sb-tip{font-size:.875rem;font-weight:500}
+.sb-badge{margin-left:auto;min-width:20px;height:18px;padding:0 6px;border-radius:9px;background:var(--accent);color:#fff;font-size:.6875rem;font-weight:600;display:inline-flex;align-items:center;justify-content:center;font-variant-numeric:tabular-nums}
+.sb-featured{background:linear-gradient(135deg,rgba(201,123,58,.10),rgba(224,153,94,.04));border:1px solid rgba(201,123,58,.20);margin-bottom:6px}
+.sb-featured:hover{background:linear-gradient(135deg,rgba(201,123,58,.16),rgba(224,153,94,.08))}
+.sb-featured svg{color:var(--accent)}.sb-featured .sb-tip{font-weight:600;color:var(--text)}
+.sb-group{display:flex;flex-direction:column;width:100%;margin-top:6px}
+.sb-group-head{width:100%;height:32px;display:flex;align-items:center;gap:8px;padding:0 10px;background:transparent;border:none;font-family:inherit;font-size:.6875rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--faint);cursor:pointer;border-radius:6px}
+.sb-group-head .sb-chev{margin-left:auto;width:11px;height:11px;transition:transform 220ms var(--ease);stroke-width:2}
+.sb-group.open .sb-group-head .sb-chev{transform:rotate(90deg)}
+.sb-group-body{display:flex;flex-direction:column;gap:2px;max-height:0;overflow:hidden;transition:max-height 280ms var(--ease)}
+.sb-group.open .sb-group-body{max-height:600px}
+.sb-bottom{display:flex;flex-direction:column;gap:2px;padding-top:10px;margin-top:8px;border-top:1px solid var(--border);width:100%}
+.topbar{position:fixed;top:0;left:var(--sidebar-w);right:0;height:var(--topbar-h);background:rgba(255,255,255,.58);backdrop-filter:blur(22px) saturate(160%);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 22px;z-index:10}
+.search{max-width:520px;flex:1;height:38px;background:rgba(255,255,255,.72);border-radius:10px;display:flex;align-items:center;gap:10px;padding:0 14px;color:var(--muted)}
+.search svg{width:16px;height:16px}.search input{flex:1;border:0;background:transparent;outline:0;font:inherit;color:var(--text)}
+.main{margin-left:var(--sidebar-w);padding:calc(var(--topbar-h) + 22px) 22px 32px}
+.shell{display:grid;gap:20px}
+.menu-toggle{display:none;width:38px;height:38px;border-radius:9px;background:transparent;border:1px solid var(--border);color:var(--text);cursor:pointer;align-items:center;justify-content:center;margin-right:12px;flex-shrink:0}.menu-toggle:hover{background:rgba(26,31,42,.05)}.menu-toggle svg{width:18px;height:18px}.sb-overlay{display:none;position:fixed;top:0;right:0;bottom:0;left:220px;background:rgba(26,31,42,.35);z-index:55}
+@media(max-width:900px){:root{--sidebar-w:0px}.sidebar{display:flex;width:220px;transform:translateX(-100%);transition:transform 220ms var(--ease);z-index:60}.sidebar.open{transform:translateX(0)}.menu-toggle{display:inline-flex}.sb-overlay.open{display:block}.main{padding-left:14px;padding-right:14px}.topbar{padding:0 14px}}
+.top{display:flex;align-items:flex-end;justify-content:space-between;gap:14px;flex-wrap:wrap}
+h1{font-size:1.55rem;margin:0;font-weight:650}.sub{font-size:.85rem;color:#68707F;margin-top:5px}
+.bar{display:flex;gap:8px;flex-wrap:wrap}.btn,.tab{height:34px;border:1px solid rgba(32,36,45,.12);background:#fff;border-radius:8px;padding:0 12px;font:600 .78rem Inter;cursor:pointer;color:#303642}
+.btn.primary{background:#4F8268;color:#fff;border-color:#4F8268}.btn.warn{background:#A3525C;color:#fff;border-color:#A3525C}
+.grid{display:grid;grid-template-columns:repeat(6,1fr);gap:14px}.metric{background:#fff;border:1px solid rgba(32,36,45,.08);border-radius:10px;padding:16px 18px;min-height:78px;display:flex;flex-direction:column;justify-content:center}
+.mk{font-size:.68rem;text-transform:uppercase;color:#737B88;font-weight:700;letter-spacing:.04em}.mv{font-size:1.5rem;font-weight:650;margin-top:8px;line-height:1.1}
+.tabs{display:flex;gap:6px;flex-wrap:wrap}.tab.active{background:#E7F1EA;border-color:#BFD8CA;color:#294B39}
+.panel{display:none;background:#fff;border:1px solid rgba(32,36,45,.08);border-radius:8px;overflow:hidden}.panel.active{display:block}
+.panel-head{display:flex;align-items:center;justify-content:space-between;padding:16px 18px;border-bottom:1px solid rgba(32,36,45,.08);gap:12px;flex-wrap:wrap}
+.title{font-weight:650}.tools{display:flex;gap:8px;flex-wrap:wrap}
+.form{display:grid;grid-template-columns:repeat(6,minmax(120px,1fr));gap:12px;padding:18px;border-bottom:1px solid rgba(32,36,45,.08);background:#FBFAF7}
+label{display:grid;gap:4px;font-size:.68rem;text-transform:uppercase;color:#737B88;font-weight:700}
+input,select{height:34px;border:1px solid rgba(32,36,45,.13);border-radius:7px;background:#fff;padding:0 10px;font:500 .82rem Inter;color:#20242D;min-width:0}
+.span2{grid-column:span 2}.span3{grid-column:span 3}.span6{grid-column:span 6}
+.table-wrap{overflow:auto}table{width:100%;border-collapse:collapse;min-width:860px}th,td{padding:10px 12px;border-bottom:1px solid rgba(32,36,45,.07);text-align:left;font-size:.8rem;white-space:nowrap}
+th{font-size:.68rem;text-transform:uppercase;color:#737B88;background:#FBFAF7}td.mono{font-variant-numeric:tabular-nums;color:#596170}
+.pill{display:inline-flex;align-items:center;border-radius:6px;padding:3px 8px;font-size:.7rem;font-weight:700;border:1px solid transparent}
+.pill.ok{background:#E8F3ED;color:#2F654A;border-color:#CAE3D4}.pill.bad{background:#F6E8EA;color:#84313C;border-color:#E8C6CB}.pill.mid{background:#F6EEDC;color:#79551D;border-color:#E9D4A4}
+.empty{padding:28px;text-align:center;color:#737B88;font-size:.85rem}
+.act-col{display:none}body.can-manage .act-col{display:table-cell}
+.row-del{height:28px;border:1px solid #E8C6CB;background:#FCEEF0;color:#84313C;border-radius:6px;padding:0 10px;font:600 .72rem Inter;cursor:pointer}
+.row-del:hover{background:#F6E0E4}
+.modal-overlay{position:fixed;inset:0;background:rgba(26,31,42,.42);backdrop-filter:blur(2px);display:none;align-items:center;justify-content:center;z-index:60;opacity:0;transition:opacity .16s var(--ease)}
+.modal-overlay.show{display:flex;opacity:1}
+.modal{background:#fff;border:1px solid var(--border);border-radius:14px;box-shadow:0 18px 48px rgba(26,31,42,.22);width:min(420px,calc(100vw - 32px));padding:22px 22px 18px;transform:translateY(8px) scale(.98);transition:transform .16s var(--ease)}
+.modal-overlay.show .modal{transform:none}
+.modal-title{font-size:1.05rem;font-weight:650;color:var(--strong);margin-bottom:6px}
+.modal-body{font-size:.88rem;color:#596170;line-height:1.45}
+.modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:20px}
+.modal-actions .btn{height:38px;padding:0 16px;font-size:.82rem}
+.btn.danger{background:#A3525C;color:#fff;border-color:#A3525C}.btn.danger:hover{background:#8E4651}.toast{position:fixed;right:18px;bottom:18px;background:#20242D;color:#fff;border-radius:8px;padding:11px 13px;font-size:.8rem;opacity:0;transform:translateY(8px);transition:.18s}
+.toast.show{opacity:1;transform:none}.event-log{max-height:160px;overflow:auto;padding:10px 14px;background:#20242D;color:#EDEFF3;font-size:.75rem}
+@media(max-width:900px){.grid{grid-template-columns:repeat(2,1fr)}.form{grid-template-columns:1fr}.span2,.span3,.span6{grid-column:span 1}}
+</style>
+</head>
+<body>
+<div class="sb-overlay" id="sbOverlay"></div>
+<aside class="sidebar" id="sidebar">
+  <a class="sb-brand" href="ask-the-brain.html" style="text-decoration:none">
+    <span class="sb-brand-dot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/><path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/></svg></span>
+    <span>Endeavor</span>
+  </a>
+  <nav class="sb-nav">
+    <a class="sb-item sb-featured" href="ask-the-brain.html" aria-label="Ask the Brain">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/><path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/></svg>
+      <span class="sb-tip">Ask the Brain</span>
+    </a>
+    <a class="sb-item" id="navCeo" href="ceo-dashboard.html" aria-label="CEO Dashboard">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 1 18 0"/><path d="M12 12l4-2"/><circle cx="12" cy="12" r="1.6"/></svg>
+      <span class="sb-tip">CEO Dashboard</span>
+    </a>
+    <a class="sb-item" id="navUpload" href="upload-leads.html" aria-label="Upload leads">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 8 5-5 5 5"/><path d="M5 17v2a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-2"/></svg>
+      <span class="sb-tip">Upload Leads</span>
+    </a>
+    <a class="sb-item" href="notifications.html" aria-label="Notifications">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 7 3 9H3c0-2 3-2 3-9Z"/><path d="M10 21a2 2 0 0 0 4 0"/></svg>
+      <span class="sb-tip">Notifications</span>
+      <span class="sb-badge" style="display:none">0</span>
+    </a>
+    <div class="sb-group open" id="sbWorkspaces">
+      <button class="sb-group-head" type="button">
+        Workspaces
+        <svg class="sb-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg>
+      </button>
+      <div class="sb-group-body">
+        <a class="sb-item" href="my-team.html" aria-label="My Team">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="7" r="4"/><path d="M3 21c0-3.5 3-6 6-6s6 2.5 6 6"/><path d="M16 3.5a4 4 0 0 1 0 7.5"/><path d="M22 21c0-3-2-5-5-5.5"/></svg>
+          <span class="sb-tip">My Team</span>
+        </a>
+        <a class="sb-item" href="inbox.html" aria-label="Inbox">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h6l2 3h2l2-3h6"/><path d="M3 7l2 12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2l2-12"/><path d="M5 7l2-3h10l2 3"/></svg>
+          <span class="sb-tip">Inbox</span>
+          <span class="sb-badge" style="display:none">0</span>
+        </a>
+        <a class="sb-item" href="deals.html" aria-label="Deals">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 3 7v6c0 5 4 8 9 9 5-1 9-4 9-9V7Z"/><path d="M9 12l2 2 4-4"/></svg>
+          <span class="sb-tip">Deals</span>
+        </a>
+        <a class="sb-item" href="appointments.html" aria-label="Appointments">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 11h18"/></svg>
+          <span class="sb-tip">Appointments</span>
+        </a>
+        <a class="sb-item" href="analytics.html" aria-label="Analytics">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 15l4-6 4 4 5-7"/></svg>
+          <span class="sb-tip">Analytics</span>
+        </a>
+      </div>
+    </div>
+  </nav>
+  <div class="sb-bottom">
+    <a class="sb-item" href="settings.html" aria-label="Settings">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.8-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1A1.6 1.6 0 0 0 9 19.4a1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.8 1.6 1.6 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1A1.6 1.6 0 0 0 4.6 9a1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3H9a1.6 1.6 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1c0 .6.4 1.2 1 1.5a1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8V9c.3.6.9 1 1.5 1H21a2 2 0 1 1 0 4h-.1c-.6 0-1.2.4-1.5 1Z"/></svg>
+      <span class="sb-tip">Settings</span>
+    </a>
+    <a class="sb-item sb-logout" href="login.html" aria-label="Log out" title="Log out">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></svg>
+      <span class="sb-tip">Log out</span>
+    </a>
+  </div>
+</aside>
+<header class="topbar">
+  
+  <button class="menu-toggle" id="menuToggle" aria-label="Open menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M3 12h18M3 18h18"/></svg></button><div class="search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg><input id="searchBox" placeholder="Search carrier, state, agent"/></div>
+</header>
+<main class="main">
+ <div class="shell">
+  <section class="top">
+    <div>
+      <h1>Compliance</h1>
+      <div class="sub">Carrier appointments, state licenses, alerts, and risk scans.</div>
+    </div>
+    <div class="bar">
+      <button class="btn" id="refreshBtn">Refresh</button>
+      <button class="btn" id="scanExpBtn">Scan expirations</button>
+      <button class="btn warn" id="scanRiskBtn">Scan risk</button>
+      <button class="btn" id="closeBtn" aria-label="Close" title="Close">✕ Close</button>
+    </div>
+  </section>
+
+  <section class="grid" id="metrics"></section>
+
+  <nav class="tabs" id="tabs">
+    <button class="tab active" data-tab="appointments">Agent Appointments</button>
+    <button class="tab" data-tab="licenses">State Licenses</button>
+    <button class="tab" data-tab="matrix">Carrier Matrix</button>
+    <button class="tab" data-tab="events">Compliance Events</button>
+    <button class="tab" data-tab="logs">Approval Logs</button>
+  </nav>
+
+  <section class="panel active" id="appointments">
+    <div class="panel-head"><div class="title">Agent Appointments</div><div class="tools"><input type="file" id="csvFile" accept=".csv"/><button class="btn" id="importCsvBtn">Import CSV</button></div></div>
+    <form class="form" id="apptForm">
+      <label class="span2">Agent<select id="apptAgent"></select></label>
+      <label>Carrier<input id="apptCarrier" placeholder="Cigna"/></label>
+      <label>State<input id="apptState" maxlength="2" placeholder="NV"/></label>
+      <label>Effective<input id="apptEffective" type="date"/></label>
+      <label>Expiration<input id="apptExpiration" type="date"/></label>
+      <label>Number<input id="apptNumber" placeholder="Optional"/></label>
+      <label>Status<select id="apptStatus"><option>ACTIVE</option><option>PENDING</option><option>EXPIRED</option><option>REVOKED</option></select></label>
+      <button class="btn primary" type="submit">Create appointment</button>
+    </form>
+    <div class="table-wrap"><table><thead><tr><th>Carrier</th><th>State</th><th>Agent</th><th>Effective</th><th>Expiration</th><th>Status</th><th class="act-col">Actions</th></tr></thead><tbody id="apptRows"></tbody></table></div>
+  </section>
+
+  <section class="panel" id="licenses">
+    <div class="panel-head"><div class="title">State Licenses</div><div class="tools"><label style="flex-direction:row;align-items:center;gap:6px;text-transform:none;font-weight:600;color:#303642">View agent<select id="licFilterAgent" style="min-width:160px"><option value="">All agents</option></select></label></div></div>
+    <div id="agentLicHint" style="display:none;padding:12px 18px;background:#FBFAF7;border-bottom:1px solid rgba(32,36,45,.08);font-size:.82rem;color:#494f59">Add your own state licenses below. They go live <strong>immediately</strong> — once added, the AI will route leads in that state to you and offer your availability when booking.</div>
+    <form class="form" id="licenseForm">
+      <label class="span2">Agent<select id="licAgent"></select></label>
+      <label>State<input id="licState" maxlength="2" placeholder="NV"/></label>
+      <label>License #<input id="licNumber"/></label>
+      <label>Effective<input id="licEffective" type="date"/></label>
+      <label>Expiration<input id="licExpiration" type="date"/></label>
+      <label>Status<select id="licStatus"><option>ACTIVE</option><option>PENDING</option><option>EXPIRED</option><option>REVOKED</option></select></label>
+      <button class="btn primary" type="submit">Create license</button>
+    </form>
+    <div class="table-wrap"><table><thead><tr><th>State</th><th>Agent</th><th>License</th><th>Effective</th><th>Expiration</th><th>Status</th><th class="act-col">Actions</th></tr></thead><tbody id="licRows"></tbody></table></div>
+  </section>
+
+  <section class="panel" id="matrix">
+    <div class="panel-head"><div class="title">Carrier Matrix</div></div>
+    <div class="table-wrap"><table><thead><tr><th>Carrier</th><th>State</th><th>Active Agents</th><th>Expiring</th><th>Expired/Revoked</th></tr></thead><tbody id="matrixRows"></tbody></table></div>
+  </section>
+
+  <section class="panel" id="events">
+    <div class="panel-head"><div class="title">Compliance Events</div></div>
+    <div class="table-wrap"><table><thead><tr><th>Created</th><th>Type</th><th>Carrier</th><th>State</th><th>Severity</th><th>Message</th><th>Resolved</th></tr></thead><tbody id="eventRows"></tbody></table></div>
+  </section>
+
+  <section class="panel" id="logs">
+    <div class="panel-head"><div class="title">Approval Logs</div></div>
+    <div class="table-wrap"><table><thead><tr><th>Created</th><th>Deal</th><th>Carrier</th><th>State</th><th>Decision</th><th>Reason</th></tr></thead><tbody id="logRows"></tbody></table></div>
+  </section>
+
+  <section class="event-log" id="rtLog">Realtime compliance events will appear here.</section>
+ </div>
+</main>
+<div class="toast" id="toast"></div>
+<div class="modal-overlay" id="confirmOverlay" role="dialog" aria-modal="true" aria-labelledby="confirmTitle">
+  <div class="modal">
+    <div class="modal-title" id="confirmTitle">Confirm</div>
+    <div class="modal-body" id="confirmBody"></div>
+    <div class="modal-actions">
+      <button class="btn" id="confirmCancel" type="button">Cancel</button>
+      <button class="btn danger" id="confirmOk" type="button">Delete</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  const $ = s => document.querySelector(s);
+  const API = window.__ebAPI;
+  const state = {agents:[], appointments:[], licenses:[], events:[], logs:[], dashboard:{}};
+  // Only admins may delete compliance records (mirrors the backend's
+  // COMPLIANCE_MANAGE permission: super_admin / tenant_admin).
+  const MANAGE_ROLES = ['super_admin','tenant_admin','admin'];
+  let canManage = false;
+  try{ canManage = MANAGE_ROLES.indexOf(localStorage.getItem('ebRole')||'') !== -1; }catch(_){}
+  function toast(msg){const t=$('#toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2600)}
+  // Styled confirm modal — returns a Promise<boolean> (replaces window.confirm).
+  function confirmModal(opts){
+    opts=opts||{};
+    const ov=$('#confirmOverlay');
+    $('#confirmTitle').textContent=opts.title||'Confirm';
+    $('#confirmBody').textContent=opts.body||'Are you sure?';
+    $('#confirmOk').textContent=opts.okText||'Delete';
+    return new Promise(resolve=>{
+      function cleanup(val){
+        ov.classList.remove('show');
+        $('#confirmOk').onclick=null;$('#confirmCancel').onclick=null;
+        ov.onclick=null;document.removeEventListener('keydown',onKey);
+        resolve(val);
+      }
+      function onKey(e){if(e.key==='Escape')cleanup(false);else if(e.key==='Enter')cleanup(true);}
+      $('#confirmOk').onclick=()=>cleanup(true);
+      $('#confirmCancel').onclick=()=>cleanup(false);
+      ov.onclick=e=>{if(e.target===ov)cleanup(false);};
+      document.addEventListener('keydown',onKey);
+      ov.classList.add('show');
+      $('#confirmCancel').focus();
+    });
+  }
+  function agentName(id){const a=state.agents.find(x=>x.id===id);return a?a.name:id}
+  function pill(v){const s=(v||'').toUpperCase();const cls=s==='ACTIVE'||s==='APPROVED'?'ok':(s==='PENDING'||s==='FLAGGED'?'mid':'bad');return `<span class="pill ${cls}">${s||'—'}</span>`}
+  function rowEmpty(cols,msg){return `<tr><td colspan="${cols}" class="empty">${msg}</td></tr>`}
+  function fillAgents(){
+    ['apptAgent','licAgent'].forEach(id=>{
+      const el=$('#'+id); el.innerHTML=state.agents.map(a=>`<option value="${a.id}">${a.name} · ${a.email||'no email'}</option>`).join('');
+    });
+    // Per-agent license filter keeps its current selection across reloads.
+    const f=$('#licFilterAgent');
+    if(f){
+      const cur=f.value;
+      f.innerHTML='<option value="">All agents</option>'+state.agents.map(a=>`<option value="${a.id}">${a.name}</option>`).join('');
+      f.value=cur;
+      if(!f._wired){ f._wired=true; f.addEventListener('change',renderLicenses); }
+    }
+  }
+  function renderMetrics(){
+    const d=state.dashboard;
+    const cards=[
+      ['Expiring',d.appointments_expiring_60d||0],['Expired',d.appointments_expired||0],['Missing access',d.agents_missing_access||0],
+      ['Alerts',d.compliance_alerts||0],['High risk',d.high_risk_deals||0],['Approval rate',(d.approval_rate||0)+'%']
+    ];
+    $('#metrics').innerHTML=cards.map(c=>`<div class="metric"><div class="mk">${c[0]}</div><div class="mv">${c[1]}</div></div>`).join('');
+  }
+  function renderAppointments(){
+    $('#apptRows').innerHTML=state.appointments.length?state.appointments.map(a=>`<tr><td>${a.carrier_name}</td><td>${a.state_code}</td><td>${agentName(a.agent_id)}</td><td class="mono">${a.effective_date}</td><td class="mono">${a.expiration_date||'—'}</td><td>${pill(a.status)}</td><td class="act-col">${canManage?`<button class="row-del" data-del="appt" data-id="${a.id}">Delete</button>`:''}</td></tr>`).join(''):rowEmpty(7,'No carrier appointments found.');
+  }
+  function renderLicenses(){
+    const filt=($('#licFilterAgent')||{}).value||'';
+    const rows=state.licenses.filter(l=>!filt||l.agent_id===filt);
+    $('#licRows').innerHTML=rows.length?rows.map(l=>`<tr><td>${l.state_code}</td><td>${agentName(l.agent_id)}</td><td>${l.license_number}</td><td class="mono">${l.effective_date}</td><td class="mono">${l.expiration_date||'—'}</td><td>${pill(l.status)}</td><td class="act-col">${canManage?`<button class="row-del" data-del="lic" data-id="${l.id}">Delete</button>`:''}</td></tr>`).join(''):rowEmpty(7, filt?'No licenses for this agent.':'No state licenses found.');
+  }
+  function renderMatrix(){
+    const m={}; const today=new Date().toISOString().slice(0,10);
+    state.appointments.forEach(a=>{const k=a.carrier_name+'|'+a.state_code; m[k]=m[k]||{carrier:a.carrier_name,state:a.state_code,active:0,expiring:0,bad:0}; if(a.status==='ACTIVE'){m[k].active++; if(a.expiration_date&&a.expiration_date>=today){const days=(new Date(a.expiration_date)-new Date(today))/86400000;if(days<=60)m[k].expiring++;}} else if(a.status==='EXPIRED'||a.status==='REVOKED'){m[k].bad++;}});
+    const rows=Object.values(m); $('#matrixRows').innerHTML=rows.length?rows.map(x=>`<tr><td>${x.carrier}</td><td>${x.state}</td><td>${x.active}</td><td>${x.expiring}</td><td>${x.bad}</td></tr>`).join(''):rowEmpty(5,'No carrier matrix data yet.');
+  }
+  function renderEvents(){
+    $('#eventRows').innerHTML=state.events.length?state.events.map(e=>`<tr><td class="mono">${new Date(e.created_at).toLocaleString()}</td><td>${e.event_type}</td><td>${e.carrier||'—'}</td><td>${e.state||'—'}</td><td>${pill(e.severity)}</td><td>${e.message}</td><td>${e.resolved?'Yes':'No'}</td></tr>`).join(''):rowEmpty(7,'No compliance events found.');
+  }
+  function renderLogs(){
+    $('#logRows').innerHTML=state.logs.length?state.logs.map(l=>`<tr><td class="mono">${new Date(l.created_at).toLocaleString()}</td><td class="mono">${String(l.deal_id).slice(0,8)}</td><td>${l.carrier}</td><td>${l.state}</td><td>${pill(l.decision)}</td><td>${l.reason}</td></tr>`).join(''):rowEmpty(6,'No approval logs found.');
+  }
+  function renderAll(){fillAgents();renderMetrics();renderAppointments();renderLicenses();renderMatrix();renderEvents();renderLogs();}
+  async function load(){
+    const [agents,dash,appts,lics,events,logs]=await Promise.all([
+      API.get('/compliance/agents'),API.get('/compliance/dashboard'),API.get('/compliance/carrier-appointments',{size:200}),API.get('/compliance/state-licenses',{size:200}),API.get('/compliance/compliance-events',{size:100}),API.get('/compliance/approval-logs',{size:100})
+    ]);
+    state.agents=agents.items||[];state.dashboard=dash;state.appointments=appts.items||[];state.licenses=lics.items||[];state.events=events.items||[];state.logs=logs.items||[];renderAll();
+  }
+  $('#tabs').addEventListener('click',e=>{const b=e.target.closest('.tab');if(!b)return;document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));document.querySelectorAll('.panel').forEach(x=>x.classList.remove('active'));b.classList.add('active');$('#'+b.dataset.tab).classList.add('active')});
+  $('#closeBtn').onclick=()=>{ if(document.referrer && history.length>1) history.back(); else window.location.href='dashboard.html'; };
+  $('#refreshBtn').onclick=()=>load().then(()=>toast('Compliance refreshed')).catch(e=>toast(e.message));
+  $('#scanExpBtn').onclick=()=>API.post('/compliance/scan/expirations',{}).then(()=>load()).then(()=>toast('Expiration scan complete')).catch(e=>toast(e.message));
+  $('#scanRiskBtn').onclick=()=>API.post('/compliance/scan/risk',{}).then(()=>load()).then(()=>toast('Risk scan complete')).catch(e=>toast(e.message));
+  $('#apptForm').onsubmit=e=>{e.preventDefault();API.post('/compliance/carrier-appointments',{agent_id:$('#apptAgent').value,carrier_name:$('#apptCarrier').value,state_code:$('#apptState').value,effective_date:$('#apptEffective').value,expiration_date:$('#apptExpiration').value||null,appointment_number:$('#apptNumber').value||null,status:$('#apptStatus').value}).then(()=>{API.clearCache();return load();}).then(()=>toast('Appointment created')).catch(err=>toast(err.message))};
+  $('#licenseForm').onsubmit=e=>{e.preventDefault();API.post('/compliance/state-licenses',{agent_id:$('#licAgent').value,state_code:$('#licState').value,license_number:$('#licNumber').value,effective_date:$('#licEffective').value,expiration_date:$('#licExpiration').value||null,status:$('#licStatus').value}).then(()=>{API.clearCache();return load();}).then(()=>toast('License created')).catch(err=>toast(err.message))};
+  // Admin-only delete for carrier appointments and state licenses.
+  if(canManage) document.body.classList.add('can-manage');
+  document.addEventListener('click',async e=>{
+    const b=e.target.closest('.row-del'); if(!b||!canManage) return;
+    const kind=b.dataset.del, id=b.dataset.id;
+    const label=kind==='appt'?'carrier appointment':'state license';
+    const ok=await confirmModal({title:`Delete ${label}?`,body:`This ${label} will be permanently removed. This cannot be undone.`,okText:'Delete'});
+    if(!ok) return;
+    const url=kind==='appt'?`/compliance/carrier-appointments/${id}`:`/compliance/state-licenses/${id}`;
+    b.disabled=true;
+    API.del(url).then(()=>{API.clearCache();return load();}).then(()=>toast(`Deleted ${label}`)).catch(err=>{b.disabled=false;toast(err.message)});
+  });
+  $('#importCsvBtn').onclick=()=>{const f=$('#csvFile').files[0];if(!f){toast('Choose a CSV first');return}const fd=new FormData();fd.append('file',f);API.upload('/compliance/carrier-appointments/import-csv',fd).then(r=>{API.clearCache();return load().then(()=>toast(`Imported ${r.created}, failed ${r.failed}`))}).catch(e=>toast(e.message))};
+  ['appointment_expiring','appointment_expired','deal_approved','deal_not_approved','compliance_event_created'].forEach(name=>{
+    window.addEventListener('launchpad:realtime:'+name,e=>{const log=$('#rtLog');log.innerHTML=`<div>${new Date().toLocaleTimeString()} · ${name} · ${JSON.stringify(e.detail||{})}</div>`+log.innerHTML;load().catch(()=>{})});
+  });
+  try{window.__ebRealtime&&window.__ebRealtime.connect()}catch(e){}
+  // Agent self-service: show the "add your own licenses" hint and open the
+  // State Licenses tab by default (per Part-2 — each agent adds their own).
+  (function(){
+    var role=''; try{ role=localStorage.getItem('ebRole')||''; }catch(_){}
+    if(role==='agent'){
+      var hint=document.getElementById('agentLicHint'); if(hint) hint.style.display='';
+      var tabBtn=document.querySelector('.tab[data-tab="licenses"]'); if(tabBtn) tabBtn.click();
+    }
+  })();
+  load().catch(e=>toast(e.message));
+})();
+</script>
+<script>(function(){var b=document.getElementById("menuToggle"),s=document.getElementById("sidebar"),o=document.getElementById("sbOverlay");if(!b||!s)return;function open(){s.classList.add("open");if(o)o.classList.add("open");}function close(){s.classList.remove("open");if(o)o.classList.remove("open");}b.addEventListener("click",function(e){e.stopPropagation();s.classList.contains("open")?close():open();});if(o)o.addEventListener("click",close);document.addEventListener("keydown",function(e){if(e.key==="Escape")close();});})();</script>
+</body>
+</html>

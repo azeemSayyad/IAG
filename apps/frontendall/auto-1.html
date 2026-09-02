@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Add Deal · Auto · Step 1 — Endeavor</title>
+<script src="i18n-dict.js?v=2"></script>
+<script src="prefs-extras.js?v=28"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="wizard.css"/>
+  <script src="services/api.js?v=10"></script>
+  <script src="services/error-boundary.js?v=19"></script>
+</head>
+<body data-chapter="auto">
+
+<div class="wiz-shell">
+  <a class="ch-brand" href="appointments.html" aria-label="Endeavor">
+    <span class="ch-brand-dot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/><path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/></svg></span>
+    Endeavor
+  </a>
+
+  <header class="ch-head">
+    <div class="ch-row">
+      <div class="ch-titlewrap">
+        <h1 class="ch-title"><span class="ch-num">03.</span> Auto Insurance</h1>
+        <p class="ch-sub">Quote the household policy. Personal info already on file.</p>
+      </div>
+      <div class="ch-prog">
+        <div class="ch-step"><strong>1</strong><span class="ch-step-of">/ 4</span></div>
+        <div class="ch-ring">
+          <svg viewBox="0 0 36 36"><circle cx="18" cy="18" r="15.9" class="ring-track"/><circle cx="18" cy="18" r="15.9" class="ring-arc" stroke-dasharray="25,100"/></svg>
+          <span class="ch-ring-num">25%</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <div class="wiz-card">
+    <div class="wiz-num">01</div>
+    <div class="wiz-eyebrow">Cross-sell</div>
+    <h2 class="wiz-title">Add auto insurance?</h2>
+    <p class="wiz-sub">Bundle their car policy with us. Most households save 15–22% switching from incumbent carriers.</p>
+
+    <div class="crosssell">
+      <button class="cs-card" type="button" data-choice="yes">
+        <span class="cs-word">Yes</span>
+        <span class="cs-eyebrow">Quote auto</span>
+        <span class="cs-desc">Auto-fills from ACA and pulls up the vehicle &amp; coverage screens.</span>
+      </button>
+      <button class="cs-card" type="button" data-choice="no">
+        <span class="cs-word">No</span>
+        <span class="cs-eyebrow">Skip for now</span>
+        <span class="cs-desc">Mark declined. Re-pitch at policy renewal touchpoint.</span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  const DRAFT_KEY = 'ebDealDraft';
+  let draft = {};
+  try{ draft = JSON.parse(sessionStorage.getItem(DRAFT_KEY) || '{}'); }catch(e){ draft = {}; }
+
+  document.querySelectorAll('.cs-card').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      draft.autoOffered = btn.dataset.choice;
+      sessionStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+      window.location.href = btn.dataset.choice === 'yes' ? 'auto-2.html' : 'close.html';
+    });
+  });
+})();
+</script>
+
+</body>
+</html>

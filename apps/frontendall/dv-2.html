@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Add Deal · Dental + Vision · Step 2 — Endeavor</title>
+<script src="i18n-dict.js?v=2"></script>
+<script src="prefs-extras.js?v=28"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="wizard.css"/>
+  <script src="services/api.js?v=10"></script>
+  <script src="services/error-boundary.js?v=19"></script>
+</head>
+<body data-chapter="dv">
+
+<div class="wiz-shell">
+  <a class="ch-brand" href="appointments.html" aria-label="Endeavor">
+    <span class="ch-brand-dot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/><path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/></svg></span>
+    Endeavor
+  </a>
+
+  <header class="ch-head">
+    <div class="ch-row">
+      <div class="ch-titlewrap">
+        <h1 class="ch-title"><span class="ch-num">02.</span> Dental + Vision</h1>
+        <p class="ch-sub">Cross-sell ancillary. Demographics carry over from ACA.</p>
+      </div>
+      <div class="ch-prog">
+        <div class="ch-step"><strong>2</strong><span class="ch-step-of">/ 3</span></div>
+        <div class="ch-ring">
+          <svg viewBox="0 0 36 36"><circle cx="18" cy="18" r="15.9" class="ring-track"/><circle cx="18" cy="18" r="15.9" class="ring-arc" stroke-dasharray="67,100"/></svg>
+          <span class="ch-ring-num">67%</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <div class="wiz-card">
+    <div class="wiz-num">02</div>
+    <div class="wiz-eyebrow">Auto-filled from ACA</div>
+    <h2 class="wiz-title">Confirm member.</h2>
+    <p class="wiz-sub">Pulled from the applicant record. Edit anything that's changed.</p>
+
+    <form id="step2" class="form-grid" autocomplete="off" novalidate>
+      <div class="field synced">
+        <div class="field-row"><label class="field-label" for="dvFirst">First name</label><span class="field-tag">Synced</span></div>
+        <input class="ctl" id="dvFirst" type="text" required/>
+      </div>
+      <div class="field synced">
+        <div class="field-row"><label class="field-label" for="dvLast">Last name</label><span class="field-tag">Synced</span></div>
+        <input class="ctl" id="dvLast" type="text" required/>
+      </div>
+      <div class="field synced">
+        <div class="field-row"><label class="field-label" for="dvDob">DOB</label><span class="field-tag">Synced</span></div>
+        <input class="ctl" id="dvDob" type="date" required/>
+      </div>
+      <div class="field synced">
+        <div class="field-row"><label class="field-label" for="dvPhone">Phone</label><span class="field-tag">Synced</span></div>
+        <input class="ctl" id="dvPhone" type="tel" required/>
+      </div>
+      <div class="field synced" style="grid-column:1/-1">
+        <div class="field-row"><label class="field-label" for="dvAddr">Address</label><span class="field-tag">Synced</span></div>
+        <input class="ctl" id="dvAddr" type="text" required/>
+      </div>
+      <div class="field synced">
+        <div class="field-row"><label class="field-label" for="dvEmail">Email</label><span class="field-tag">Synced</span></div>
+        <input class="ctl" id="dvEmail" type="email" required/>
+      </div>
+      <div class="field">
+        <label class="field-label" for="dvDeps">Dependents on plan</label>
+        <input class="ctl" id="dvDeps" type="number" min="0" max="20" placeholder="2"/>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="wiz-foot">
+  <button class="btn-step back" id="btnBack" type="button">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+    Back
+  </button>
+  <button class="btn-step next" id="btnNext" type="button">
+    Next
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
+  </button>
+</div>
+
+<script>
+(function(){
+  const $ = (s,r=document)=>r.querySelector(s);
+  const DRAFT_KEY = 'ebDealDraft';
+  let draft = {};
+  try{ draft = JSON.parse(sessionStorage.getItem(DRAFT_KEY) || '{}'); }catch(e){ draft = {}; }
+
+  // Autofill from ACA draft.
+  $('#dvFirst').value = draft.dvFirst ?? draft.first ?? '';
+  $('#dvLast').value  = draft.dvLast  ?? draft.last  ?? '';
+  $('#dvDob').value   = draft.dvDob   ?? draft.dob   ?? '';
+  $('#dvPhone').value = draft.dvPhone ?? draft.phone ?? '';
+  $('#dvAddr').value  = draft.dvAddr  ?? [draft.addr, draft.city, draft.state, draft.zip].filter(Boolean).join(', ');
+  $('#dvEmail').value = draft.dvEmail ?? draft.email ?? '';
+  $('#dvDeps').value  = draft.dvDeps  ?? draft.dep   ?? '';
+
+  function persist(){
+    Object.assign(draft, {
+      dvFirst: $('#dvFirst').value.trim(), dvLast: $('#dvLast').value.trim(),
+      dvDob: $('#dvDob').value, dvPhone: $('#dvPhone').value.trim(),
+      dvAddr: $('#dvAddr').value.trim(), dvEmail: $('#dvEmail').value.trim(),
+      dvDeps: $('#dvDeps').value
+    });
+    sessionStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+  }
+  document.querySelectorAll('#step2 .ctl').forEach(el=> el.addEventListener('input', persist));
+
+  $('#btnNext').addEventListener('click', ()=>{ persist(); window.location.href = 'dv-3.html'; });
+  $('#btnBack').addEventListener('click', ()=>{ persist(); window.location.href = 'dv-1.html'; });
+})();
+</script>
+
+</body>
+</html>

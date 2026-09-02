@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Capacity Engine — Endeavor</title>
+<script src="i18n-dict.js?v=2"></script>
+<script src="prefs-extras.js?v=28"></script>
+<script src="services/api.js?v=10"></script>
+<script src="services/error-boundary.js?v=19"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{--bg:#DDD8CE;--card:#fff;--border:rgba(26,31,42,.08);--text:#2D3340;--strong:#1A1F2A;--muted:rgba(26,31,42,.62);--faint:rgba(26,31,42,.42);--accent:#C97B3A;--accent-hover:#B26A2D;--up:#4F8268;--down:#A3525C;--pending:#9C7842;--topbar-h:64px;--ease:cubic-bezier(.4,0,.2,1)}
+body{font-family:Inter,system-ui,-apple-system,sans-serif;background:linear-gradient(135deg,#FFFBF5 0%,#FFEFDC 52%,#FFF6E9 100%);color:var(--text);min-height:100vh;-webkit-font-smoothing:antialiased}
+.topbar{position:fixed;top:0;left:0;right:0;height:var(--topbar-h);background:rgba(255,255,255,.62);backdrop-filter:blur(22px) saturate(160%);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:14px;padding:0 22px;z-index:10}
+.brand{display:flex;align-items:center;gap:9px;font-weight:700;color:var(--strong);text-decoration:none}
+.brand-dot{width:26px;height:26px;border-radius:8px;background:linear-gradient(135deg,#C97B3A,#E0995E)}
+.topbar a.back{margin-left:auto;font-size:.8125rem;color:var(--muted);text-decoration:none;font-weight:600}
+.topbar a.back:hover{color:var(--accent)}
+.main{max-width:1100px;margin:0 auto;padding:calc(var(--topbar-h) + 26px) 22px 40px}
+h1{font-size:1.6rem;letter-spacing:-.015em;color:var(--strong);font-weight:700}
+.sub{font-size:.875rem;color:var(--muted);margin-top:5px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.badge{display:inline-flex;align-items:center;height:20px;padding:0 9px;border-radius:10px;font-size:.625rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase}
+.badge.on{background:rgba(79,130,104,.14);color:#2E5A45}.badge.off{background:rgba(163,82,92,.12);color:#7A2F39}
+.badge.dry{background:rgba(156,120,66,.14);color:#7C5E2F}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;margin:20px 0}
+.tile{background:rgba(255,255,255,.82);border:1px solid var(--border);border-radius:12px;padding:15px 16px;box-shadow:0 1px 2px rgba(26,31,42,.04),0 6px 18px rgba(178,106,45,.07)}
+.tile .k{font-size:.6875rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:700}
+.tile .v{font-size:1.7rem;font-weight:700;color:var(--strong);margin-top:6px;font-variant-numeric:tabular-nums}
+.tile .m{font-size:.72rem;color:var(--muted);margin-top:3px}
+.panel{background:rgba(255,255,255,.82);border:1px solid var(--border);border-radius:12px;overflow:hidden;box-shadow:0 1px 2px rgba(26,31,42,.04),0 6px 18px rgba(178,106,45,.07)}
+.panel-head{padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.panel-title{font-weight:700;color:var(--strong)}
+.tw{overflow:auto}
+table{width:100%;border-collapse:collapse;min-width:780px}
+th,td{padding:11px 14px;text-align:left;border-bottom:1px solid rgba(26,31,42,.06);font-size:.8125rem;white-space:nowrap}
+th{font-size:.625rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:800;background:rgba(251,250,247,.7)}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+.fill{display:flex;align-items:center;gap:8px;min-width:120px}
+.fill-bar{flex:1;height:7px;border-radius:4px;background:rgba(26,31,42,.08);overflow:hidden}
+.fill-in{height:100%;border-radius:4px;background:linear-gradient(90deg,var(--accent),#E0995E)}
+.warn{color:var(--down);font-weight:700}
+.empty{padding:40px;text-align:center;color:var(--faint)}
+.muted{color:var(--muted)}
+</style>
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="dashboard.html"><span class="brand-dot"></span><span>Endeavor</span></a>
+  <a class="back" href="dashboard.html">← Back to dashboard</a>
+</header>
+<main class="main">
+  <h1>Appointment Capacity Engine</h1>
+  <div class="sub">
+    <span>Same-day lead pacing — live per-state capacity.</span>
+    <span id="engineBadge" class="badge off">disabled</span>
+    <span id="dryBadge" class="badge dry" style="display:none">dry-run</span>
+    <span class="muted" id="updated"></span>
+  </div>
+
+  <div class="tiles" id="tiles"></div>
+
+  <div class="panel">
+    <div class="panel-head"><div class="panel-title">By state</div><div class="muted" id="stateCount"></div></div>
+    <div class="tw">
+      <table>
+        <thead><tr>
+          <th>State</th><th class="num">Agents</th><th>Fill</th>
+          <th class="num">Booked</th><th class="num">Open</th>
+          <th class="num">In-flight</th><th class="num">Waitlist</th>
+          <th class="num">Held</th><th class="num">Wasted</th>
+        </tr></thead>
+        <tbody id="rows"><tr><td colspan="9" class="empty">Loading…</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</main>
+
+<script>
+(function(){
+  var $=function(s){return document.querySelector(s)};
+  function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
+  function tile(k,v,m){return '<div class="tile"><div class="k">'+esc(k)+'</div><div class="v">'+esc(v)+'</div>'+(m?'<div class="m">'+esc(m)+'</div>':'')+'</div>'}
+
+  function render(d){
+    if(!d){ return; }
+    var eb=$('#engineBadge'); eb.textContent = d.enabled?'enabled':'disabled'; eb.className='badge '+(d.enabled?'on':'off');
+    $('#dryBadge').style.display = (d.enabled && d.dry_run) ? '' : 'none';
+    $('#updated').textContent = '· updated '+new Date().toLocaleTimeString([], {hour:'numeric',minute:'2-digit',second:'2-digit'});
+    var o=d.overall||{};
+    $('#tiles').innerHTML =
+      tile('Fill today', (o.fill_pct||0)+'%', (o.booked||0)+' of '+(o.slots_total||0)+' slots') +
+      tile('Open slots', o.slots_open||0, 'shortfall to full') +
+      tile('In-flight', o.in_flight||0, 'conversations working') +
+      tile('Waitlist', o.waitlisted||0, 'interested, awaiting slot') +
+      tile('Held', o.held||0, 'reservoir (not yet worked)') +
+      tile('Wasted', o.wasted||0, 'unserviceable (no licensed agent)');
+    var rows=(d.states||[]);
+    $('#stateCount').textContent = rows.length+' state'+(rows.length===1?'':'s');
+    if(!rows.length){ $('#rows').innerHTML='<tr><td colspan="9" class="empty">No active states — upload a CSV to begin.</td></tr>'; return; }
+    rows.sort(function(a,b){return (b.slots_total||0)-(a.slots_total||0)});
+    $('#rows').innerHTML = rows.map(function(r){
+      var fp=r.fill_pct||0;
+      return '<tr>'+
+        '<td><strong>'+esc(r.state)+'</strong>'+(r.no_capacity?' <span class="warn">⚠ no agent</span>':'')+'</td>'+
+        '<td class="num">'+(r.licensed_agents||0)+'</td>'+
+        '<td><div class="fill"><div class="fill-bar"><div class="fill-in" style="width:'+Math.min(100,fp)+'%"></div></div><span class="muted">'+fp+'%</span></div></td>'+
+        '<td class="num">'+(r.booked||0)+'</td>'+
+        '<td class="num">'+(r.slots_open||0)+'</td>'+
+        '<td class="num">'+(r.in_flight||0)+'</td>'+
+        '<td class="num">'+(r.waitlisted||0)+'</td>'+
+        '<td class="num">'+(r.held||0)+'</td>'+
+        '<td class="num'+((r.wasted||0)>0?' warn':'')+'">'+(r.wasted||0)+'</td>'+
+      '</tr>';
+    }).join('');
+  }
+
+  async function load(){
+    if(!window.__ebAPI) return;
+    try{ var d=await window.__ebAPI.get('/pacing/metrics'); render(d); }
+    catch(e){ console.warn('pacing metrics failed', e); }
+  }
+
+  function start(){
+    load();
+    setInterval(load, 8000);
+    try{ window.addEventListener('launchpad:realtime:pacing_updated', load); window.__ebRealtime && window.__ebRealtime.connect(); }catch(e){}
+  }
+  if(window.__ebSafeInit){ window.__ebSafeInit(start); } else { document.addEventListener('DOMContentLoaded', start); }
+})();
+</script>
+</body>
+</html>

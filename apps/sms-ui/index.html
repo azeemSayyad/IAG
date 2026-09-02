@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <title>SMS Workspace</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+    <!-- Mobile hard gate (on phones replaces the whole UI with a compulsory
+         "install the app" screen). Shared vanilla file served at the site root. -->
+    <script>
+      (function () { var s = document.createElement("script"); s.src = "/app-gate.js"; s.defer = true; document.body.appendChild(s); })();
+    </script>
+    <!-- Announcement gate (blocking blurred popup for admin announcements). Shared
+         vanilla file served at the site root; loaded at runtime so Vite never bundles it. -->
+    <script>
+      (function () { var s = document.createElement("script"); s.src = "/announcements.js"; s.defer = true; document.body.appendChild(s); })();
+    </script>
+  </body>
+</html>

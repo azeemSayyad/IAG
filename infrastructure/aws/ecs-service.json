@@ -1,0 +1,22 @@
+{
+  "serviceName": "launchpad-backend-service",
+  "cluster": "launchpad-cluster",
+  "taskDefinition": "launchpad-backend",
+  "desiredCount": 2,
+  "launchType": "FARGATE",
+  "networkConfiguration": {
+    "awsvpcConfiguration": {
+      "subnets": ["subnet-xxxxx", "subnet-yyyyy"],
+      "securityGroups": ["sg-xxxxx"],
+      "assignPublicIp": "ENABLED"
+    }
+  },
+  "loadBalancers": [
+    {
+      "targetGroupArn": "arn:aws:elasticloadbalancing:us-east-1:ACCOUNT_ID:targetgroup/launchpad-backend/xxxxx",
+      "containerName": "backend-api",
+      "containerPort": 8000
+    }
+  ],
+  "healthCheckGracePeriodSeconds": 60
+}

@@ -1,0 +1,1385 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Upload Leads — Endeavor</title>
+<script>
+(function(){try{
+const FM={sm:'14px',md:'16px',lg:'18px',xl:'20px'};
+const TM={
+warm:{a:'#C97B3A',a2:'#E0995E',ah:'#B26A2D',b1:'rgba(224,153,94,.40)',b2:'rgba(201,123,58,.32)',b3:'rgba(255,200,150,.22)',g:'linear-gradient(135deg,#FFFBF5 0%,#FFEFDC 50%,#FFF6E9 100%)',gl:'rgba(178,106,45,.08)'},
+forest:{a:'#4F8268',a2:'#6B9F86',ah:'#3D6651',b1:'rgba(107,159,134,.40)',b2:'rgba(79,130,104,.32)',b3:'rgba(180,220,200,.22)',g:'linear-gradient(135deg,#F5FBF7 0%,#E0F1E6 50%,#E8F4ED 100%)',gl:'rgba(63,109,84,.08)'},
+indigo:{a:'#5E7BA8',a2:'#7B96BD',ah:'#4A6488',b1:'rgba(123,150,189,.40)',b2:'rgba(94,123,168,.32)',b3:'rgba(180,200,230,.22)',g:'linear-gradient(135deg,#F5F7FB 0%,#DCE4F1 50%,#E5EBF4 100%)',gl:'rgba(74,100,136,.08)'},
+rose:{a:'#A3525C',a2:'#B97077',ah:'#82414B',b1:'rgba(185,112,119,.40)',b2:'rgba(163,82,92,.32)',b3:'rgba(230,180,190,.22)',g:'linear-gradient(135deg,#FBF5F6 0%,#F1DCDF 50%,#F4E5E8 100%)',gl:'rgba(130,65,75,.08)'},
+slate:{a:'#2D3340',a2:'#5A6275',ah:'#1A1F2A',b1:'rgba(90,98,117,.45)',b2:'rgba(45,51,64,.38)',b3:'rgba(150,156,170,.28)',g:'linear-gradient(135deg,#B8BCC5 0%,#9DA3AD 50%,#ABB0BA 100%)',gl:'rgba(26,31,42,.14)'},
+amber:{a:'#9C7842',a2:'#B89058',ah:'#7C5E2F',b1:'rgba(184,144,88,.40)',b2:'rgba(156,120,66,.32)',b3:'rgba(245,220,180,.22)',g:'linear-gradient(135deg,#FBF7F0 0%,#F0E5D0 50%,#F4EBDB 100%)',gl:'rgba(124,94,47,.08)'}
+};
+window.__ebApplyFont=function(v){document.documentElement.style.fontSize=FM[v]||'16px';};
+window.__ebApplyTheme=function(v){
+var t=TM[v]||TM.warm,D=document.documentElement;
+D.style.setProperty('--accent',t.a);
+D.style.setProperty('--accent-2',t.a2);
+D.style.setProperty('--accent-hover',t.ah);
+var st=document.getElementById('ebPrefsTheme');
+if(!st){st=document.createElement('style');st.id='ebPrefsTheme';document.head.appendChild(st);}
+st.textContent='body::before{background:'+t.g+' !important}body::after{background:radial-gradient(ellipse 95% 85% at 50% 50%,transparent 55%,'+t.gl+' 100%) !important}.sb-brand-dot{background:linear-gradient(135deg,'+t.a+','+t.a2+') !important}';
+};
+window.__ebApplyFont(localStorage.getItem('ebFontSize')||'md');
+window.__ebApplyTheme(localStorage.getItem('ebTheme')||'warm');
+
+// Role gate: only admin-tier roles (admin / tenant_admin / super_admin) and
+// head manager can access this page.
+var role = localStorage.getItem('ebRole') || 'admin';
+if(role !== 'admin' && role !== 'tenant_admin' && role !== 'super_admin' && role !== 'head' && role !== 'dev'){
+  window.location.replace('ask-the-brain.html');
+}
+}catch(e){}})();
+</script>
+<script src="i18n-dict.js?v=2"></script>
+<script src="prefs-extras.js?v=28"></script>
+<script src="coach.js" defer></script>
+<script src="tour.js" defer></script>
+<!-- SheetJS for XLSX parsing -->
+<script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js" defer></script>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#DDD8CE;--border:rgba(26,31,42,0.07);--border-hover:rgba(26,31,42,0.14);--border-soft:rgba(26,31,42,0.06);
+  --text-strong:#1A1F2A;--text:#2D3340;--text-muted:rgba(26,31,42,0.60);--text-faint:rgba(26,31,42,0.42);
+  --accent:#C97B3A;--accent-2:#E0995E;--accent-hover:#B26A2D;
+  --up:#4F8268;--down:#A3525C;--pending:#9C7842;
+  --sidebar-w:220px;--topbar-h:64px;
+  --ease:cubic-bezier(0.4,0,0.2,1);
+}
+html,body{height:100%}
+body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;position:relative;overflow-x:hidden;-webkit-font-smoothing:antialiased}
+body::before{content:'';position:fixed;inset:-15%;z-index:-3;background:linear-gradient(135deg,#FFFBF5 0%,#FFEFDC 50%,#FFF6E9 100%);animation:bgDrift 22s ease-in-out infinite;will-change:transform}
+body::after{content:'';position:fixed;inset:-10%;z-index:-2;pointer-events:none;background:radial-gradient(ellipse 95% 85% at 50% 50%, transparent 55%, rgba(178,106,45,0.08) 100%);animation:bgFloat 28s ease-in-out infinite reverse}
+@keyframes bgDrift{0%{transform:scale(1) translate(0,0) rotate(0deg)}20%{transform:scale(1.10) translate(-3.5%,2.5%) rotate(0.6deg)}40%{transform:scale(1.06) translate(3%,-3%) rotate(-0.5deg)}60%{transform:scale(1.12) translate(-2.5%,-3.5%) rotate(0.7deg)}80%{transform:scale(1.08) translate(3%,2%) rotate(-0.4deg)}100%{transform:scale(1) translate(0,0) rotate(0deg)}}
+@keyframes bgFloat{0%,100%{transform:scale(1) translate(0,0)}50%{transform:scale(1.08) translate(2%,-2%)}}
+@media (prefers-reduced-motion:reduce){body::before,body::after{animation:none}}
+
+/* ─── Sidebar ─── */
+.sidebar{position:fixed;top:0;left:0;width:var(--sidebar-w);height:100vh;background:rgba(255,255,255,0.55);backdrop-filter:blur(22px) saturate(160%);-webkit-backdrop-filter:blur(22px) saturate(160%);border-right:1px solid var(--border);display:flex;flex-direction:column;padding:0 12px 12px;z-index:40}
+.sb-brand{height:var(--topbar-h);display:flex;align-items:center;gap:10px;padding:0 10px;font-weight:600;font-size:1.0625rem;letter-spacing:-0.015em;color:var(--text);margin:0 -12px 12px}
+.sb-brand-dot{width:17px;height:17px;border-radius:5px;background:linear-gradient(135deg,#C97B3A,#E0995E);box-shadow:0 1px 2px rgba(178,106,45,0.30),inset 0 1px 0 rgba(255,255,255,0.22);flex-shrink:0;display:flex;align-items:center;justify-content:center}
+.sb-brand-dot svg{width:11px;height:11px;color:#fff;stroke-width:1.8}
+.sb-nav{display:flex;flex-direction:column;gap:2px;flex:1;width:100%}
+.sb-item{width:100%;height:38px;border-radius:8px;padding:0 10px;display:flex;align-items:center;gap:10px;color:var(--text-muted);font-family:inherit;font-size:.875rem;font-weight:500;cursor:pointer;text-decoration:none;transition:color 160ms var(--ease),background 160ms var(--ease);position:relative}
+.sb-item:hover{color:var(--text);background:rgba(26,31,42,0.05)}
+.sb-item.active{background:rgba(201,123,58,0.10);color:var(--text)}
+.sb-item.active svg{color:var(--accent)}
+.sb-item svg{width:17px;height:17px;stroke-width:1.7;flex-shrink:0}
+.sb-tip{font-size:.875rem;font-weight:500}
+.sb-badge{margin-left:auto;min-width:20px;height:18px;padding:0 6px;border-radius:9px;background:var(--accent);color:#fff;font-size:.6875rem;font-weight:600;display:inline-flex;align-items:center;justify-content:center;font-variant-numeric:tabular-nums}
+.sb-featured{background:linear-gradient(135deg,rgba(201,123,58,0.10),rgba(224,153,94,0.04));border:1px solid rgba(201,123,58,0.20);margin-bottom:6px}
+.sb-featured:hover{background:linear-gradient(135deg,rgba(201,123,58,0.16),rgba(224,153,94,0.08))}
+.sb-featured svg{color:var(--accent)}
+.sb-featured .sb-tip{font-weight:600;color:var(--text)}
+.sb-group{display:flex;flex-direction:column;width:100%;margin-top:6px}
+.sb-group-head{width:100%;height:32px;display:flex;align-items:center;gap:8px;padding:0 10px;background:transparent;border:none;font-family:inherit;font-size:.6875rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-faint);cursor:pointer;border-radius:6px;transition:color 120ms var(--ease)}
+.sb-group-head:hover{color:var(--text-muted)}
+.sb-group-head .sb-chev{margin-left:auto;width:11px;height:11px;transition:transform 220ms var(--ease);stroke-width:2}
+.sb-group.open .sb-group-head .sb-chev{transform:rotate(90deg)}
+.sb-group-body{display:flex;flex-direction:column;gap:2px;max-height:0;overflow:hidden;transition:max-height 280ms var(--ease)}
+.sb-group.open .sb-group-body{max-height:600px}
+.sb-bottom{display:flex;flex-direction:column;gap:2px;padding-top:10px;margin-top:8px;border-top:1px solid var(--border);width:100%}
+
+/* ─── Topbar ─── */
+.topbar{position:fixed;top:0;left:var(--sidebar-w);right:0;height:var(--topbar-h);background:rgba(255,255,255,0.55);backdrop-filter:blur(22px) saturate(160%);-webkit-backdrop-filter:blur(22px) saturate(160%);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 22px;gap:18px;z-index:30}
+.menu-toggle{display:none;width:36px;height:36px;flex:0 0 36px;border-radius:9px;background:transparent;border:1px solid var(--border);color:var(--text);cursor:pointer;align-items:center;justify-content:center;margin-right:4px}
+.menu-toggle svg{width:18px;height:18px}
+.sb-overlay{display:none;position:fixed;inset:0;background:rgba(26,31,42,0.35);z-index:35}
+.sb-overlay.open{display:block}
+.search{flex:1;max-width:520px;margin-left:24px;display:flex;align-items:center;gap:10px;height:38px;padding:0 14px;background:rgba(255,255,255,0.65);border:none;border-radius:10px;color:var(--text-muted);transition:background 150ms var(--ease),box-shadow 200ms var(--ease);cursor:text}
+.search:hover{background:rgba(255,255,255,0.8)}
+.search:focus-within{background:rgba(255,255,255,0.92);box-shadow:0 0 0 3px rgba(26,31,42,0.08)}
+.search svg{width:16px;height:16px;flex-shrink:0;stroke-width:1.6}
+.search input{flex:1;background:transparent;border:none;outline:none;color:var(--text);font-family:inherit;font-size:.8125rem}
+.search input::placeholder{color:var(--text-faint)}
+.search kbd{font-family:inherit;font-size:.6875rem;color:var(--text-muted);background:rgba(255,255,255,0.85);border:none;border-radius:4px;padding:2px 6px}
+.tb-right{display:flex;align-items:center;gap:10px;margin-left:auto}
+.icon-btn{width:36px;height:36px;border-radius:9px;background:rgba(255,255,255,0.6);border:none;color:var(--text-muted);display:inline-flex;align-items:center;justify-content:center;cursor:pointer;position:relative;transition:color 150ms var(--ease),background 150ms var(--ease)}
+.icon-btn:hover{color:var(--text);background:rgba(255,255,255,0.85)}
+.icon-btn svg{width:18px;height:18px;stroke-width:1.8}
+.icon-btn .dot{position:absolute;top:8px;right:8px;width:7px;height:7px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 2px rgba(255,255,255,0.65)}
+.avatar{width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--accent-2));color:#fff;font-size:.75rem;font-weight:600;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;border:none;flex-shrink:0;letter-spacing:.04em}
+
+/* ─── Main ─── */
+.main{margin-left:var(--sidebar-w);padding:calc(var(--topbar-h) + 24px) 28px 60px}
+.page-hdr{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:18px;gap:12px;flex-wrap:wrap}
+.page-hdr h1{font-size:1.625rem;font-weight:600;letter-spacing:-0.015em;line-height:1.15;color:var(--text-strong)}
+.page-hdr .sub{color:var(--text-muted);font-size:.875rem;margin-top:6px;line-height:1.45;max-width:60ch}
+.role-pill{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border-radius:99px;background:rgba(201,123,58,0.10);border:1px solid rgba(201,123,58,0.22);color:var(--accent);font-size:.6875rem;font-weight:600;letter-spacing:.08em;text-transform:uppercase}
+.role-pill::before{content:'';width:6px;height:6px;border-radius:50%;background:var(--accent)}
+
+.card{background:#FFFFFF;border:1px solid var(--border);border-radius:16px;padding:22px;position:relative;box-shadow:0 1px 2px rgba(26,31,42,0.04),0 2px 8px rgba(26,31,42,0.04)}
+
+/* ─── Drop zone ─── */
+.drop-shell{padding:42px 42px 38px;background:linear-gradient(135deg,#FFFFFF 0%,#FAF7F1 100%)}
+.drop{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;border:2px dashed var(--border-hover);border-radius:14px;padding:64px 32px;cursor:pointer;transition:border-color 180ms var(--ease),background 180ms var(--ease);position:relative;min-height:360px}
+.drop:hover{border-color:var(--accent);background:rgba(201,123,58,0.04)}
+.drop.dragging{border-color:var(--accent);background:rgba(201,123,58,0.08);transform:scale(1.005)}
+.drop-icon{width:78px;height:78px;border-radius:18px;background:linear-gradient(135deg,rgba(201,123,58,0.12),rgba(224,153,94,0.06));display:inline-flex;align-items:center;justify-content:center;color:var(--accent);margin-bottom:22px;border:1px solid rgba(201,123,58,0.16);position:relative}
+.drop-icon::before{content:'';position:absolute;inset:-10px;border-radius:24px;background:radial-gradient(ellipse at center,rgba(201,123,58,0.16),transparent 70%);z-index:-1;animation:dropPulse 2.8s ease-in-out infinite}
+@keyframes dropPulse{0%,100%{opacity:.45;transform:scale(0.95)}50%{opacity:.85;transform:scale(1.05)}}
+.drop-icon svg{width:36px;height:36px;stroke-width:1.6}
+.drop-title{font-size:1.5rem;font-weight:600;letter-spacing:-0.015em;color:var(--text-strong);margin-bottom:8px}
+.drop-sub{font-size:.875rem;color:var(--text-muted);margin-bottom:22px;max-width:42ch}
+.drop-cta{display:inline-flex;align-items:center;gap:8px;height:42px;padding:0 22px;background:var(--accent);color:#FFFFFF;border:none;border-radius:10px;font-family:inherit;font-size:.875rem;font-weight:600;cursor:pointer;box-shadow:0 1px 2px rgba(178,106,45,0.20),0 6px 18px rgba(201,123,58,0.26);transition:transform 150ms var(--ease),background 200ms var(--ease),box-shadow 200ms var(--ease)}
+.drop-cta:hover{background:var(--accent-hover);transform:translateY(-1px)}
+.drop-formats{margin-top:18px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+.drop-format{display:inline-flex;align-items:center;gap:6px;padding:5px 12px;border-radius:99px;background:#F2EEE6;border:1px solid var(--border);color:var(--text-muted);font-size:.6875rem;font-weight:600;letter-spacing:.04em;text-transform:uppercase}
+.drop-format strong{color:var(--text-strong)}
+.drop-or{font-size:.75rem;color:var(--text-faint);margin-bottom:12px}
+
+.drop-fineprint{margin-top:24px;font-size:.75rem;color:var(--text-faint);max-width:60ch;line-height:1.55}
+
+/* ─── Parse results (hidden until file dropped) ─── */
+.parse-results{display:none;flex-direction:column;gap:18px;margin-top:24px}
+.parse-results.show{display:flex}
+
+.file-bar{display:flex;align-items:center;gap:14px;padding:14px 18px;background:#FFFFFF;border:1px solid var(--border);border-radius:12px;box-shadow:0 1px 2px rgba(26,31,42,0.04)}
+.file-bar-icon{width:38px;height:38px;border-radius:9px;background:rgba(201,123,58,0.10);color:var(--accent);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0}
+.file-bar-icon svg{width:18px;height:18px;stroke-width:1.8}
+.file-bar-l{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.file-name{font-size:.9375rem;font-weight:600;color:var(--text-strong);letter-spacing:-0.005em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.file-meta{font-size:.75rem;color:var(--text-muted);font-variant-numeric:tabular-nums}
+.file-bar-r{display:flex;align-items:center;gap:8px;flex-shrink:0}
+.file-btn{height:34px;padding:0 12px;background:transparent;border:1px solid var(--border);color:var(--text-muted);border-radius:8px;font-family:inherit;font-size:.75rem;font-weight:500;cursor:pointer;transition:color 130ms var(--ease),border-color 130ms var(--ease),background 130ms var(--ease)}
+.file-btn:hover{color:var(--text-strong);border-color:var(--border-hover);background:rgba(26,31,42,0.04)}
+.file-btn.danger{color:var(--down)}
+.file-btn.danger:hover{background:rgba(163,82,92,0.08);border-color:rgba(163,82,92,0.30)}
+
+.stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.page-stats{display:grid;grid-template-columns:repeat(7,1fr);gap:12px;margin:0 0 18px}
+.stat-tile{background:#FFFFFF;border:1px solid var(--border);border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:4px}
+.stat-tile.warn{background:rgba(156,120,66,0.04);border-color:rgba(156,120,66,0.25)}
+.stat-tile.err{background:rgba(163,82,92,0.05);border-color:rgba(163,82,92,0.25)}
+.stat-tile.ok{background:rgba(22,163,74,0.04);border-color:rgba(22,163,74,0.22)}
+.stat-label{font-size:.6875rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--text-muted)}
+.stat-num{font-size:1.5rem;font-weight:600;letter-spacing:-0.015em;color:var(--text-strong);font-variant-numeric:tabular-nums}
+.stat-tile.warn .stat-num{color:var(--pending)}
+.stat-tile.err .stat-num{color:var(--down)}
+.stat-tile.ok .stat-num{color:#16A34A}
+.stat-sub{font-size:.6875rem;color:var(--text-muted);margin-top:2px}
+
+.section-title{font-size:1rem;font-weight:600;color:var(--text-strong);letter-spacing:-0.01em;margin-bottom:4px}
+.section-sub{font-size:.8125rem;color:var(--text-muted);margin-bottom:14px}
+
+/* ─── Mapping table ─── */
+.map-card{padding:22px 24px}
+.map-table{width:100%;border-collapse:separate;border-spacing:0}
+.map-table th{text-align:left;font-size:.6875rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--text-muted);padding:10px 14px;border-bottom:1px solid var(--border)}
+.map-table td{padding:12px 14px;border-bottom:1px solid var(--border-soft);font-size:.875rem;color:var(--text-strong);vertical-align:middle}
+.map-table tr:last-child td{border-bottom:none}
+.map-table .src{font-weight:600;font-size:.875rem;color:var(--text-strong)}
+.map-table .sample{color:var(--text-muted);font-family:'SFMono-Regular',Consolas,'Liberation Mono',Menlo,monospace;font-size:.75rem;letter-spacing:-0.005em;max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.map-arrow{color:var(--text-faint);font-size:.875rem}
+.map-sel{width:100%;height:36px;padding:0 12px;padding-right:34px;background:#FAF7F1;border:1px solid transparent;border-radius:8px;font-family:inherit;font-size:.8125rem;color:var(--text-strong);outline:none;appearance:none;-webkit-appearance:none;-moz-appearance:none;background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%231A1F2A' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='m6 9 6 6 6-6'/></svg>");background-repeat:no-repeat;background-position:right 10px center;background-size:14px 14px;cursor:pointer;transition:background 130ms var(--ease),border-color 130ms var(--ease),box-shadow 200ms var(--ease)}
+.map-sel:hover{background-color:#F2EEE6}
+.map-sel:focus{background-color:#FFFFFF;border-color:var(--accent);box-shadow:0 0 0 3px rgba(201,123,58,0.16)}
+.map-sel.skipped{color:var(--text-faint)}
+.match-pill{display:inline-flex;align-items:center;gap:5px;font-size:.6875rem;font-weight:600;letter-spacing:.04em;text-transform:uppercase;padding:3px 8px;border-radius:99px}
+.match-pill.auto{background:rgba(79,130,104,0.10);color:var(--up)}
+.match-pill.manual{background:rgba(156,120,66,0.12);color:var(--pending)}
+.match-pill.skipped{background:rgba(26,31,42,0.06);color:var(--text-faint)}
+
+/* ─── Preview table ─── */
+.preview-card{padding:22px 24px}
+.preview-wrap{overflow-x:auto;border:1px solid var(--border);border-radius:10px;margin-top:6px}
+.preview-table{width:100%;border-collapse:collapse;font-size:.8125rem}
+.preview-table th{text-align:left;padding:10px 14px;background:#FAF7F1;font-size:.6875rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text-muted);border-bottom:1px solid var(--border);white-space:nowrap}
+.preview-table td{padding:10px 14px;border-bottom:1px solid var(--border-soft);color:var(--text-strong);max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.preview-table tr:last-child td{border-bottom:none}
+.preview-table tr:nth-child(even) td{background:rgba(250,247,241,0.4)}
+
+/* ─── Import actions ─── */
+.import-bar{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:18px 22px;background:#FFFFFF;border:1px solid var(--border);border-radius:12px;box-shadow:0 1px 2px rgba(26,31,42,0.04)}
+.import-bar-l{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.import-bar-num{font-size:1.125rem;font-weight:700;color:var(--text-strong);font-variant-numeric:tabular-nums}
+.import-bar-meta{font-size:.8125rem;color:var(--text-muted)}
+.import-bar-r{display:flex;gap:10px;flex-wrap:wrap}
+.btn-ghost{height:40px;padding:0 18px;background:transparent;border:1px solid var(--border);color:var(--text-strong);border-radius:9px;font-family:inherit;font-size:.8125rem;font-weight:500;cursor:pointer;transition:background 130ms var(--ease),border-color 130ms var(--ease)}
+.btn-ghost:hover{background:rgba(255,255,255,0.55);border-color:var(--border-hover)}
+.btn-primary{height:40px;padding:0 22px;background:var(--accent);color:#FFFFFF;border:none;border-radius:9px;font-family:inherit;font-size:.8125rem;font-weight:600;cursor:pointer;box-shadow:0 1px 2px rgba(178,106,45,0.18),0 4px 14px rgba(201,123,58,0.22);transition:transform 150ms var(--ease),background 200ms var(--ease),box-shadow 200ms var(--ease)}
+.btn-primary:hover{background:var(--accent-hover);transform:translateY(-1px)}
+.btn-primary:disabled{opacity:0.55;cursor:not-allowed;transform:none}
+
+/* Tips strip */
+.tips{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:24px}
+.tip{background:rgba(255,255,255,0.55);border:1px solid var(--border);border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:4px}
+.tip-head{display:inline-flex;align-items:center;gap:8px;font-size:.6875rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--accent)}
+.tip-head svg{width:13px;height:13px;stroke-width:2}
+.tip-body{font-size:.8125rem;color:var(--text-muted);line-height:1.5}
+
+/* Toast */
+.toast{position:fixed;left:50%;bottom:24px;transform:translate(-50%,90px);background:var(--text-strong);color:#FFFFFF;padding:10px 16px;border-radius:10px;font-size:.8125rem;display:inline-flex;align-items:center;gap:8px;box-shadow:0 6px 20px rgba(26,31,42,0.25);opacity:0;pointer-events:none;transition:transform 280ms var(--ease),opacity 280ms var(--ease);z-index:80}
+.toast.show{opacity:1;transform:translate(-50%,0)}
+.toast.accent{background:var(--accent)}
+.toast.danger{background:var(--down)}
+
+@media (max-width:900px){
+  :root{--sidebar-w:0px}
+  /* Mobile sidebar acts as a slide-in drawer. Keep it at a real width so
+     translateX(-100%) actually moves it off-screen. Background stays
+     consistent with the other pages (frosted glass over the dimmed
+     overlay). */
+  .sidebar{width:240px;transform:translateX(-100%);transition:transform 220ms var(--ease)}
+  .sidebar.open{transform:translateX(0)}
+  .menu-toggle{display:inline-flex}
+  .topbar{left:0;padding:0 14px;gap:10px}
+  /* Hide the search bar on mobile to match the other portal pages. */
+  .search{display:none}
+  .tb-right{gap:6px;margin-left:auto}
+  .main{margin-left:0;padding:calc(var(--topbar-h) + 18px) 14px 60px}
+  .stats-row{grid-template-columns:1fr 1fr}
+  .page-stats{grid-template-columns:repeat(3,1fr)}
+  .tips{grid-template-columns:1fr}
+  .drop-shell{padding:28px 22px 22px}
+  .drop{padding:42px 18px;min-height:280px}
+  .drop-title{font-size:1.25rem}
+  .drop-sub{font-size:.8125rem}
+  .drop-formats{gap:6px}
+  .drop-format{font-size:.625rem;padding:4px 10px}
+  .drop-fineprint{font-size:.6875rem;margin-top:18px}
+  .map-card,.preview-card{padding:18px}
+  .map-table .sample{display:none}
+  .map-table th:nth-child(2),.map-table td:nth-child(2){display:none}
+  .map-table th,.map-table td{padding:10px 10px}
+  .import-bar{flex-direction:column;align-items:stretch;gap:12px}
+  .import-bar-r{justify-content:flex-end}
+  .file-bar{flex-wrap:wrap}
+  .file-bar-l{flex:1 1 60%;min-width:0}
+  .file-bar-r{flex:1 1 100%;justify-content:flex-end}
+}
+@media (max-width:520px){
+  .page-hdr{flex-direction:column;align-items:flex-start;gap:10px}
+  .page-hdr h1{font-size:1.25rem}
+  .page-hdr .sub{font-size:.8125rem}
+  .role-pill{font-size:.625rem;padding:4px 8px}
+  .stats-row{grid-template-columns:1fr}
+  .page-stats{grid-template-columns:1fr 1fr}
+  .stat-tile{padding:12px 14px}
+  .stat-num{font-size:1.25rem}
+  .drop-shell{padding:20px 14px 16px}
+  .drop{padding:32px 14px;min-height:240px;border-radius:12px}
+  .drop-icon{width:60px;height:60px;border-radius:14px;margin-bottom:16px}
+  .drop-icon svg{width:28px;height:28px}
+  .drop-title{font-size:1.0625rem}
+  .drop-cta{height:38px;padding:0 18px;font-size:.8125rem}
+  .drop-fineprint{font-size:.6875rem}
+  .map-card,.preview-card{padding:14px}
+  .section-title{font-size:.9375rem}
+  .section-sub{font-size:.75rem;margin-bottom:10px}
+  /* Hide the match pill column on very narrow screens — keep source + arrow + mapping. */
+  .map-table th:nth-child(5),.map-table td:nth-child(5){display:none}
+  .map-table th,.map-table td{padding:8px 6px;font-size:.75rem}
+  .map-sel{height:34px;font-size:.75rem;padding:0 10px;padding-right:28px}
+  .map-table .src{font-size:.8125rem}
+  .preview-wrap{font-size:.75rem}
+  .preview-table th,.preview-table td{padding:8px 10px}
+  .import-bar{padding:14px}
+  .import-bar-num{font-size:1rem}
+  .import-bar-meta{font-size:.75rem}
+  .import-bar-r{flex-direction:column-reverse;align-items:stretch}
+  .btn-ghost,.btn-primary{width:100%;height:42px;font-size:.875rem}
+  .file-bar{padding:12px 14px;gap:10px}
+  .file-bar-icon{width:32px;height:32px}
+  .file-bar-icon svg{width:15px;height:15px}
+  .file-name{font-size:.875rem}
+  .file-meta{font-size:.6875rem}
+  .file-btn{height:32px;padding:0 10px;font-size:.6875rem}
+}
+</style>
+  <script src="services/api.js?v=10"></script>
+  <script src="services/error-boundary.js?v=19"></script>
+  <style>
+  /* Dark-mode mapping for bespoke surfaces prefs-extras doesn't cover (stat tiles,
+     drop zone, bars, map selects, drip control, first-message editor). */
+  html[data-mode="dark"] .stat-tile,html[data-mode="dark"] .file-bar,html[data-mode="dark"] .import-bar{background:rgba(24,28,36,0.78)!important;border-color:rgba(255,255,255,0.08)!important}
+  html[data-mode="dark"] .drop-shell{background:linear-gradient(135deg,rgba(255,255,255,0.05),rgba(255,255,255,0.02))!important}
+  html[data-mode="dark"] .drop-format{background:rgba(255,255,255,0.06)!important;border-color:rgba(255,255,255,0.10)!important}
+  html[data-mode="dark"] .map-sel{background:rgba(255,255,255,0.05)!important;color:#D5DAE2!important}
+  html[data-mode="dark"] .tip{background:rgba(255,255,255,0.04)!important;border-color:rgba(255,255,255,0.08)!important}
+  html[data-mode="dark"] .preview-table th{background:rgba(255,255,255,0.04)!important}
+  html[data-mode="dark"] .preview-table tr:nth-child(even) td{background:rgba(255,255,255,0.02)!important}
+  html[data-mode="dark"] #dripControl{background:rgba(255,255,255,0.04)!important;border-color:rgba(255,255,255,0.10)!important;color:#D5DAE2!important}
+  html[data-mode="dark"] #tmplInput{background:rgba(255,255,255,0.04)!important;color:#F0F2F5!important;border-color:rgba(255,255,255,0.10)!important}
+  html[data-mode="dark"] #tmplPrevBox{background:rgba(255,255,255,0.04)!important;border-color:rgba(255,255,255,0.10)!important}
+  html[data-mode="dark"] #tmplPreview{color:#D5DAE2!important}
+  </style>
+</head>
+<body>
+
+<div class="sb-overlay" id="sbOverlay"></div>
+
+<aside class="sidebar" id="sidebar">
+  <a class="sb-brand" href="ask-the-brain.html" style="text-decoration:none">
+    <span class="sb-brand-dot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/><path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/></svg></span>
+    <span>Endeavor</span>
+  </a>
+  <nav class="sb-nav">
+    <a class="sb-item sb-featured" href="ask-the-brain.html" aria-label="Ask the Brain">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/><path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/></svg>
+      <span class="sb-tip">Ask the Brain</span>
+    </a>
+    <a class="sb-item" id="navCeo" href="ceo-dashboard.html" aria-label="CEO Dashboard">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 1 18 0"/><path d="M12 12l4-2"/><circle cx="12" cy="12" r="1.6"/></svg>
+      <span class="sb-tip">CEO Dashboard</span>
+    </a>
+    <a class="sb-item active" id="navUpload" href="upload-leads.html" aria-label="Upload leads">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 8 5-5 5 5"/><path d="M5 17v2a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-2"/></svg>
+      <span class="sb-tip">Upload Leads</span>
+    </a>
+    <a class="sb-item" href="notifications.html" aria-label="Notifications">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 7 3 9H3c0-2 3-2 3-9Z"/><path d="M10 21a2 2 0 0 0 4 0"/></svg>
+      <span class="sb-tip">Notifications</span>
+      <span class="sb-badge" style="display:none">0</span>
+    </a>
+    <div class="sb-group" id="sbWorkspaces">
+      <button class="sb-group-head" type="button">
+        Workspaces
+        <svg class="sb-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg>
+      </button>
+      <div class="sb-group-body">
+        <a class="sb-item" href="my-team.html" aria-label="My Team">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="7" r="4"/><path d="M3 21c0-3.5 3-6 6-6s6 2.5 6 6"/><path d="M16 3.5a4 4 0 0 1 0 7.5"/><path d="M22 21c0-3-2-5-5-5.5"/></svg>
+          <span class="sb-tip">My Team</span>
+        </a>
+        <a class="sb-item" href="inbox.html" aria-label="Inbox">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h6l2 3h2l2-3h6"/><path d="M3 7l2 12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2l2-12"/><path d="M5 7l2-3h10l2 3"/></svg>
+          <span class="sb-tip">Inbox</span>
+          <span class="sb-badge" style="display:none">0</span>
+        </a>
+        <a class="sb-item" href="deals.html" aria-label="Deals">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 3 7v6c0 5 4 8 9 9 5-1 9-4 9-9V7Z"/><path d="M9 12l2 2 4-4"/></svg>
+          <span class="sb-tip">Deals</span>
+        </a>
+        <a class="sb-item" href="appointments.html" aria-label="Appointments">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 11h18"/></svg>
+          <span class="sb-tip">Appointments</span>
+        </a>
+        <a class="sb-item" href="analytics.html" aria-label="Analytics">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 15l4-6 4 4 5-7"/></svg>
+          <span class="sb-tip">Analytics</span>
+        </a>
+        <a class="sb-item" href="qa-review.html" aria-label="QA Review">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9 12l2 2 4-4"/><path d="M21 12c0 5-4 8.5-9 9-5-.5-9-4-9-9V5l9-3 9 3v7Z"/></svg>
+          <span class="sb-tip">QA Review</span>
+        </a>
+      </div>
+    </div>
+  </nav>
+  <div class="sb-bottom">
+    <a class="sb-item" href="settings.html" aria-label="Settings">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.8-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1A1.6 1.6 0 0 0 9 19.4a1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.8 1.6 1.6 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1A1.6 1.6 0 0 0 4.6 9a1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3H9a1.6 1.6 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1c0 .6.4 1.2 1 1.5a1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8V9c.3.6.9 1 1.5 1H21a2 2 0 1 1 0 4h-.1c-.6 0-1.2.4-1.5 1Z"/></svg>
+      <span class="sb-tip">Settings</span>
+    </a>
+    <a class="sb-item sb-logout" href="login.html" aria-label="Log out" title="Log out">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></svg>
+      <span class="sb-tip">Log out</span>
+    </a>
+  </div>
+</aside>
+
+<header class="topbar">
+  <button class="menu-toggle" id="menuToggle" aria-label="Open menu">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+  </button>
+  <div class="search">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+    <input type="text" placeholder="Search leads, clients, deals..."/>
+    <kbd>⌘K</kbd>
+  </div>
+  <div class="tb-right">
+    <button class="icon-btn" aria-label="Notifications" type="button">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 7 3 9H3c0-2 3-2 3-9Z"/><path d="M10 21a2 2 0 0 0 4 0"/></svg>
+      <span class="dot"></span>
+    </button>
+    <button class="avatar" type="button" aria-label="Account">AW</button>
+  </div>
+</header>
+
+<main class="main">
+
+  <div class="page-hdr">
+    <div>
+      <h1>Upload leads</h1>
+      <div class="sub">Drop a CSV or XLSX file. We'll auto-detect the columns, map them to lead fields, and queue everything for review before it hits the CRM.</div>
+    </div>
+    <div style="display:flex;align-items:center;gap:12px;flex-shrink:0">
+      <button id="sendToggle" type="button"
+              style="display:none;align-items:center;gap:8px;height:38px;padding:0 16px;border-radius:9px;border:1px solid transparent;font:600 .85rem inherit;cursor:pointer;white-space:nowrap;background:#DC2626;color:#fff">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
+        <span id="sendToggleLabel">Pause sending</span>
+      </button>
+      <button id="autopilotToggle" type="button"
+              style="display:none;align-items:center;gap:8px;height:38px;padding:0 16px;border-radius:9px;border:1px solid transparent;font:600 .85rem inherit;cursor:pointer;white-space:nowrap;background:#D97706;color:#fff">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>
+        <span id="autopilotToggleLabel">Queue-Only Mode</span>
+      </button>
+      <span class="role-pill" id="rolePill">Admin only</span>
+    </div>
+  </div>
+
+  <!-- Live page stats: today's activity + campaign state -->
+  <div class="page-stats" id="pageStats">
+    <div class="stat-tile">
+      <div class="stat-label">Leads today</div>
+      <div class="stat-num" id="psLeads">0</div>
+      <div class="stat-sub">Uploaded today</div>
+    </div>
+    <div class="stat-tile">
+      <div class="stat-label">Sent text</div>
+      <div class="stat-num" id="psSent">0</div>
+      <div class="stat-sub">Texts sent today</div>
+    </div>
+    <div class="stat-tile ok">
+      <div class="stat-label">Total delivered</div>
+      <div class="stat-num" id="psDelivered">0</div>
+      <div class="stat-sub">Delivered today</div>
+    </div>
+    <div class="stat-tile ok">
+      <div class="stat-label">Total yes</div>
+      <div class="stat-num" id="psYes">0</div>
+      <div class="stat-sub">Positive replies today</div>
+    </div>
+    <div class="stat-tile err">
+      <div class="stat-label">Failed text</div>
+      <div class="stat-num" id="psFailed">0</div>
+      <div class="stat-sub">Sent, not delivered</div>
+    </div>
+    <div class="stat-tile ok">
+      <div class="stat-label">Campaigns running</div>
+      <div class="stat-num" id="psRunning">0</div>
+      <div class="stat-sub">Sending now</div>
+    </div>
+    <div class="stat-tile warn">
+      <div class="stat-label">Campaigns paused</div>
+      <div class="stat-num" id="psPaused">0</div>
+      <div class="stat-sub">Paused right now</div>
+    </div>
+  </div>
+
+  <!-- Global send kill-switch banner -->
+  <div id="sendPausedBanner" role="alert"
+       style="display:none;align-items:center;gap:10px;margin:0 0 18px;padding:12px 16px;border-radius:10px;background:#FEF2F2;border:1px solid #FCA5A5;color:#991B1B;font-weight:600">
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M9 9l6 6M15 9l-6 6"/></svg>
+    All outbound sending is PAUSED — the first template, AI replies, follow-ups, reminders and the pacing engine are all stopped. Nothing will send to any lead until you press Resume.
+  </div>
+
+  <!-- Queue-Only Mode banner -->
+  <div id="autopilotBanner" role="alert"
+       style="display:none;align-items:center;gap:10px;margin:0 0 18px;padding:12px 16px;border-radius:10px;background:#FFFBEB;border:1px solid #FCD34D;color:#92400E;font-weight:600">
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M9 9v6M15 9v6"/></svg>
+    Queue-Only Mode is permanently ON — the platform sends ONLY the first template. No AI replies, no booking, no follow-ups, reminders or nurture of any kind are ever sent. All replies are handled by a human. This is locked and cannot be turned off.
+  </div>
+
+  <!-- Queue-Only drip rate (admin) -->
+  <div id="dripControl"
+       style="display:none;align-items:center;flex-wrap:wrap;gap:10px;margin:0 0 18px;padding:12px 16px;border-radius:10px;background:#F8FAFC;border:1px solid #E2E8F0;color:#334155;font-size:.9rem">
+    <span style="font-weight:600">Big-batch drip rate (&gt;500 leads, Queue-Only Mode):</span>
+    <span>send</span>
+    <input id="dripLeads" type="number" min="1" max="5000" step="1"
+           style="width:78px;height:34px;padding:0 8px;border:1px solid #CBD5E1;border-radius:8px;font:inherit;text-align:center">
+    <span>leads every</span>
+    <input id="dripMinutes" type="number" min="1" max="1440" step="1"
+           style="width:70px;height:34px;padding:0 8px;border:1px solid #CBD5E1;border-radius:8px;font:inherit;text-align:center">
+    <span>minutes</span>
+    <button id="dripSave" type="button"
+            style="height:34px;padding:0 16px;border-radius:8px;border:none;background:#0F172A;color:#fff;font:600 .85rem inherit;cursor:pointer">Save</button>
+    <span id="dripHint" style="color:#64748B">Applies to the first-template send for large uploads while Queue-Only Mode is on.</span>
+  </div>
+
+  <!-- First message (auto-sent to every uploaded lead) -->
+  <section class="card" id="firstMsgCard" style="display:none;margin:0 0 18px;padding:18px 22px">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:10px">
+      <div>
+        <h2 style="margin:0;font-size:1rem;font-weight:700;color:var(--text-strong)">First message — auto-sent after upload</h2>
+        <p style="margin:4px 0 0;font-size:.8125rem;color:var(--text-muted)">Every uploaded lead automatically receives this text. Edit it and press Save.</p>
+      </div>
+      <span id="firstMsgBadge" style="display:none;font-size:.72rem;font-weight:700;padding:3px 10px;border-radius:999px;background:#FEF3C7;color:#B45309">Custom</span>
+    </div>
+    <textarea id="tmplInput" rows="3" maxlength="1000" placeholder="Loading…"
+      style="width:100%;padding:10px 12px;border:1px solid var(--border,#CBD5E1);border-radius:10px;font:inherit;font-size:.9rem;color:var(--text-strong);background:var(--surface-1,#fff);resize:vertical;box-sizing:border-box"></textarea>
+    <div style="font-size:.75rem;color:#64748B;margin-top:6px">Use <code>{first_name}</code> to insert the lead's first name. <span id="tmplCount"></span></div>
+    <div id="tmplPrevBox" style="margin-top:10px;padding:10px 12px;border-radius:10px;background:#F8FAFC;border:1px solid #E2E8F0">
+      <div style="font-size:.68rem;text-transform:uppercase;letter-spacing:.04em;color:#94A3B8;margin-bottom:4px">Preview</div>
+      <div id="tmplPreview" style="font-size:.9rem;color:#0F172A;white-space:pre-wrap">—</div>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:12px">
+      <button id="tmplSave" type="button" style="height:36px;padding:0 18px;border-radius:8px;border:none;background:#0F172A;color:#fff;font:600 .85rem inherit;cursor:pointer">Save message</button>
+      <button id="tmplReset" type="button" style="height:36px;padding:0 14px;border-radius:8px;border:1px solid #CBD5E1;background:transparent;color:#64748B;font:600 .85rem inherit;cursor:pointer">Reset to default</button>
+      <span id="tmplStatus" style="font-size:.8rem;color:#64748B"></span>
+    </div>
+  </section>
+
+  <!-- Step 1: drop zone -->
+  <section class="card drop-shell" id="dropShell">
+    <div class="drop" id="drop" tabindex="0" role="button" aria-label="Upload file">
+      <div class="drop-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v14"/><path d="m7 8 5-5 5 5"/><path d="M5 21h14"/></svg>
+      </div>
+      <h2 class="drop-title">Drop your file here</h2>
+      <p class="drop-sub">Or click to browse. Files stay in your browser until you press Import.</p>
+      <button class="drop-cta" id="browseBtn" type="button">Choose a file</button>
+      <input id="fileInput" type="file" accept=".csv,.xlsx,.xls" hidden/>
+      <div class="drop-or" style="margin-top:20px">— or —</div>
+      <button class="btn-ghost" id="addOneBtn" type="button" style="margin-top:4px">+ Add one contact manually</button>
+    </div>
+
+  </section>
+
+  <!-- Step 2: parse results (hidden until file dropped) -->
+  <section class="parse-results" id="parseResults">
+
+    <div class="file-bar">
+      <div class="file-bar-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h8M8 9h2"/></svg>
+      </div>
+      <div class="file-bar-l">
+        <div class="file-name" id="fileName">—</div>
+        <div class="file-meta" id="fileMeta">—</div>
+      </div>
+      <div class="file-bar-r">
+        <button class="file-btn" id="btnReplace" type="button">Replace file</button>
+        <button class="file-btn danger" id="btnRemove" type="button">Remove</button>
+      </div>
+    </div>
+
+    <div class="stats-row">
+      <div class="stat-tile">
+        <div class="stat-label">Total rows</div>
+        <div class="stat-num" id="statTotal">0</div>
+        <div class="stat-sub">In the source file</div>
+      </div>
+      <div class="stat-tile">
+        <div class="stat-label">Auto-mapped fields</div>
+        <div class="stat-num" id="statMapped">0</div>
+        <div class="stat-sub" id="statMappedSub">of 0 columns</div>
+      </div>
+      <div class="stat-tile warn">
+        <div class="stat-label">Unmapped</div>
+        <div class="stat-num" id="statUnmapped">0</div>
+        <div class="stat-sub">Review before import</div>
+      </div>
+      <div class="stat-tile err">
+        <div class="stat-label">Invalid rows</div>
+        <div class="stat-num" id="statInvalid">0</div>
+        <div class="stat-sub">Missing required fields</div>
+      </div>
+    </div>
+
+    <div class="card map-card">
+      <div class="section-title">Column mapping</div>
+      <div class="section-sub">We matched what we could. Override any guess from the dropdown, or set a column to &ldquo;Skip&rdquo; to leave it out of the import.</div>
+      <table class="map-table">
+        <thead>
+          <tr>
+            <th style="width:24%">Source column</th>
+            <th style="width:36%">Sample value</th>
+            <th style="width:8%"></th>
+            <th style="width:24%">Maps to</th>
+            <th style="width:8%">Match</th>
+          </tr>
+        </thead>
+        <tbody id="mapBody"></tbody>
+      </table>
+    </div>
+
+    <div class="card preview-card">
+      <div class="section-title">Preview · first 5 rows</div>
+      <div class="section-sub">Columns shown in their mapped order. Click <strong>Import</strong> below to push everything to the lead inbox.</div>
+      <div class="preview-wrap">
+        <table class="preview-table" id="previewTable">
+          <thead><tr id="previewHead"></tr></thead>
+          <tbody id="previewBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="import-bar">
+      <div class="import-bar-l">
+        <div class="import-bar-num" id="importNum">0 leads ready</div>
+        <div class="import-bar-meta" id="importMeta">—</div>
+      </div>
+      <div class="import-bar-r" style="flex-wrap:wrap;gap:10px">
+        <label style="display:flex;align-items:center;gap:6px;font-size:.78rem;color:var(--text-muted,#6b7280)">Source
+          <input id="impSource" value="csv_import" style="height:34px;border:1px solid rgba(0,0,0,.14);border-radius:8px;padding:0 9px;font:inherit;width:130px"/>
+        </label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:.78rem;color:var(--text-muted,#6b7280)">Duplicates
+          <select id="impDedup" style="height:34px;border:1px solid rgba(0,0,0,.14);border-radius:8px;padding:0 9px;font:inherit">
+            <option value="skip">Skip</option>
+            <option value="merge">Merge</option>
+          </select>
+        </label>
+        <button class="btn-ghost" id="btnCancel" type="button">Cancel</button>
+        <button class="btn-primary" id="btnImport" type="button">Import to CRM</button>
+      </div>
+    </div>
+
+    <div id="importResult" style="display:none;margin-top:14px;padding:14px 16px;border-radius:12px;background:rgba(255,255,255,.72);border:1px solid rgba(0,0,0,.07)">
+      <div style="font-weight:700;margin-bottom:8px" id="importResultTitle">Import complete</div>
+      <div id="importResultBody" style="font-size:.86rem;line-height:1.7"></div>
+    </div>
+
+  </section>
+
+  <!-- Campaign manager: up to 5 CSV campaigns, each with independent controls -->
+  <style>.camp-btn{height:32px;padding:0 14px;border:none;border-radius:8px;color:#fff;font:600 .8rem inherit;cursor:pointer}
+  @keyframes campSpin{to{transform:rotate(360deg)}}
+  .camp-spin{display:inline-block;width:14px;height:14px;border:2px solid currentColor;border-top-color:transparent;border-radius:50%;animation:campSpin .7s linear infinite;opacity:.9;flex-shrink:0;vertical-align:-2px}
+  @keyframes campShimmer{0%{background-position:-360px 0}100%{background-position:360px 0}}
+  #campLoadingCard .camp-bar{height:4px;border-radius:99px;margin-top:8px;background:linear-gradient(90deg,#F1F5F9 0%,#C97B3A 50%,#F1F5F9 100%);background-size:360px 100%;animation:campShimmer 1.1s linear infinite}</style>
+  <section id="campaignMgr" style="display:none;margin:0 0 18px;padding:16px 18px;border-radius:12px;background:#fff;border:1px solid #E2E8F0">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:6px">
+      <div>
+        <div style="font-weight:700;font-size:1rem;color:#0F172A">Campaigns</div>
+        <div style="font-size:.82rem;color:#64748B">Upload up to 5 CSVs — each runs independently. Only one campaign sends at a time.</div>
+      </div>
+      <button id="campAddBtn" type="button" style="height:38px;padding:0 16px;border-radius:9px;border:none;background:#C97B3A;color:#fff;font:600 .85rem inherit;cursor:pointer;white-space:nowrap">+ Upload campaign CSV</button>
+    </div>
+    <div id="campList" style="display:flex;flex-direction:column;gap:10px;margin-top:10px"></div>
+    <div id="campEmpty" style="font-size:.85rem;color:#94A3B8;padding:8px 0">No campaigns yet — upload a CSV to create one.</div>
+  </section>
+
+</main>
+
+<div class="toast" id="toast"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span id="toastMsg">Imported</span></div>
+
+<script>
+(function(){
+  const $ = (s,r=document)=>r.querySelector(s);
+  const $$ = (s,r=document)=>Array.from(r.querySelectorAll(s));
+
+  // Mobile sidebar toggle (matches other pages).
+  const sb = $('#sidebar'), sbo = $('#sbOverlay');
+  $('#menuToggle')?.addEventListener('click',()=>{sb.classList.add('open');sbo.classList.add('open')});
+  sbo?.addEventListener('click',()=>{sb.classList.remove('open');sbo.classList.remove('open')});
+
+  // Workspaces collapsible — matches the behavior of every other page.
+  // Auto-opens if the active page lives inside the group, or if the user
+  // previously expanded it (state stored in localStorage).
+  const wkGroup = document.getElementById('sbWorkspaces');
+  if(wkGroup){
+    const hasActiveInside = !!wkGroup.querySelector('.sb-item.active');
+    const savedOpen = localStorage.getItem('ebSbWorkspaces');
+    if(hasActiveInside || savedOpen === 'open'){ wkGroup.classList.add('open'); }
+    const wkHead = wkGroup.querySelector('.sb-group-head');
+    wkHead?.addEventListener('click', ()=>{
+      wkGroup.classList.toggle('open');
+      localStorage.setItem('ebSbWorkspaces', wkGroup.classList.contains('open') ? 'open' : 'closed');
+    });
+  }
+
+  const ROLE = (localStorage.getItem('ebRole') || 'admin');
+  $('#rolePill').textContent = ROLE === 'head' ? 'Head manager' : 'Admin';
+  const ceoLink = $('#navCeo');
+  if(ceoLink && ROLE !== 'admin' && ROLE !== 'dev'){ ceoLink.style.display = 'none'; }
+
+  // ─── Mapping schema ──────────────────────────────────────────
+  // Each target field has: key, label, required flag, regex(es) to match
+  // against header cells, and an optional value-shape validator.
+  const FIELDS = [
+    { key:'first_name', label:'First name',     required:true,  match:[/\bfirst[\s_.\-]*name\b/i, /\bfname\b/i, /\bgiven[\s_.\-]*name\b/i] },
+    { key:'last_name',  label:'Last name',      required:true,  match:[/\blast[\s_.\-]*name\b/i, /\blname\b/i, /\bsurname\b/i, /\bfamily[\s_.\-]*name\b/i] },
+    { key:'full_name',  label:'Full name',      required:false, match:[/^(full[\s_.\-]*)?name$/i, /\bcontact[\s_.\-]*name\b/i] },
+    { key:'email',      label:'Email',          required:true,  match:[/\be[\s_.\-]*mail\b/i, /email[\s_.\-]*address/i] },
+    { key:'phone',      label:'Phone',          required:true,  match:[/\b(phone|mobile|cell|tel|telephone)\b/i, /contact[\s_.\-]*number/i] },
+    { key:'dob',        label:'Date of birth',  required:false, match:[/\bdob\b/i, /date[\s_.\-]*of[\s_.\-]*birth/i, /\bbirth[\s_.\-]*(date|day)\b/i] },
+    { key:'address',    label:'Street address', required:false, match:[/\b(street|address|addr)\b/i, /address[\s_.\-]*line/i, /\bline[\s_.\-]*1\b/i] },
+    { key:'city',       label:'City',           required:false, match:[/\b(city|town)\b/i] },
+    { key:'state',      label:'State',          required:false, match:[/\b(state|province|region)\b/i] },
+    { key:'zip',        label:'Zip / postal',   required:false, match:[/\b(zip|postal|postcode)\b/i] },
+    { key:'source',     label:'Lead source',    required:false, match:[/\b(source|channel|campaign|origin)\b/i, /lead[\s_.\-]*source/i, /\butm[\s_.\-]*source\b/i] },
+    { key:'product',    label:'Product interest', required:false, match:[/\b(product|interest|plan|coverage|service|line[\s_.\-]*of[\s_.\-]*business)\b/i] },
+    { key:'owner',      label:'Assigned owner', required:false, match:[/\b(owner|assigned|agent|rep)\b/i] },
+    { key:'status',     label:'Status / stage', required:false, match:[/\b(status|stage|lead[\s_.\-]*status)\b/i] },
+    { key:'notes',      label:'Notes',          required:false, match:[/\b(notes?|comment|remark)\b/i] }
+  ];
+  const FIELD_BY_KEY = Object.fromEntries(FIELDS.map(f=>[f.key,f]));
+
+  // ─── State ───────────────────────────────────────────────────
+  let parsed = null;     // { fileName, fileSize, headers, rows, mapping, autoCount }
+
+  // ─── Helpers ─────────────────────────────────────────────────
+  function fmtSize(n){
+    if(!n) return '0 B';
+    const u=['B','KB','MB','GB']; let i=0; while(n>=1024 && i<u.length-1){n/=1024;i++;}
+    return n.toFixed(n<10?1:0) + ' ' + u[i];
+  }
+  function toast(msg, kind){
+    const t = $('#toast'); $('#toastMsg').textContent = msg;
+    t.classList.remove('accent','danger');
+    if(kind) t.classList.add(kind);
+    t.classList.add('show');
+    clearTimeout(toast._t); toast._t = setTimeout(()=>t.classList.remove('show'), 2400);
+  }
+  function autoMatch(header){
+    if(!header) return null;
+    const h = String(header).trim();
+    if(!h) return null;
+    for(const f of FIELDS){
+      for(const re of f.match){ if(re.test(h)) return f.key; }
+    }
+    return null;
+  }
+  function isValidEmail(v){ return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(v||'').trim()); }
+  function digits(v){ return String(v||'').replace(/\D/g,''); }
+  function isValidPhone(v){ return digits(v).length >= 7; }
+
+  // ─── File handling ───────────────────────────────────────────
+  function handleFile(file){
+    if(!file) return;
+    const name = (file.name||'').toLowerCase();
+    if(!/\.(csv|xlsx|xls)$/.test(name)){
+      toast('Unsupported file. Use CSV or XLSX.', 'danger');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onerror = ()=> toast('Could not read file.', 'danger');
+    reader.onload = (e)=>{
+      try{
+        let headers = [], rows = [];
+        if(name.endsWith('.csv')){
+          const text = new TextDecoder('utf-8').decode(new Uint8Array(e.target.result));
+          ({headers, rows} = parseCSV(text));
+        } else {
+          if(typeof XLSX === 'undefined'){
+            toast('Excel parser still loading — try again in a second.', 'danger');
+            return;
+          }
+          const wb = XLSX.read(new Uint8Array(e.target.result), {type:'array'});
+          const first = wb.SheetNames[0];
+          const sheet = wb.Sheets[first];
+          const aoa = XLSX.utils.sheet_to_json(sheet, {header:1, defval:'', raw:false});
+          if(!aoa.length){ toast('That workbook looks empty.', 'danger'); return; }
+          headers = aoa[0].map(h => String(h||'').trim());
+          rows = aoa.slice(1).filter(r => r.some(cell => String(cell||'').trim() !== ''));
+        }
+        if(!headers.length){ toast('No header row detected.', 'danger'); return; }
+
+        const mapping = headers.map(h => ({ header: h, target: autoMatch(h) }));
+        const autoCount = mapping.filter(m => m.target).length;
+
+        parsed = {
+          fileName: file.name,
+          fileSize: file.size,
+          headers, rows, mapping, autoCount
+        };
+        renderResults();
+        $('#parseResults').classList.add('show');
+        $('#dropShell').style.display = 'none';
+        toast('File loaded · ' + rows.length + ' rows', 'accent');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      } catch(err){
+        console.error(err);
+        toast('Could not parse that file.', 'danger');
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  }
+
+  // Minimal CSV parser supporting quoted fields with commas and escaped quotes.
+  function parseCSV(text){
+    const lines = [];
+    let cur = '', row = [], inQ = false;
+    for(let i=0; i<text.length; i++){
+      const c = text[i], n = text[i+1];
+      if(inQ){
+        if(c === '"' && n === '"'){ cur += '"'; i++; }
+        else if(c === '"'){ inQ = false; }
+        else { cur += c; }
+      } else {
+        if(c === '"'){ inQ = true; }
+        else if(c === ','){ row.push(cur); cur = ''; }
+        else if(c === '\n' || c === '\r'){
+          if(c === '\r' && n === '\n') i++;
+          row.push(cur); lines.push(row); row = []; cur = '';
+        } else { cur += c; }
+      }
+    }
+    if(cur || row.length){ row.push(cur); lines.push(row); }
+    if(!lines.length) return { headers: [], rows: [] };
+    const headers = lines[0].map(h => String(h||'').trim());
+    const rows = lines.slice(1).filter(r => r.some(c => String(c||'').trim() !== ''));
+    // Pad short rows to header length.
+    const w = headers.length;
+    rows.forEach(r => { while(r.length < w) r.push(''); });
+    return { headers, rows };
+  }
+
+  // ─── Rendering ───────────────────────────────────────────────
+  function renderResults(){
+    $('#fileName').textContent = parsed.fileName;
+    $('#fileMeta').textContent = parsed.headers.length + ' columns · ' + parsed.rows.length.toLocaleString() + ' rows · ' + fmtSize(parsed.fileSize);
+    $('#statTotal').textContent = parsed.rows.length.toLocaleString();
+    $('#statMapped').textContent = parsed.autoCount;
+    $('#statMappedSub').textContent = 'of ' + parsed.headers.length + ' columns';
+    renderMapping();
+    renderPreview();
+    refreshImportSummary();
+  }
+
+  function renderMapping(){
+    const tb = $('#mapBody'); tb.innerHTML = '';
+    parsed.mapping.forEach((m, i) => {
+      const sample = parsed.rows.find(r => String(r[i]||'').trim() !== '');
+      const sampleVal = sample ? String(sample[i]).trim() : '';
+      const tr = document.createElement('tr');
+
+      const tdSrc = document.createElement('td');
+      tdSrc.className = 'src';
+      tdSrc.textContent = m.header || '(unnamed column ' + (i+1) + ')';
+
+      const tdSamp = document.createElement('td');
+      tdSamp.className = 'sample';
+      tdSamp.textContent = sampleVal || '—';
+
+      const tdArrow = document.createElement('td');
+      tdArrow.className = 'map-arrow';
+      tdArrow.textContent = '→';
+
+      const tdSel = document.createElement('td');
+      const sel = document.createElement('select');
+      sel.className = 'map-sel';
+      sel.dataset.idx = i;
+      let opt = document.createElement('option');
+      opt.value = ''; opt.textContent = 'Skip this column';
+      sel.appendChild(opt);
+      FIELDS.forEach(f=>{
+        const o = document.createElement('option');
+        o.value = f.key; o.textContent = f.label + (f.required ? ' *' : '');
+        sel.appendChild(o);
+      });
+      sel.value = m.target || '';
+      if(!sel.value) sel.classList.add('skipped');
+      sel.addEventListener('change', e=>{
+        parsed.mapping[i].target = e.target.value || null;
+        parsed.mapping[i].userTouched = true;
+        if(!e.target.value) e.target.classList.add('skipped'); else e.target.classList.remove('skipped');
+        // Update pill
+        const pillCell = tr.querySelector('.match-pill');
+        if(!e.target.value){ pillCell.className = 'match-pill skipped'; pillCell.textContent = 'Skipped'; }
+        else { pillCell.className = 'match-pill manual'; pillCell.textContent = 'Manual'; }
+        renderPreview();
+        refreshImportSummary();
+      });
+      tdSel.appendChild(sel);
+
+      const tdPill = document.createElement('td');
+      const pill = document.createElement('span');
+      if(m.target){ pill.className = 'match-pill auto'; pill.textContent = 'Auto'; }
+      else { pill.className = 'match-pill skipped'; pill.textContent = 'Skipped'; }
+      tdPill.appendChild(pill);
+
+      tr.appendChild(tdSrc); tr.appendChild(tdSamp); tr.appendChild(tdArrow); tr.appendChild(tdSel); tr.appendChild(tdPill);
+      tb.appendChild(tr);
+    });
+  }
+
+  function renderPreview(){
+    const usedCols = parsed.mapping
+      .map((m, i) => m.target ? { i, key: m.target, label: FIELD_BY_KEY[m.target].label } : null)
+      .filter(Boolean);
+    const head = $('#previewHead'); head.innerHTML = '';
+    if(!usedCols.length){
+      head.innerHTML = '<th style="color:var(--text-faint);font-style:italic">No columns mapped yet — pick targets above to see the preview.</th>';
+      $('#previewBody').innerHTML = '';
+      return;
+    }
+    usedCols.forEach(c=>{
+      const th = document.createElement('th'); th.textContent = c.label; head.appendChild(th);
+    });
+    const tb = $('#previewBody'); tb.innerHTML = '';
+    parsed.rows.slice(0, 5).forEach(r=>{
+      const tr = document.createElement('tr');
+      usedCols.forEach(c=>{
+        const td = document.createElement('td');
+        td.textContent = String(r[c.i] ?? '').trim() || '—';
+        tr.appendChild(td);
+      });
+      tb.appendChild(tr);
+    });
+  }
+
+  function refreshImportSummary(){
+    const used = parsed.mapping.filter(m => m.target);
+    const usedCount = used.length;
+    const headersN = parsed.headers.length;
+    $('#statMapped').textContent = usedCount;
+    $('#statMappedSub').textContent = 'of ' + headersN + ' columns';
+    $('#statUnmapped').textContent = headersN - usedCount;
+
+    // Validate rows against required fields.
+    const idx = {}; parsed.mapping.forEach((m,i)=>{ if(m.target) idx[m.target] = i; });
+    let invalid = 0;
+    parsed.rows.forEach(r=>{
+      const need = ['email','phone','first_name','last_name'];
+      const hasName = (idx.first_name !== undefined && String(r[idx.first_name]||'').trim()) || (idx.full_name !== undefined && String(r[idx.full_name]||'').trim());
+      const hasContact = (idx.email !== undefined && isValidEmail(r[idx.email])) || (idx.phone !== undefined && isValidPhone(r[idx.phone]));
+      if(!hasName || !hasContact) invalid++;
+    });
+    $('#statInvalid').textContent = invalid;
+
+    const ready = parsed.rows.length - invalid;
+    $('#importNum').textContent = ready.toLocaleString() + ' lead' + (ready===1?'':'s') + ' ready';
+    const bits = [];
+    if(invalid) bits.push(invalid + ' row' + (invalid===1?'':'s') + ' will be skipped (missing name or contact)');
+    bits.push((headersN - usedCount) + ' column' + ((headersN-usedCount)===1?'':'s') + ' unmapped');
+    $('#importMeta').textContent = bits.join(' · ');
+
+    $('#btnImport').disabled = ready === 0;
+  }
+
+  // ─── Wiring ──────────────────────────────────────────────────
+  const dropEl = $('#drop');
+  const fileInput = $('#fileInput');
+  $('#browseBtn').addEventListener('click', e=>{ e.stopPropagation(); fileInput.click(); });
+  dropEl.addEventListener('click', ()=> fileInput.click());
+  dropEl.addEventListener('keydown', e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); fileInput.click(); } });
+  fileInput.addEventListener('change', e=>{ if(e.target.files[0]) handleFile(e.target.files[0]); });
+  ['dragenter','dragover'].forEach(ev=>{
+    dropEl.addEventListener(ev, e=>{ e.preventDefault(); e.stopPropagation(); dropEl.classList.add('dragging'); });
+  });
+  ['dragleave','drop'].forEach(ev=>{
+    dropEl.addEventListener(ev, e=>{ e.preventDefault(); e.stopPropagation(); dropEl.classList.remove('dragging'); });
+  });
+  dropEl.addEventListener('drop', e=>{
+    const f = e.dataTransfer?.files?.[0];
+    if(f) handleFile(f);
+  });
+  // Also allow drop anywhere on the shell.
+  ['dragenter','dragover'].forEach(ev=>{
+    document.addEventListener(ev, e=>{ if(parsed) return; e.preventDefault(); });
+  });
+
+  function resetAll(){
+    parsed = null;
+    fileInput.value = '';
+    $('#parseResults').classList.remove('show');
+    $('#dropShell').style.display = '';
+    $('#statTotal').textContent = '0';
+    $('#statMapped').textContent = '0';
+    $('#statUnmapped').textContent = '0';
+    $('#statInvalid').textContent = '0';
+  }
+  $('#btnReplace').addEventListener('click', ()=> fileInput.click());
+  $('#btnRemove').addEventListener('click', ()=>{ resetAll(); toast('File removed'); });
+  $('#btnCancel').addEventListener('click', ()=>{ resetAll(); toast('Cancelled'); });
+
+  // ---- Global "Stop sending" kill-switch ----
+  function renderSendState(paused){
+    const btn = $('#sendToggle'), lbl = $('#sendToggleLabel'), banner = $('#sendPausedBanner');
+    if(!btn) return;
+    btn.style.display = 'inline-flex';
+    if(paused){
+      lbl.textContent = 'Resume sending';
+      btn.style.background = '#16A34A';                 // green = resume
+      banner.style.display = 'flex';
+    } else {
+      lbl.textContent = 'Pause sending';
+      btn.style.background = '#DC2626';                 // red = pause all sending
+      banner.style.display = 'none';
+    }
+    btn.dataset.paused = paused ? '1' : '';
+  }
+  async function loadSendState(){
+    try{
+      const r = await window.__ebAPI.get('/ingestion/sending/status');
+      renderSendState(!!(r && r.paused));
+    }catch(e){ /* leave hidden if not permitted */ }
+  }
+  $('#sendToggle')?.addEventListener('click', async ()=>{
+    const paused = $('#sendToggle').dataset.paused === '1';
+    if(!paused){
+      if(!confirm('PAUSE all outbound sending?\n\nThis fully stops the first template, AI replies, follow-ups, reminders and the pacing engine for every lead until you press Resume.')) return;
+    }
+    try{
+      const r = await window.__ebAPI.post('/ingestion/sending/' + (paused ? 'resume' : 'stop'), {});
+      renderSendState(!!(r && r.paused));
+      toast(r && r.paused ? 'All sending PAUSED — nothing will send' : 'Sending resumed', r && r.paused ? 'danger' : 'accent');
+    }catch(e){ toast('Could not change sending state', 'danger'); }
+  });
+  loadSendState();
+
+  // ---- Queue-Only Mode toggle (pause booking autopilot) ----
+  // The label states the actual STATE (ON/OFF) so there is no ambiguity about
+  // whether booking is paused. Green = ON (paused), amber = OFF (booking live).
+  function renderAutopilotState(paused){
+    const btn = $('#autopilotToggle'), lbl = $('#autopilotToggleLabel'), banner = $('#autopilotBanner');
+    if(!btn) return;
+    // Queue-Only Mode (first-template-only lockdown) is PERMANENTLY ON and not
+    // togglable. The platform may only ever send the first template.
+    btn.style.display = 'inline-flex';
+    lbl.textContent = 'Queue-Only: ON (locked)';
+    btn.style.background = '#16A34A';
+    btn.style.cursor = 'not-allowed';
+    btn.style.opacity = '.85';
+    btn.disabled = true;
+    btn.title = 'Permanently ON — the platform only ever sends the first template. This cannot be turned off.';
+    if(banner) banner.style.display = 'flex';
+    btn.dataset.paused = '1';
+  }
+  async function loadAutopilotState(){
+    try{
+      const r = await window.__ebAPI.get('/ingestion/sending/autopilot/status');
+      renderAutopilotState(!!(r && r.autopilot_paused));
+      loadDrip();
+    }catch(e){ /* leave hidden if not permitted */ }
+  }
+  // ---- big-batch drip rate (dynamic: N leads every M minutes) ----
+  async function loadDrip(){
+    try{
+      const c = await window.__ebAPI.get('/ingestion/sending/autopilot/drip');
+      if(!c) return;
+      $('#dripLeads').value = c.leads; $('#dripMinutes').value = c.minutes;
+      $('#dripControl').style.display = 'flex';
+    }catch(e){ /* hidden if not permitted */ }
+  }
+  $('#dripSave')?.addEventListener('click', async ()=>{
+    const leads = parseInt($('#dripLeads').value, 10);
+    const minutes = parseInt($('#dripMinutes').value, 10);
+    if(!(leads >= 1) || !(minutes >= 1)){ toast('Leads and minutes must be 1 or more', 'danger'); return; }
+    try{
+      const r = await window.__ebAPI.post('/ingestion/sending/autopilot/drip', { leads, minutes });
+      $('#dripLeads').value = r.leads; $('#dripMinutes').value = r.minutes;   // reflect clamped values
+      toast(r.message || `Drip set: ${r.leads} leads every ${r.minutes} min`, 'accent');
+    }catch(e){ toast('Could not save drip rate (permission or network)', 'danger'); }
+  });
+  // Permanently ON (first-template-only lockdown) — no switching.
+  $('#autopilotToggle')?.addEventListener('click', (e)=>{
+    e.preventDefault();
+    toast('Queue-Only Mode is permanently ON — the platform only ever sends the first template.', 'accent');
+  });
+  loadAutopilotState();
+
+  // ---- First message template (auto-sent after upload) ----
+  var tmplDefault = '';
+  function tmplPreviewText(){
+    var t = ($('#tmplInput').value || '');
+    return t.replace(/\{first_name\}/g, 'Sarah') || '—';
+  }
+  function renderTmpl(){
+    $('#tmplPreview').textContent = tmplPreviewText();
+    var len = ($('#tmplInput').value || '').length;
+    $('#tmplCount').textContent = len + '/1000';
+    var isCustom = tmplDefault && $('#tmplInput').value.trim() !== tmplDefault.trim();
+    $('#firstMsgBadge').style.display = isCustom ? 'inline-block' : 'none';
+  }
+  async function loadTmpl(){
+    try{
+      var r = await window.__ebAPI.get('/ingestion/outreach-template');
+      if(!r) return;
+      tmplDefault = r.default || '';
+      $('#tmplInput').value = r.template || '';
+      $('#firstMsgCard').style.display = 'block';
+      renderTmpl();
+    }catch(e){ /* hidden if not permitted */ }
+  }
+  $('#tmplInput')?.addEventListener('input', renderTmpl);
+  $('#tmplSave')?.addEventListener('click', async ()=>{
+    var template = ($('#tmplInput').value || '').trim();
+    if(!template){ toast('Message cannot be empty', 'danger'); return; }
+    $('#tmplStatus').textContent = 'Saving…';
+    try{
+      var r = await window.__ebAPI.post('/ingestion/outreach-template', { template: template });
+      $('#tmplInput').value = r.template || template;
+      $('#tmplStatus').textContent = 'Saved';
+      setTimeout(function(){ $('#tmplStatus').textContent = ''; }, 2500);
+      renderTmpl();
+      toast(r.message || 'First message saved', 'accent');
+    }catch(e){ $('#tmplStatus').textContent=''; toast('Could not save message (permission or network)', 'danger'); }
+  });
+  $('#tmplReset')?.addEventListener('click', async ()=>{
+    if(!confirm('Reset the first message back to the default?')) return;
+    try{
+      var r = await window.__ebAPI.post('/ingestion/outreach-template/reset', {});
+      $('#tmplInput').value = r.template || tmplDefault;
+      renderTmpl();
+      toast(r.message || 'Reset to default', 'accent');
+    }catch(e){ toast('Could not reset (permission or network)', 'danger'); }
+  });
+  loadTmpl();
+
+  // ===== Campaign manager (up to 5 CSV campaigns, independent controls) =====
+  function campBadge(state){
+    var m={running:['Running','#16A34A','#DCFCE7'],ready:['Ready','#475569','#F1F5F9'],
+           paused:['Paused','#B45309','#FEF3C7'],stopped:['Stopped','#B91C1C','#FEE2E2']}[state]
+          || ['Ready','#475569','#F1F5F9'];
+    return '<span style="font-size:.72rem;font-weight:700;padding:3px 10px;border-radius:999px;color:'+m[1]+';background:'+m[2]+'">'+m[0]+'</span>';
+  }
+  function campStat(label, val, color){
+    return '<div style="display:flex;flex-direction:column;gap:2px;min-width:58px">'
+      + '<span style="font-size:.64rem;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#94A3B8">'+label+'</span>'
+      + '<span style="font-size:1.1rem;font-weight:700;font-variant-numeric:tabular-nums;color:'+(color||'#0F172A')+'">'+(val||0)+'</span></div>';
+  }
+  function campCardHTML(c){
+    var st=c.send_state, actions='';
+    if(st==='running')      actions='<button data-act="pause" data-id="'+c.id+'" class="camp-btn" style="background:#B45309">Pause</button><button data-act="stop" data-id="'+c.id+'" class="camp-btn" style="background:#B91C1C">Stop</button>';
+    else if(st==='paused')  actions='<button data-act="resume" data-id="'+c.id+'" class="camp-btn" style="background:#16A34A">Resume</button><button data-act="stop" data-id="'+c.id+'" class="camp-btn" style="background:#B91C1C">Stop</button>';
+    else                    actions='<button data-act="run" data-id="'+c.id+'" class="camp-btn" style="background:#16A34A">Run</button>'; // ready / stopped
+    return '<div class="camp-card" data-id="'+c.id+'" style="display:flex;flex-direction:column;gap:14px;padding:16px 18px;border:1px solid #E2E8F0;border-radius:12px;background:#F8FAFC">'
+      // row 1: name + status badge
+      + '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">'
+        + '<div style="font-weight:700;font-size:1rem;color:#0F172A;word-break:break-word">'+(c.name||'Campaign')+'</div>'
+        + campBadge(st)
+      + '</div>'
+      // row 2: per-campaign stats
+      + '<div style="display:flex;align-items:center;gap:22px;flex-wrap:wrap;padding:10px 0;border-top:1px solid #EEF2F7;border-bottom:1px solid #EEF2F7">'
+        + campStat('Leads', c.total_leads)
+        + campStat('Sent', c.sent)
+        + campStat('Delivered', c.delivered, '#16A34A')
+        + campStat('Left', c.remaining)
+        + campStat('Total yes', c.yes, '#16A34A')
+        + campStat('Failed text', c.failed, '#B91C1C')
+      + '</div>'
+      // row 3: drip rate + actions
+      + '<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;justify-content:space-between">'
+        + '<div style="display:flex;align-items:center;gap:6px;font-size:.82rem;color:#475569">send '
+          + '<input type="number" min="1" max="5000" value="'+c.drip_leads+'" data-rate-leads="'+c.id+'" style="width:64px;height:34px;text-align:center;border:1px solid #CBD5E1;border-radius:8px"> every '
+          + '<input type="number" min="1" max="1440" value="'+c.drip_minutes+'" data-rate-min="'+c.id+'" style="width:56px;height:34px;text-align:center;border:1px solid #CBD5E1;border-radius:8px"> min '
+          + '<button data-act="rate" data-id="'+c.id+'" class="camp-btn" style="background:#0F172A">Save</button></div>'
+        + '<div style="display:flex;gap:6px">'+actions
+          + '<button data-act="remove" data-id="'+c.id+'" class="camp-btn" style="background:#64748B" title="Remove campaign">Remove</button>'
+        + '</div>'
+      + '</div></div>';
+  }
+  async function loadCampaigns(){
+    try{
+      var r=await window.__ebAPI.get('/ingestion/campaigns?_='+Date.now());  // cache-bust so state is always fresh
+      var list=(r&&r.campaigns)||[];
+      var mgr=$('#campaignMgr'); if(mgr) mgr.style.display='block';
+      var el=$('#campList'); if(el) el.innerHTML=list.map(campCardHTML).join('');
+      var empty=$('#campEmpty'); if(empty) empty.style.display=list.length?'none':'block';
+    }catch(e){ /* hidden if not permitted */ }
+  }
+  $('#campAddBtn')?.addEventListener('click', function(){
+    var cards=$('#campList')?$('#campList').querySelectorAll('.camp-card').length:0;
+    if(cards>=5){ toast('Up to 5 campaigns — stop/remove one first','danger'); return; }
+    var inp=document.createElement('input'); inp.type='file'; inp.accept='.csv,text/csv';
+    inp.addEventListener('change', async function(e){
+      var f=e.target.files&&e.target.files[0]; if(!f) return;
+      var fd=new FormData(); fd.append('file', f); fd.append('name', f.name);
+      // Loading state: spinner on the button + a shimmer "Importing…" card while the CSV uploads and leads are ingested.
+      var btn=$('#campAddBtn'); var orig=btn?btn.innerHTML:'';
+      if(btn){ btn.disabled=true; btn.style.opacity='.65'; btn.style.cursor='default'; btn.innerHTML='<span class="camp-spin"></span> Uploading…'; }
+      var empty=$('#campEmpty'); if(empty) empty.style.display='none';
+      var list=$('#campList'); var lc=document.createElement('div'); lc.id='campLoadingCard';
+      lc.style.cssText='padding:14px 16px;border:1px solid #E2E8F0;border-radius:12px;background:#F8FAFC;color:#475569;font-size:.86rem';
+      lc.innerHTML='<div style="display:flex;align-items:center;gap:10px"><span class="camp-spin"></span><div><strong style="color:#0F172A">Importing <span class="camp-fn"></span>…</strong><div style="font-size:.78rem;color:#64748B;margin-top:2px">Reading the file and adding leads — big files take a few seconds.</div></div></div><div class="camp-bar"></div>';
+      var fn=lc.querySelector('.camp-fn'); if(fn) fn.textContent=f.name||'CSV';
+      if(list) list.insertBefore(lc, list.firstChild);
+      try{
+        await window.__ebAPI.upload('/ingestion/campaigns/upload', fd);
+        toast('Campaign uploaded: '+f.name,'accent');
+        loadCampaigns();   // re-renders #campList, replacing the loading card with the real campaign card
+      }catch(err){
+        toast('Upload failed','danger');
+        if(lc&&lc.parentNode) lc.parentNode.removeChild(lc);
+        if(!cards && empty) empty.style.display='';
+      }finally{
+        if(btn){ btn.disabled=false; btn.style.opacity=''; btn.style.cursor='pointer'; btn.innerHTML=orig; }
+      }
+    });
+    inp.click();
+  });
+  $('#campList')?.addEventListener('click', async function(e){
+    var btn=e.target.closest('[data-act]'); if(!btn) return;
+    var id=btn.getAttribute('data-id'), act=btn.getAttribute('data-act');
+    try{
+      if(act==='rate'){
+        var leads=parseInt(document.querySelector('[data-rate-leads="'+id+'"]').value,10);
+        var minutes=parseInt(document.querySelector('[data-rate-min="'+id+'"]').value,10);
+        var r=await window.__ebAPI.post('/ingestion/campaigns/'+id+'/drip',{leads:leads,minutes:minutes});
+        toast((r&&r.message)||'Rate saved','accent');
+      } else if(act==='remove'){
+        if(!confirm('Remove this campaign and its leads?')) return;
+        await window.__ebAPI.del('/ingestion/campaigns/'+id);
+        toast('Campaign removed','accent'); refreshLive();
+      } else {
+        var r=await window.__ebAPI.post('/ingestion/campaigns/'+id+'/'+act,{});
+        toast((r&&r.message)||'Done','accent'); refreshLive();
+      }
+    }catch(err){ toast('Could not '+act+' — another campaign may be running','danger'); refreshLive(); }
+  });
+  // Live page stats (today's activity + current campaign state). One overview
+  // call feeds all six tiles; refreshed together with the campaign list so the
+  // running/paused counts stay in sync with the cards.
+  async function loadPageStats(){
+    try{
+      // "Today" = the Eastern (America/New_York) business day, matching the
+      // backend window — KPIs reset at ET midnight, not UTC. en-CA => YYYY-MM-DD.
+      var today=new Date().toLocaleDateString('en-CA',{timeZone:'America/New_York'});
+      var o=await window.__ebAPI.get('/admin/analytics/overview',{start_date:today,end_date:today});
+      if(!o) return;
+      var set=function(id,v){ var el=$('#'+id); if(el) el.textContent=(typeof v==='number')?v:(v||0); };
+      set('psLeads', (o.leads&&typeof o.leads.total==='number')?o.leads.total:0);
+      set('psSent', o.messages_sent);
+      set('psDelivered', o.delivered_texts);
+      set('psYes', o.positive_replies);
+      set('psFailed', o.failed_texts);
+      set('psRunning', o.campaigns_running);
+      set('psPaused', o.campaigns_paused);
+    }catch(e){ /* hidden if not permitted */ }
+  }
+  function refreshLive(){ loadCampaigns(); loadPageStats(); }
+  refreshLive();
+  setInterval(refreshLive, 15000);   // refresh campaign progress/state + live stats
+
+  $('#btnImport').addEventListener('click', async ()=>{
+    if(!parsed) return;
+    const idx = {}; parsed.mapping.forEach((m,i)=>{ if(m.target) idx[m.target] = i; });
+    const accepted = [];
+    parsed.rows.forEach(r=>{
+      const lead = {};
+      Object.entries(idx).forEach(([key, i])=>{
+        const v = String(r[i] ?? '').trim();
+        if(v) lead[key] = v;
+      });
+      // Split full_name if first/last not separately mapped.
+      if(!lead.first_name && lead.full_name){
+        const parts = lead.full_name.split(/\s+/);
+        lead.first_name = parts[0];
+        if(parts.length > 1) lead.last_name = parts.slice(1).join(' ');
+      }
+      const hasName = lead.first_name || lead.full_name;
+      const hasContact = (lead.email && isValidEmail(lead.email)) || (lead.phone && isValidPhone(lead.phone));
+      if(hasName && hasContact){
+        lead.importedAt = new Date().toISOString();
+        accepted.push(lead);
+      }
+    });
+
+    if(!accepted.length){ toast('No valid rows to import.', 'danger'); return; }
+
+    // Build a canonical CSV (headers the server understands) and upload the
+    // FILE to the real ingestion pipeline: validate -> dedupe -> create ->
+    // score -> queue outreach -> summary. This is the same /ingestion/csv
+    // endpoint a CRM/Zapier integration would call.
+    function esc(s){ return String(s==null?'':s).replace(/[&<>]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;'}[c]; }); }
+    function csvCell(v){ var s=String(v==null?'':v); return /[",\n\r]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s; }
+    function buildCsv(leads){
+      var headers=['first_name','last_name','phone','email','state','city','zip_code'];
+      var lines=[headers.join(',')];
+      leads.forEach(function(l){
+        lines.push([l.first_name||'', l.last_name||'', l.phone||'', l.email||'', l.state||'', l.city||'', l.zip||''].map(csvCell).join(','));
+      });
+      return lines.join('\r\n');
+    }
+
+    const btn = $('#btnImport');
+    const origLabel = btn.textContent;
+    btn.disabled = true; btn.textContent = 'Uploading…';
+    try {
+      const csv = buildCsv(accepted);
+      const baseName = (parsed.fileName || 'leads').replace(/\.(xlsx|xls|csv)$/i, '');
+      const fd = new FormData();
+      fd.append('file', new File([csv], baseName + '.csv', { type: 'text/csv' }));
+      fd.append('source', ($('#impSource').value || 'csv_import').trim() || 'csv_import');
+      fd.append('dedup_mode', $('#impDedup').value || 'skip');
+
+      const res = await window.__ebAPI.upload('/ingestion/csv', fd);
+      const s = (res && res.summary) || {};
+      $('#importResult').style.display = '';
+      $('#importResultTitle').textContent = 'Import complete — server processed ' + (s.total_rows || 0) + ' row' + ((s.total_rows === 1) ? '' : 's');
+      var html = '';
+      html += '<div>&#9989; <b>' + (s.successful || 0) + '</b> leads created &amp; queued for AI outreach</div>';
+      html += '<div>&#9197;&#65039; <b>' + (s.skipped_duplicates || 0) + '</b> skipped as duplicates</div>';
+      html += '<div>&#9888;&#65039; <b>' + (s.failed || 0) + '</b> failed validation</div>';
+      if (s.errors && s.errors.length) {
+        html += '<div style="margin-top:8px;color:#7A2F39">First issues:</div><ul style="margin:4px 0 0 18px">' +
+          s.errors.slice(0, 6).map(function(e){
+            var msg = e.error || (e.errors && e.errors.join('; ')) || 'error';
+            return '<li>Row ' + esc(e.row || '?') + ': ' + esc(msg) + '</li>';
+          }).join('') + '</ul>';
+      }
+      $('#importResultBody').innerHTML = html;
+      $('#importResult').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      toast((s.successful || 0).toLocaleString() + ' leads imported', 'accent');
+    } catch(e) {
+      console.warn('CSV upload failed:', e);
+      toast('Lead import failed: ' + (e.message || 'backend unavailable'), 'danger');
+    } finally {
+      btn.disabled = false; btn.textContent = origLabel;
+    }
+  });
+})();
+</script>
+
+<!-- Add one contact modal (single-lead, same outreach flow as CSV) -->
+<div id="addOneOverlay" style="display:none;position:fixed;inset:0;background:rgba(26,31,42,0.35);z-index:60;align-items:center;justify-content:center">
+  <div style="width:100%;max-width:440px;background:#fff;border:1px solid var(--border);border-radius:16px;box-shadow:0 12px 40px rgba(26,31,42,0.18);padding:22px;font-family:inherit">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+      <h3 style="font-size:1.125rem;font-weight:600;color:var(--text-strong)">Add one contact</h3>
+      <button id="addOneClose" type="button" style="background:none;border:none;font-size:1.25rem;color:var(--text-muted);cursor:pointer">&times;</button>
+    </div>
+    <p style="font-size:.8125rem;color:var(--text-muted);margin-bottom:16px">Adds a single lead — same fields as the CSV, runs through the normal outreach flow.</p>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <label style="font-size:.75rem;color:var(--text-muted)">First name *<input id="aoFirst" type="text" style="width:100%;margin-top:4px;height:38px;padding:0 10px;border:1px solid var(--border);border-radius:8px;font-family:inherit;font-size:.875rem"/></label>
+      <label style="font-size:.75rem;color:var(--text-muted)">Last name *<input id="aoLast" type="text" style="width:100%;margin-top:4px;height:38px;padding:0 10px;border:1px solid var(--border);border-radius:8px;font-family:inherit;font-size:.875rem"/></label>
+      <label style="font-size:.75rem;color:var(--text-muted);grid-column:1/3">Phone * (E.164, e.g. +15551234567)<input id="aoPhone" type="tel" placeholder="+1..." style="width:100%;margin-top:4px;height:38px;padding:0 10px;border:1px solid var(--border);border-radius:8px;font-family:inherit;font-size:.875rem"/></label>
+      <label style="font-size:.75rem;color:var(--text-muted)">Email<input id="aoEmail" type="email" style="width:100%;margin-top:4px;height:38px;padding:0 10px;border:1px solid var(--border);border-radius:8px;font-family:inherit;font-size:.875rem"/></label>
+      <label style="font-size:.75rem;color:var(--text-muted)">State<input id="aoState" type="text" placeholder="TX" style="width:100%;margin-top:4px;height:38px;padding:0 10px;border:1px solid var(--border);border-radius:8px;font-family:inherit;font-size:.875rem"/></label>
+    </div>
+    <div id="aoMsg" style="margin-top:12px;font-size:.8125rem;min-height:18px"></div>
+    <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:8px">
+      <button id="addOneCancel" class="btn-ghost" type="button">Cancel</button>
+      <button id="addOneSubmit" class="drop-cta" type="button" style="height:40px;box-shadow:none">Add contact</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  var overlay = document.getElementById('addOneOverlay');
+  var msg = document.getElementById('aoMsg');
+  function open(){ msg.textContent=''; overlay.style.display='flex'; document.getElementById('aoFirst').focus(); }
+  function close(){ overlay.style.display='none'; ['aoFirst','aoLast','aoPhone','aoEmail','aoState'].forEach(function(id){document.getElementById(id).value='';}); }
+  var openBtn = document.getElementById('addOneBtn');
+  if (openBtn) openBtn.addEventListener('click', function(e){ e.stopPropagation(); open(); });
+  document.getElementById('addOneClose').addEventListener('click', close);
+  document.getElementById('addOneCancel').addEventListener('click', close);
+  overlay.addEventListener('click', function(e){ if(e.target===overlay) close(); });
+
+  document.getElementById('addOneSubmit').addEventListener('click', async function(){
+    var btn = this;
+    var first = document.getElementById('aoFirst').value.trim();
+    var last  = document.getElementById('aoLast').value.trim();
+    var phone = document.getElementById('aoPhone').value.trim();
+    var email = document.getElementById('aoEmail').value.trim();
+    var state = document.getElementById('aoState').value.trim();
+    if (!first || !last || !phone) {
+      msg.style.color = 'var(--down)';
+      msg.textContent = 'First name, last name and phone are required.';
+      return;
+    }
+    var body = { source: 'manual_ui', first_name: first, last_name: last, phone: phone };
+    if (email) body.email = email;
+    if (state) body.state = state;
+    btn.disabled = true; var orig = btn.textContent; btn.textContent = 'Adding…';
+    msg.style.color = 'var(--text-muted)'; msg.textContent = 'Submitting…';
+    try {
+      await window.__ebAPI.post('/ingestion/api', body);
+      msg.style.color = 'var(--up)';
+      msg.textContent = '✓ Contact added — outreach triggered.';
+      setTimeout(close, 1200);
+    } catch (err) {
+      msg.style.color = 'var(--down)';
+      var m = (err && err.message) || 'Failed to add contact.';
+      if (err && err.status === 409) m = 'A lead with this phone already exists.';
+      msg.textContent = m;
+    } finally {
+      btn.disabled = false; btn.textContent = orig;
+    }
+  });
+})();
+</script>
+
+</body>
+</html>
