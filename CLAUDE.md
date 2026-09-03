@@ -110,6 +110,21 @@ every surface, and **rebranding is a one-line change in `brand.js`.**
   Dental / Vision), leaderboard rank medals, `wizard.css`'s per-chapter accents
   (aca green, dv purple, auto orange) and `sms-ui/.../charts/jewel.ts`.
 
+### Logo — `apps/frontendall/assets/`
+`logo-source.png` is the master artwork; `logo.png` (full lockup), `logo-mark.png`
+(IAG monogram), `favicon.png` and `apple-touch-icon.png` are derived from it.
+`assets/README.md` has the exact regeneration script and crop boxes.
+- Sidebar / wizard / mobile gate use the **monogram** — the full lockup's
+  "ALLIANCE GROUP" line is unreadable below ~120px wide. The login card uses the
+  full lockup.
+- The SPA references them root-absolute (`/assets/logo-mark.png`); static pages
+  use `assets/...`.
+- The artwork is navy on transparent, so dark mode puts it on a white rounded
+  plate — it is never recoloured.
+- Gotcha: the wizard's brand link is `<a class="ch-brand" href="appointments.html">`,
+  and prefs-extras' role gate hides `a[href="appointments.html"]` for admin/head.
+  Those selectors carry `:not(.ch-brand)` so the gate doesn't eat the logo.
+
 ### Dark mode
 Applied globally by **`apps/frontendall/prefs-extras.js`**, which injects a large
 `<style>` of `html[data-mode="dark"] …` rules and toggles `html[data-mode]` from

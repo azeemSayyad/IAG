@@ -304,6 +304,8 @@
       // hidden in icons mode there's nothing to align to and the tiny
       // 17px tile looked lost. Bump it back up to a real logo.
       'html[data-sidebar="icons"]:not([data-mobile]) .sb-brand-dot{width:28px !important;height:28px !important;border-radius:8px !important}' +
+      // Collapsed rail: shrink the brand mark to fit the 64px width.
+      'html[data-sidebar="icons"]:not([data-mobile]) .sb-brand-logo{height:20px !important;margin-left:0 !important}' +
       'html[data-sidebar="icons"]:not([data-mobile]) .sb-brand-dot svg{width:16px !important;height:16px !important}' +
       // ----- Collapse toggle button (chevron handle on the sidebar edge) -----
       '.sb-collapse-btn{position:absolute;top:18px;right:-12px;width:24px;height:24px;border-radius:50%;background:#FFFFFF;border:1px solid var(--border);color:var(--text-muted);display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;box-shadow:0 1px 2px rgba(26,31,42,0.06),0 2px 8px rgba(26,31,42,0.08);z-index:50;transition:color 140ms var(--ease),background 140ms var(--ease),border-color 140ms var(--ease),transform 220ms var(--ease)}' +
@@ -730,19 +732,21 @@
         'html[data-role="manager"] #navUpload,' +
         'html[data-role="manager"] a[href="dashboard.html"],' +
         // Head manager: no Appointments (operates above the appointment level).
-        'html[data-role="head"]  a[href="appointments.html"],' +
+        // :not(.ch-brand) — the Add-Deal wizard's BRAND lockup also links to
+        // appointments.html, and without this the gate hid the logo too.
+        'html[data-role="head"]  a[href="appointments.html"]:not(.ch-brand),' +
         // Admin: no Appointments, no Inbox, no My Team; Analytics merges into
         // Dashboard. Admin works at the org level (Team Performance, not the
         // operator-level My Team / Inbox / Appointments surfaces).
-        'html[data-role="tenant_admin"] a[href="appointments.html"],' +
+        'html[data-role="tenant_admin"] a[href="appointments.html"]:not(.ch-brand),' +
         'html[data-role="tenant_admin"] a[href="inbox.html"],' +
         'html[data-role="tenant_admin"] a[href="my-team.html"],' +
         'html[data-role="tenant_admin"] a[href="analytics.html"],' +
-        'html[data-role="super_admin"]  a[href="appointments.html"],' +
+        'html[data-role="super_admin"]  a[href="appointments.html"]:not(.ch-brand),' +
         'html[data-role="super_admin"]  a[href="inbox.html"],' +
         'html[data-role="super_admin"]  a[href="my-team.html"],' +
         'html[data-role="super_admin"]  a[href="analytics.html"],' +
-        'html[data-role="admin"] a[href="appointments.html"],' +
+        'html[data-role="admin"] a[href="appointments.html"]:not(.ch-brand),' +
         'html[data-role="admin"] a[href="inbox.html"],' +
         'html[data-role="admin"] a[href="my-team.html"],' +
         'html[data-role="admin"] a[href="analytics.html"]{display:none !important}' +
@@ -1010,7 +1014,7 @@
     // Head managers operate above the appointment level.
     function hideAppointmentsForHeads(){
       if((localStorage.getItem('ebRole') || 'agent') !== 'head') return;
-      document.querySelectorAll('a[href="appointments.html"]').forEach(function(a){
+      document.querySelectorAll('a[href="appointments.html"]:not(.ch-brand)').forEach(function(a){
         a.style.display = 'none';
       });
       var here = (location.pathname.split('/').pop() || '').toLowerCase();
@@ -1044,7 +1048,7 @@
     function gateAdminTabs(){
       var role = localStorage.getItem('ebRole') || 'agent';
       if(role !== 'admin' && role !== 'tenant_admin' && role !== 'super_admin') return;
-      document.querySelectorAll('a[href="appointments.html"], a[href="inbox.html"], a[href="analytics.html"], a[href="my-team.html"]').forEach(function(a){
+      document.querySelectorAll('a[href="appointments.html"]:not(.ch-brand), a[href="inbox.html"], a[href="analytics.html"], a[href="my-team.html"]').forEach(function(a){
         a.style.display = 'none';
       });
       var here = (location.pathname.split('/').pop() || '').toLowerCase();
@@ -1716,7 +1720,7 @@
     function appointmentsFirstInWorkspaces(){
       var wsBody = document.querySelector('#sbWorkspaces .sb-group-body');
       if(!wsBody) return;
-      var appt = wsBody.querySelector('a[href="appointments.html"]');
+      var appt = wsBody.querySelector('a[href="appointments.html"]:not(.ch-brand)');
       if(!appt) return;
       if(wsBody.firstChild === appt) return;
       wsBody.insertBefore(appt, wsBody.firstChild);

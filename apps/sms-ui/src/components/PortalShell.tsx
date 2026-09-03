@@ -349,10 +349,9 @@ export default function PortalShell() {
     <>
       <aside className={`sidebar${navOpen ? " open" : ""}`}>
         <a className="sb-brand" href="/dashboard.html">
-          <span className="sb-brand-dot">
-            <Icon name="brain" />
-          </span>
-          <span>Insurance Alliance Group</span>
+          {/* Brand mark served from the site root — the same asset the static
+              portal uses. Full lockup is unreadable at sidebar size. */}
+          <img className="sb-brand-logo" src="/assets/logo-mark.png" alt="Insurance Alliance Group" />
         </a>
         <nav className="sb-nav">
           <a className="sb-item sb-featured" href="/ask-the-brain.html">

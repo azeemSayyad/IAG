@@ -83,6 +83,11 @@ body::after{content:'';position:fixed;inset:-10%;z-index:-2;pointer-events:none;
 .ch-brand-dot{width:26px;height:26px;border-radius:8px;background:linear-gradient(135deg,var(--c),var(--c2));box-shadow:0 1px 2px rgba(0,0,0,0.20),inset 0 1px 0 rgba(255,255,255,0.22);flex-shrink:0;display:inline-flex;align-items:center;justify-content:center}
 .ch-brand-dot svg{width:14px;height:14px;color:#fff;stroke-width:1.8}
 
+/* Brand lockup — assets/logo-mark.png. Replaces the old chapter-coloured chip;
+   the artwork carries its own colour so it does NOT follow --c. */
+.ch-brand-logo{height:30px;width:auto;display:block;object-fit:contain}
+html[data-mode="dark"] .ch-brand-logo{background:#FFFFFF;border-radius:8px;padding:3px 6px}
+
 /* ─── Chapter header (above the card) ─── */
 .ch-head{margin-bottom:22px}
 .ch-row{display:flex;align-items:flex-start;justify-content:space-between;gap:24px;flex-wrap:wrap}
@@ -207,6 +212,7 @@ body::after{content:'';position:fixed;inset:-10%;z-index:-2;pointer-events:none;
   .wiz-num{font-size:2.25rem;top:14px;right:14px}
   .ch-brand{margin-bottom:14px;font-size:.875rem;gap:8px}
   .ch-brand-dot{width:22px;height:22px;border-radius:6px}
+  .ch-brand-logo{height:25px}
   .ch-brand-dot svg{width:12px;height:12px}
   .ch-title{font-size:1.375rem;line-height:1.1}
   .ch-sub{font-size:.75rem;margin-top:6px}

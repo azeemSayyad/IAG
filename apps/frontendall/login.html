@@ -4,13 +4,15 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
 <title>Sign in — Insurance Alliance Group</title>
+<link rel="icon" type="image/png" href="assets/favicon.png"/>
+<link rel="apple-touch-icon" href="assets/apple-touch-icon.png"/>
 <!-- Mobile hard gate: on phones the whole login page is replaced by a compulsory
      "install the app" screen. Loaded directly (not just via prefs-extras) so it
      fires early and reliably on the login page too. -->
 <script src="/app-gate.js?v=2" defer></script>
-<script src="brand.js?v=1"></script>
+<script src="brand.js?v=2"></script>
 <script src="i18n-dict.js?v=2"></script>
-<script src="prefs-extras.js?v=30"></script>
+<script src="prefs-extras.js?v=31"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
@@ -111,6 +113,10 @@ body::after{
 }
 .brand-dot svg{width:21px;height:21px;color:#fff;stroke-width:1.8}
 .brand-name{font-size:1.1875rem;font-weight:600;letter-spacing:-0.015em;color:var(--text-strong)}
+/* Full brand lockup — assets/logo.png. Navy artwork on a transparent
+   ground, so dark mode gets a light plate rather than a recolour. */
+.brand-logo{width:230px;max-width:70%;height:auto;display:block}
+html[data-mode="dark"] .brand-logo{background:#FFFFFF;border-radius:12px;padding:10px 14px}
 
 .login-title{
   font-size:2.125rem;
@@ -329,6 +335,7 @@ form.has-failed .forgot{display:inline-block;opacity:1;transform:translateY(0)}
   .login-title{font-size:1.5rem}
   .login-sub{font-size:.875rem;margin-bottom:24px}
   .brand-mark{margin-bottom:18px}
+  .brand-logo{width:186px}
   .brand-dot{width:34px;height:34px;border-radius:10px}
   .brand-dot svg{width:18px;height:18px}
   .brand-name{font-size:1.0625rem}
@@ -349,13 +356,7 @@ form.has-failed .forgot{display:inline-block;opacity:1;transform:translateY(0)}
 
 <div class="login-card">
   <div class="brand-mark">
-    <span class="brand-dot">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/>
-        <path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/>
-      </svg>
-    </span>
-    <span class="brand-name">Insurance Alliance Group</span>
+    <img class="brand-logo" src="assets/logo.png" alt="Insurance Alliance Group"/>
   </div>
 
   <h1 class="login-title">Welcome back</h1>

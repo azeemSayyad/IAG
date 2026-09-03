@@ -35,7 +35,8 @@
    -----------
      window.EB_BRAND.theme()   active theme object {a,a2,ah,b1,b2,b3,g,gl}
      window.EB_BRAND.THEMES    the theme map (settings.html swatches)
-     window.__ebApplyTheme(v)  switch accent theme  (kept for settings.html)
+     window.__ebApplyTheme(v)  switch accent theme  (kept for settings.html;
+                               a no-op while LOCK_TO_BRAND is on)
      window.__ebApplyFont(v)   switch base font size
    ========================================================================= */
 (function () {
@@ -65,6 +66,12 @@
   var LEGACY = { warm: 'brand' };
 
   var DEFAULT_THEME = 'brand';
+
+  /* The theme picker is hidden in Settings, so everyone renders the brand accent
+     — including users whose localStorage still holds an older choice (indigo,
+     rose, …). Their stored value is NOT erased: set this to false and both the
+     picker and every saved preference come straight back. */
+  var LOCK_TO_BRAND = true;
 
   /* Neutral surface ramp, as [saturation, lightness] pairs. The HUE comes from
      the active accent, so a rebrand recolours every card/panel/divider too,
@@ -126,6 +133,7 @@
   function set(name, value) { D.style.setProperty(name, value); }
 
   function normalize(v) {
+    if (LOCK_TO_BRAND) return DEFAULT_THEME;
     v = LEGACY[v] || v;
     return THEMES[v] ? v : DEFAULT_THEME;
   }

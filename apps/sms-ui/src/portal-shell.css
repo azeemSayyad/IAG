@@ -138,6 +138,25 @@ body::after {
   margin: 0 0 12px;
   text-decoration: none;
 }
+
+/* Brand mark — /assets/logo-mark.png (the IAG monogram), the same file the
+   static portal uses. The full lockup is unreadable below ~120px wide, so it is
+   reserved for the login screen. Navy artwork on a transparent ground, so dark
+   mode sits it on a light plate rather than recolouring it. */
+.sb-brand-logo {
+  height: 36px;
+  width: auto;
+  max-width: 100%;
+  object-fit: contain;
+  flex-shrink: 0;
+  margin-left: 6px;
+}
+html[data-mode="dark"] .sb-brand-logo {
+  background: #ffffff;
+  border-radius: 8px;
+  padding: 4px 6px;
+}
+html[data-sidebar="icons"]:not([data-mobile]) .sb-brand-logo { height: 20px; margin-left: 0; }
 .sb-brand-dot {
   width: 17px;
   height: 17px;

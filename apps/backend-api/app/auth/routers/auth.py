@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
+from app.core.deps import require_role
 from app.core.security import (
     hash_password,
     verify_password,
@@ -43,10 +44,31 @@ class UpdateProfileRequest(BaseModel):
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
+def _normalise_email(value: str | None) -> str:
+    """Emails are STORED lowercased (bootstrap_admin + admin create-user both
+    call .lower()), so every lookup must lower-case too. Without this a user
+    who types "Admin@iag.com" — or whose browser autofill capitalises the first
+    letter — gets "Invalid credentials" for a password that is perfectly correct.
+    """
+    return (value or "").strip().lower()
+
+# Self-service signup is CLOSED. This route used to be fully unauthenticated and
+# handed anyone on the internet a brand-new tenant plus a tenant_admin account on
+# it — a public admin-account factory the moment the API has a domain. Nothing in
+# the portal calls it; real accounts are created by an existing admin through
+# POST /admin/users, and the very first one by scripts/bootstrap_admin.py.
+#
+# It is gated to "dev" rather than deleted so the tenant-provisioning logic stays
+# available for onboarding a new tenant, and so existing tests keep a way in.
 @router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
-def register(request: RegisterRequest, db: Session = Depends(get_db)):
+def register(
+    request: RegisterRequest,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_role("dev")),
+):
     # Check if email already exists
-    existing = db.query(User).filter(User.email == request.email).first()
+    email = _normalise_email(request.email)
+    existing = db.query(User).filter(User.email == email).first()
     if existing:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already registered")
 
@@ -58,7 +80,7 @@ def register(request: RegisterRequest, db: Session = Depends(get_db)):
     # Create user as tenant_admin
     user = User(
         tenant_id=tenant.id,
-        email=request.email,
+        email=email,
         password_hash=hash_password(request.password),
         first_name=request.first_name,
         last_name=request.last_name,
@@ -87,7 +109,9 @@ def register(request: RegisterRequest, db: Session = Depends(get_db)):
 
 @router.post("/login", response_model=TokenResponse)
 def login(request: LoginRequest, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.email == request.email, User.deleted_at.is_(None)).first()
+    user = db.query(User).filter(
+        User.email == _normalise_email(request.email), User.deleted_at.is_(None)
+    ).first()
     if not user or not verify_password(request.password, user.password_hash):
         if user:
             record_failed_login(user, db)
@@ -135,7 +159,9 @@ def refresh_token(request: RefreshRequest, db: Session = Depends(get_db)):
 
 @router.post("/password-reset-request")
 def request_password_reset(request: PasswordResetRequest, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.email == request.email, User.deleted_at.is_(None)).first()
+    user = db.query(User).filter(
+        User.email == _normalise_email(request.email), User.deleted_at.is_(None)
+    ).first()
     # Always return success to prevent email enumeration
     if user:
         reset_token = create_password_reset_token(user.email)
@@ -147,7 +173,7 @@ def request_password_reset(request: PasswordResetRequest, db: Session = Depends(
 
 @router.post("/password-reset-confirm")
 def confirm_password_reset(request: PasswordResetConfirm, db: Session = Depends(get_db)):
-    email = decode_password_reset_token(request.token)
+    email = _normalise_email(decode_password_reset_token(request.token))
     user = db.query(User).filter(User.email == email, User.deleted_at.is_(None)).first()
     if not user:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid reset token")
