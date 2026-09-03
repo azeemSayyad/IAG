@@ -63,25 +63,30 @@
   }
   if (!isMobile()) return;
 
-  // Per-theme accent (mirrors prefs-extras' theme map). Default = warm.
-  var TM = {
-    warm:   { a: "#C97B3A", a2: "#E0995E", glow: "rgba(201,123,58,0.40)", soft: "rgba(178,106,45,0.14)", line: "rgba(201,123,58,0.38)" },
-    forest: { a: "#4F8268", a2: "#6B9F86", glow: "rgba(79,130,104,0.40)", soft: "rgba(63,109,84,0.14)",  line: "rgba(79,130,104,0.38)" },
-    indigo: { a: "#5E7BA8", a2: "#7B96BD", glow: "rgba(94,123,168,0.40)", soft: "rgba(74,100,136,0.14)", line: "rgba(94,123,168,0.38)" },
-    rose:   { a: "#A3525C", a2: "#B97077", glow: "rgba(163,82,92,0.40)",  soft: "rgba(130,65,75,0.14)",  line: "rgba(163,82,92,0.38)" },
-    slate:  { a: "#2D3340", a2: "#5A6275", glow: "rgba(45,51,64,0.40)",   soft: "rgba(26,31,42,0.16)",   line: "rgba(45,51,64,0.38)" },
-    amber:  { a: "#9C7842", a2: "#B89058", glow: "rgba(156,120,66,0.40)", soft: "rgba(124,94,47,0.14)",  line: "rgba(156,120,66,0.38)" }
-  };
+  // Accent comes from brand.js — the portal's single source of truth for colour.
+  // This only derives the three alpha shades the gate's own chrome needs.
+  function accent() {
+    var b = window.EB_BRAND;
+    var css = function (n) {
+      return getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+    };
+    var a  = b ? b.theme().a  : css('--accent');
+    var a2 = b ? b.theme().a2 : css('--accent-2');
+    var rgb = css('--accent-rgb');
+    return {
+      a: a, a2: a2,
+      glow: 'rgba(' + rgb + ',0.40)',
+      soft: 'rgba(' + rgb + ',0.14)',
+      line: 'rgba(' + rgb + ',0.38)'
+    };
+  }
 
   function build() {
     if (document.getElementById("appHardGate")) return;
 
-    var theme = "warm", dark = false;
-    try {
-      theme = localStorage.getItem("ebTheme") || "warm";
-      dark  = localStorage.getItem("ebMode") === "dark";
-    } catch (e) {}
-    var t = TM[theme] || TM.warm;
+    var dark = false;
+    try { dark = localStorage.getItem("ebMode") === "dark"; } catch (e) {}
+    var t = accent();
 
     // The announcement gate is irrelevant on mobile — hide it behind this one.
     var hideAnn = document.createElement("style");
@@ -95,10 +100,10 @@
     st.textContent =
       "#appHardGate{position:fixed;inset:0;z-index:2147483647;overflow:auto;-webkit-overflow-scrolling:touch;" +
         "display:flex;align-items:center;justify-content:center;padding:40px 26px;" +
-        "font-family:Inter,system-ui,-apple-system,sans-serif;text-align:center;color:#2D3340;background:#FFF8EE}" +
+        "font-family:Inter,system-ui,-apple-system,sans-serif;text-align:center;color:#2D3340;background:var(--a97)}" +
       "#appHardGate *{box-sizing:border-box;margin:0;padding:0}" +
       "#appHardGate::before{content:'';position:absolute;inset:-15%;z-index:0;" +
-        "background:linear-gradient(135deg,#FFFBF5 0%,#FFEFDC 50%,#FFF6E9 100%)}" +
+        "background:linear-gradient(135deg,var(--a98) 0%,var(--a93) 50%,var(--a96) 100%)}" +
       "#appHardGate::after{content:'';position:absolute;inset:-10%;z-index:0;pointer-events:none;" +
         "background:radial-gradient(ellipse 95% 85% at 50% 50%,transparent 55%," + t.soft + " 100%)}" +
       "#appHardGate.eb-dark{background:#0d1016}" +
@@ -121,7 +126,7 @@
       "#appHardGate .ahg-logo svg{width:38px;height:38px}" +
       // Heading + body
       "#appHardGate .ahg-h1{font-size:1.875rem;font-weight:500;letter-spacing:-0.02em;line-height:1.2;color:#1A1F2A;margin-bottom:20px}" +
-      "#appHardGate.eb-dark .ahg-h1{color:#F0EAE0}" +
+      "#appHardGate.eb-dark .ahg-h1{color:var(--n91)}" +
       "#appHardGate .ahg-body{font-size:0.9375rem;line-height:1.6;color:rgba(26,31,42,0.58);margin:0 auto 36px;max-width:320px}" +
       "#appHardGate.eb-dark .ahg-body{color:rgba(240,234,224,0.58)}" +
       // Store buttons
@@ -138,8 +143,8 @@
       "#appHardGate .ahg-btn .ahg-lbl .ahg-sub{display:block;font-size:0.6875rem;font-weight:500;color:rgba(26,31,42,0.45);line-height:1;margin-bottom:3px}" +
       "#appHardGate .ahg-btn .ahg-lbl .ahg-main{display:block;font-size:1rem;font-weight:700;letter-spacing:-0.01em;color:#1A1F2A;line-height:1.1}" +
       "#appHardGate.eb-dark .ahg-btn .ahg-lbl .ahg-sub{color:rgba(240,234,224,0.45)}" +
-      "#appHardGate.eb-dark .ahg-btn .ahg-lbl .ahg-main{color:#F0EAE0}" +
-      "#appHardGate.eb-dark .ahg-btn .apple-fill{fill:#F0EAE0}" +
+      "#appHardGate.eb-dark .ahg-btn .ahg-lbl .ahg-main{color:var(--n91)}" +
+      "#appHardGate.eb-dark .ahg-btn .apple-fill{fill:var(--n91)}" +
       // Footer — inside the card, sitting near the bottom (below the buttons).
       "#appHardGate .ahg-foot{margin-top:24px;text-align:center;" +
         "font-size:0.8125rem;color:rgba(26,31,42,0.50);letter-spacing:0.01em}" +

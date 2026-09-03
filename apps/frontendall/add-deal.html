@@ -3,15 +3,16 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<title>Add Deal — Endeavor</title>
+<title>Add Deal — Insurance Alliance Group</title>
+<script src="brand.js?v=1"></script>
 <script src="i18n-dict.js?v=2"></script>
-<script src="prefs-extras.js?v=28"></script>
+<script src="prefs-extras.js?v=30"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
 <link rel="stylesheet" href="wizard.css"/>
   <script src="services/api.js?v=10"></script>
-  <script src="services/error-boundary.js?v=19"></script>
+  <script src="services/error-boundary.js?v=20"></script>
 <style>
   .ch-prog{display:flex;gap:14px}
   .person-card{position:relative}
@@ -23,7 +24,7 @@
   .person-remove:hover{background:rgba(163,82,92,.08)}
   .prods{margin-top:18px;padding-top:16px;border-top:1px solid rgba(0,0,0,.08);display:flex;flex-direction:column;gap:12px}
   .prods-eyebrow{font-size:.7rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#16A34A}
-  .prod{border:1px solid #E2E8F0;border-radius:12px;overflow:hidden;background:#FCFCFB}
+  .prod{border:1px solid #E2E8F0;border-radius:12px;overflow:hidden;background:var(--n99)}
   .prod-head{display:flex;align-items:center;gap:10px;padding:12px 14px;cursor:pointer;user-select:none}
   .prod-head input{width:18px;height:18px;accent-color:#16A34A;cursor:pointer}
   .prod-name{font-weight:700;color:#0F172A;font-size:.92rem}
@@ -32,7 +33,7 @@
   .prod.on .prod-body{display:grid}
   .prod.on{background:rgba(22,163,74,.04);border-color:rgba(22,163,74,.25)}
   .btn-add-person{margin:4px 0 0;width:100%;height:46px;border:1.5px dashed #CBD5E1;border-radius:12px;background:rgba(255,255,255,.5);color:#475569;font:700 .9rem inherit;cursor:pointer}
-  .btn-add-person:hover{border-color:var(--accent,#C97B3A);color:var(--accent,#C97B3A)}
+  .btn-add-person:hover{border-color:var(--accent);color:var(--accent)}
   .res-card{margin-top:8px}
   .res-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 14px;border-bottom:1px solid rgba(0,0,0,.06);font-size:.85rem}
   .res-row:last-child{border-bottom:none}
@@ -49,9 +50,9 @@
 <body data-chapter="aca">
 
 <div class="wiz-shell">
-  <a class="ch-brand" href="appointments.html" aria-label="Endeavor">
+  <a class="ch-brand" href="appointments.html" aria-label="Insurance Alliance Group">
     <span class="ch-brand-dot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/><path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/></svg></span>
-    Endeavor
+    Insurance Alliance Group
   </a>
 
   <header class="ch-head">
@@ -90,13 +91,13 @@
   <button class="btn-add-person" id="addPersonBtn" type="button">+ Add another person</button>
 
   <!-- Call recording — moved to the end; gate logic unchanged (JS binds by ID) -->
-  <div class="wiz-card" id="recCard" style="border:1.5px solid rgba(201,123,58,.4)">
+  <div class="wiz-card" id="recCard" style="border:1.5px solid rgba(var(--accent-rgb),.4)">
     <div class="wiz-eyebrow">Required first</div>
     <h2 class="wiz-title">Call recording</h2>
     <p class="wiz-sub">Upload the recording(s) of this sales call — up to 4. You can fill the form now, but Log Sale stays disabled until at least one is attached.</p>
     <div id="recList" style="display:flex;flex-direction:column;gap:8px;margin-bottom:10px"></div>
     <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-      <button id="recBtn" type="button" style="height:42px;padding:0 18px;border-radius:10px;border:none;background:var(--accent,#C97B3A);color:#fff;font:700 .88rem inherit;cursor:pointer;white-space:nowrap">⬆ Upload call recording</button>
+      <button id="recBtn" type="button" style="height:42px;padding:0 18px;border-radius:10px;border:none;background:var(--accent);color:#fff;font:700 .88rem inherit;cursor:pointer;white-space:nowrap">⬆ Upload call recording</button>
       <span id="recStatus" style="font-size:.85rem;color:#A3525C;font-weight:600">🔒 Log Sale disabled — upload at least one recording to enable it.</span>
     </div>
     <input id="recInput" type="file" accept="audio/*,video/*" style="display:none"/>

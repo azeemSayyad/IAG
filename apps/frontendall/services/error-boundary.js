@@ -20,7 +20,7 @@
   skeletonStyle.textContent =
     '@keyframes ebShimmer{0%{background-position:-400px 0}100%{background-position:400px 0}}' +
     '.eb-skeleton{background:linear-gradient(90deg,var(--bg-input,#eee) 25%,var(--bg-card-hover,#f5f5f5) 50%,var(--bg-input,#eee) 75%);background-size:800px 100%;animation:ebShimmer 1.4s ease-in-out infinite;border-radius:6px;display:inline-block}' +
-    '.eb-loading-spinner{display:inline-block;width:20px;height:20px;border:2px solid var(--border,rgba(0,0,0,.15));border-top-color:var(--accent,#C97B3A);border-radius:50%;animation:ebSpin .6s linear infinite;vertical-align:middle}' +
+    '.eb-loading-spinner{display:inline-block;width:20px;height:20px;border:2px solid var(--border,rgba(0,0,0,.15));border-top-color:var(--accent);border-radius:50%;animation:ebSpin .6s linear infinite;vertical-align:middle}' +
     '@keyframes ebSpin{to{transform:rotate(360deg)}}' +
     '.eb-loading-overlay{position:fixed;inset:0;z-index:99997;background:var(--bg-page, rgba(255,255,255,.7));display:flex;align-items:center;justify-content:center;flex-direction:column;gap:16px;backdrop-filter:blur(2px);-webkit-backdrop-filter:blur(2px);transition:opacity .3s}' +
     '.eb-loading-overlay .eb-loading-spinner{width:36px;height:36px;border-width:3px}' +
@@ -41,7 +41,7 @@
           '<div id="ebErrorTitle" style="font-size:1.125rem;font-weight:600;margin-bottom:8px;color:var(--text,#1a1a1a)">Something went wrong</div>' +
           '<div id="ebErrorMsg" style="font-size:.875rem;color:var(--text-faint,#888);line-height:1.5;margin-bottom:24px"></div>' +
           '<div style="display:flex;gap:12px;justify-content:center">' +
-            '<button id="ebErrorRetryBtn" type="button" style="padding:10px 24px;border-radius:8px;border:none;background:var(--accent,#C97B3A);color:#fff;font-size:.875rem;font-weight:500;cursor:pointer">Retry</button>' +
+            '<button id="ebErrorRetryBtn" type="button" style="padding:10px 24px;border-radius:8px;border:none;background:var(--accent);color:#fff;font-size:.875rem;font-weight:500;cursor:pointer">Retry</button>' +
             '<button id="ebErrorDismissBtn" type="button" style="padding:10px 24px;border-radius:8px;border:none;background:var(--bg-input,#f0f0f0);color:var(--text,#1a1a1a);font-size:.875rem;cursor:pointer">Dismiss</button>' +
           '</div>' +
         '</div>' +
@@ -93,7 +93,7 @@
     init();
     if (!toastEl) return;
     toastEl.textContent = msg || '';
-    toastEl.style.background = kind === 'danger' ? 'var(--danger,#D03A3A)' : kind === 'accent' ? 'var(--accent,#C97B3A)' : 'var(--bg-card,#1a1a1a)';
+    toastEl.style.background = kind === 'danger' ? 'var(--danger,#D03A3A)' : kind === 'accent' ? 'var(--accent)' : 'var(--bg-card,#1a1a1a)';
     toastEl.style.display = 'flex';
     clearTimeout(toast._t);
     toast._t = setTimeout(function(){ if (toastEl) toastEl.style.display = 'none'; }, 3000);
@@ -340,11 +340,11 @@
       + '.eb-sl-overlay.show{display:flex;}'
       + '.eb-sl-card{background:#fff;color:#1A1F2A;width:min(630px,94vw);border-radius:20px;box-shadow:0 24px 60px rgba(0,0,0,.35);overflow:hidden;animation:ebSlPop .18s ease-out;}'
       + '@keyframes ebSlPop{from{transform:translateY(12px) scale(.98);opacity:0}to{transform:none;opacity:1}}'
-      + '.eb-sl-head{background:#F6EEE1;color:#1A1F2A;padding:22px 30px;display:flex;align-items:center;gap:12px;}'
+      + '.eb-sl-head{background:var(--a92);color:#1A1F2A;padding:22px 30px;display:flex;align-items:center;gap:12px;}'
       + '.eb-sl-head svg{width:26px;height:26px;flex-shrink:0;}'
       + '.eb-sl-head h3{margin:0;font-size:22px;font-weight:700;}'
       + '.eb-sl-body{padding:24px 30px 6px;display:flex;align-items:center;gap:18px;}'
-      + '.eb-sl-avatar{width:72px;height:72px;border-radius:50%;background:#F6EEE1;color:#C97B3A;display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:700;flex-shrink:0;letter-spacing:.02em;}'
+      + '.eb-sl-avatar{width:72px;height:72px;border-radius:50%;background:var(--a92);color:var(--accent);display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:700;flex-shrink:0;letter-spacing:.02em;}'
       + '.eb-sl-name{font-size:30px;font-weight:700;line-height:1.15;}'
       + '.eb-sl-phone{font-size:22px;color:#5A6473;margin-top:4px;}'
       + '.eb-sl-msg{display:none;}'

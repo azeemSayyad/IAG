@@ -352,7 +352,7 @@ export default function PortalShell() {
           <span className="sb-brand-dot">
             <Icon name="brain" />
           </span>
-          <span>Endeavor</span>
+          <span>Insurance Alliance Group</span>
         </a>
         <nav className="sb-nav">
           <a className="sb-item sb-featured" href="/ask-the-brain.html">

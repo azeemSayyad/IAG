@@ -37,3 +37,6 @@ apps/backend-api/models/registry/test_*/
 
 # Local-only Docker Compose overrides (machine-specific ports/env) — not for production
 docker-compose.override.yml
+
+# Local preview server + scratch verification scripts (never committed)
+.localpreview/

@@ -4,7 +4,7 @@
  * script in dashboard.html + prefs-extras.js. Those scripts read the user's
  * preferences from localStorage and apply them to the document root:
  *
- *   ebTheme    warm | forest | indigo | rose | slate | amber   → --accent / --accent-2 / --accent-hover
+ *   ebTheme    brand | forest | indigo | rose | slate | amber   → --accent / --accent-2 / --accent-hover
  *   ebMode     light | dark | auto                              → html[data-mode]
  *   ebLayout   spacious | compact                               → html[data-layout]
  *   ebSidebar  labels | icons                                   → html[data-sidebar]
@@ -14,64 +14,42 @@
  * shares the same localStorage origin, but previously ignored these keys — so
  * the chosen color theme + dark mode + collapsed sidebar never carried over.
  *
- * This module mirrors the EXACT contract (TM accent map + FM font map copied
- * verbatim from dashboard.html's head script) and applies it to <html> on
- * startup. It also listens for `storage` events (theme changed in another
- * tab/the portal) and for system dark-mode changes when ebMode === 'auto'.
+ * The palette itself lives in ONE place — apps/frontendall/brand.js, loaded at
+ * the site root by index.html — so a rebrand never has to touch this file. This
+ * module only forwards the user's stored preferences to it, and keeps them in
+ * sync with `storage` events (theme changed in another tab/the portal) and with
+ * system dark-mode changes when ebMode === 'auto'.
  */
 
-// Accent map — copied verbatim from dashboard.html's TM (a/a2/ah per theme).
-const TM: Record<string, { a: string; a2: string; ah: string; g: string; gl: string }> = {
-  warm:   { a: "#C97B3A", a2: "#E0995E", ah: "#B26A2D", g: "linear-gradient(135deg,#FFFBF5 0%,#FFEFDC 50%,#FFF6E9 100%)", gl: "rgba(178,106,45,.08)" },
-  forest: { a: "#4F8268", a2: "#6B9F86", ah: "#3D6651", g: "linear-gradient(135deg,#F5FBF7 0%,#E0F1E6 50%,#E8F4ED 100%)", gl: "rgba(63,109,84,.08)" },
-  indigo: { a: "#5E7BA8", a2: "#7B96BD", ah: "#4A6488", g: "linear-gradient(135deg,#F5F7FB 0%,#DCE4F1 50%,#E5EBF4 100%)", gl: "rgba(74,100,136,.08)" },
-  rose:   { a: "#A3525C", a2: "#B97077", ah: "#82414B", g: "linear-gradient(135deg,#FBF5F6 0%,#F1DCDF 50%,#F4E5E8 100%)", gl: "rgba(130,65,75,.08)" },
-  slate:  { a: "#2D3340", a2: "#5A6275", ah: "#1A1F2A", g: "linear-gradient(135deg,#B8BCC5 0%,#9DA3AD 50%,#ABB0BA 100%)", gl: "rgba(26,31,42,.14)" },
-  amber:  { a: "#9C7842", a2: "#B89058", ah: "#7C5E2F", g: "linear-gradient(135deg,#FBF7F0 0%,#F0E5D0 50%,#F4EBDB 100%)", gl: "rgba(124,94,47,.08)" },
+/** window.EB_BRAND, published by /brand.js. */
+type Brand = {
+  DEFAULT: string;
+  normalize: (v: string | null) => string;
+  apply: (v: string | null) => void;
+  applyFont: (v: string | null) => void;
+  theme: () => { a: string; a2: string; ah: string };
+  css: (name: string) => string;
 };
+function brand(): Brand | undefined {
+  return (window as unknown as { EB_BRAND?: Brand }).EB_BRAND;
+}
 
-// Font-size map — copied verbatim from dashboard.html's FM.
-const FM: Record<string, string> = { sm: "14px", md: "16px", lg: "18px", xl: "20px" };
+/** A brand colour as a real value — for SVG attributes and <canvas>, neither
+ *  of which resolves var(). Falls back to the computed custom property. */
+export function brandColor(name: string): string {
+  return brand()?.css(name) ?? "";
+}
 
 function root() {
   return document.documentElement;
 }
 
-/** "#RRGGBB" -> "r, g, b" so rgba(var(--accent-rgb), a) tints follow the theme. */
-function hexToRgb(hex: string): string {
-  let h = (hex || "").trim().replace("#", "");
-  if (h.length === 3) h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2];
-  if (h.length !== 6) return "";
-  const n = parseInt(h, 16);
-  if (Number.isNaN(n)) return "";
-  return `${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}`;
-}
-
 export function applyTheme(v: string | null) {
-  const t = TM[v || "warm"] || TM.warm;
-  const D = root();
-  D.style.setProperty("--accent", t.a);
-  D.style.setProperty("--accent-2", t.a2);
-  D.style.setProperty("--accent-hover", t.ah);
-  D.style.setProperty("--accent-rgb", hexToRgb(t.a));
-  // Mirror the portal's injected #ebPrefsTheme style block: recolor the page
-  // background gradients and the brand logo gradient to the chosen theme so the
-  // SMS pages match the portal's canvas (the portal sets these via body::before
-  // / body::after + .sb-brand-dot).
-  let st = document.getElementById("ebPrefsTheme") as HTMLStyleElement | null;
-  if (!st) {
-    st = document.createElement("style");
-    st.id = "ebPrefsTheme";
-    document.head.appendChild(st);
-  }
-  st.textContent =
-    "body::before{background:" + t.g + " !important}" +
-    "body::after{background:radial-gradient(ellipse 95% 85% at 50% 50%,transparent 55%," + t.gl + " 100%) !important}" +
-    ".sb-brand-dot{background:linear-gradient(135deg," + t.a + "," + t.a2 + ") !important}";
+  brand()?.apply(v);
 }
 
 export function applyFont(v: string | null) {
-  root().style.fontSize = FM[v || "md"] || "16px";
+  brand()?.applyFont(v);
 }
 
 export function applyMode(v: string | null) {
@@ -115,9 +93,7 @@ export function installThemeBridge() {
   applyAllPrefs();
 
   // Expose the same globals the portal defines, so calling them recolors/relays
-  // the SMS app identically.
-  (window as unknown as Record<string, unknown>).__ebApplyTheme = applyTheme;
-  (window as unknown as Record<string, unknown>).__ebApplyFont = applyFont;
+  // the SMS app identically. (__ebApplyTheme / __ebApplyFont come from brand.js.)
   (window as unknown as Record<string, unknown>).__ebApplyMode = applyMode;
   (window as unknown as Record<string, unknown>).__ebApplyLayout = applyLayout;
   (window as unknown as Record<string, unknown>).__ebApplySidebar = applySidebar;

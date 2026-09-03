@@ -23,7 +23,7 @@
   // compulsory "install the app" screen). One shared file, served at the root.
   if(!document.getElementById('appGateScript')){
     var _gate = document.createElement('script');
-    _gate.id = 'appGateScript'; _gate.src = '/app-gate.js'; _gate.defer = true;
+    _gate.id = 'appGateScript'; _gate.src = '/app-gate.js?v=2'; _gate.defer = true;
     (document.head || document.documentElement).appendChild(_gate);
   }
 
@@ -31,7 +31,7 @@
   // announcements) on every portal page. One shared file, served at the root.
   if(!document.getElementById('annScript')){
     var _ann = document.createElement('script');
-    _ann.id = 'annScript'; _ann.src = '/announcements.js'; _ann.defer = true;
+    _ann.id = 'annScript'; _ann.src = '/announcements.js?v=2'; _ann.defer = true;
     (document.head || document.documentElement).appendChild(_ann);
   }
 
@@ -79,8 +79,8 @@
       'html[data-mode="dark"] .sb-brand{color:#F0F2F5}' +
       'html[data-mode="dark"] .sb-item{color:rgba(255,255,255,0.60)}' +
       'html[data-mode="dark"] .sb-item:hover{background:rgba(255,255,255,0.06);color:#F0F2F5}' +
-      'html[data-mode="dark"] .sb-item.active{background:rgba(201,123,58,0.16);color:#F0F2F5}' +
-      'html[data-mode="dark"] .sb-featured{background:linear-gradient(135deg,rgba(201,123,58,0.18),rgba(224,153,94,0.06)) !important;border-color:rgba(201,123,58,0.34) !important}' +
+      'html[data-mode="dark"] .sb-item.active{background:rgba(var(--accent-rgb),0.16);color:#F0F2F5}' +
+      'html[data-mode="dark"] .sb-featured{background:linear-gradient(135deg,rgba(var(--accent-rgb),0.18),rgba(var(--accent-2-rgb),0.06)) !important;border-color:rgba(var(--accent-rgb),0.34) !important}' +
       'html[data-mode="dark"] input,html[data-mode="dark"] select,html[data-mode="dark"] textarea{background:rgba(255,255,255,0.04) !important;color:#D5DAE2 !important;border-color:rgba(255,255,255,0.10) !important}' +
       'html[data-mode="dark"] input::placeholder{color:rgba(255,255,255,0.40)}' +
       'html[data-mode="dark"] .btn,html[data-mode="dark"] .ebc-btn,html[data-mode="dark"] .bulk-btn,html[data-mode="dark"] .btn-preview,html[data-mode="dark"] .top-btn,html[data-mode="dark"] .tab,html[data-mode="dark"] .na-btn,html[data-mode="dark"] .icon-btn,html[data-mode="dark"] .demo-chip{background:rgba(255,255,255,0.06) !important;color:#D5DAE2 !important;border-color:rgba(255,255,255,0.10) !important}' +
@@ -88,7 +88,7 @@
       'html[data-mode="dark"] .btn.danger,html[data-mode="dark"] .na-btn.danger{color:#E59AA0 !important}' +
       'html[data-mode="dark"] .field-row-static,html[data-mode="dark"] .av-block,html[data-mode="dark"] .dg-tile,html[data-mode="dark"] .bill-tile,html[data-mode="dark"] .list-row,html[data-mode="dark"] .notif-pref,html[data-mode="dark"] .acc-tile,html[data-mode="dark"] .master,html[data-mode="dark"] .mate,html[data-mode="dark"] .team-block,html[data-mode="dark"] .lead-card,html[data-mode="dark"] .sugg-card{background:rgba(255,255,255,0.03) !important;border-color:rgba(255,255,255,0.08) !important}' +
       'html[data-mode="dark"] .notif{background:rgba(255,255,255,0.03) !important;border-color:rgba(255,255,255,0.08) !important;color:#D5DAE2 !important}' +
-      'html[data-mode="dark"] .notif.unread{background:rgba(201,123,58,0.10) !important;border-color:rgba(201,123,58,0.25) !important}' +
+      'html[data-mode="dark"] .notif.unread{background:rgba(var(--accent-rgb),0.10) !important;border-color:rgba(var(--accent-rgb),0.25) !important}' +
       'html[data-mode="dark"] .search,html[data-mode="dark"] .lt-search{background:rgba(255,255,255,0.05) !important}' +
       // Icon chips / the search shortcut badge keep light fills in dark mode (their
       // base bg was never overridden) — show them as a WHITE OUTLINE instead of a
@@ -101,7 +101,7 @@
       'html[data-mode="dark"] .toast{background:#FFFFFF !important;color:#1A1F2A !important}' +
       'html[data-mode="dark"] .car-card{background:rgba(255,255,255,0.06) !important;color:#D5DAE2 !important}' +
       'html[data-mode="dark"] .composer{background:rgba(24,28,36,0.92) !important;border-color:rgba(255,255,255,0.10) !important}' +
-      'html[data-mode="dark"] .eb-coach{background:linear-gradient(90deg,rgba(201,123,58,0.18),rgba(201,123,58,0.06)) !important}' +
+      'html[data-mode="dark"] .eb-coach{background:linear-gradient(90deg,rgba(var(--accent-rgb),0.18),rgba(var(--accent-rgb),0.06)) !important}' +
       'html[data-mode="dark"] .ebc-btn{background:rgba(255,255,255,0.06) !important;color:#D5DAE2 !important}' +
       // --- Dark mode: extra coverage (segmented, settings fields, custom selects, modals, cards) ---
       // Segmented controls (Font size, Mode, Layout, Sidebar)
@@ -119,7 +119,7 @@
       // Settings left nav
       'html[data-mode="dark"] .set-nav-item{color:rgba(255,255,255,0.60) !important}' +
       'html[data-mode="dark"] .set-nav-item:hover{background:rgba(255,255,255,0.06) !important;color:#F0F2F5 !important}' +
-      'html[data-mode="dark"] .set-nav-item.active{background:rgba(201,123,58,0.16) !important;color:#F0F2F5 !important}' +
+      'html[data-mode="dark"] .set-nav-item.active{background:rgba(var(--accent-rgb),0.16) !important;color:#F0F2F5 !important}' +
       // Modals (reschedule, override, etc.)
       'html[data-mode="dark"] .modal{background:#1A1F2A !important;color:#D5DAE2 !important;border-color:rgba(255,255,255,0.10) !important}' +
       'html[data-mode="dark"] .modal-head,html[data-mode="dark"] .modal-foot{border-color:rgba(255,255,255,0.08) !important}' +
@@ -132,16 +132,16 @@
       'html[data-mode="dark"] .cp-card{background:rgba(255,255,255,0.04) !important;border-color:rgba(255,255,255,0.08) !important;color:#D5DAE2 !important}' +
       'html[data-mode="dark"] .viz-card{background:rgba(255,255,255,0.04) !important;border-color:rgba(255,255,255,0.08) !important;color:#D5DAE2 !important}' +
       'html[data-mode="dark"] .viz-card-title{color:#F0F2F5 !important}' +
-      'html[data-mode="dark"] .gs-row{background:rgba(201,123,58,0.10) !important;border-color:rgba(201,123,58,0.24) !important}' +
+      'html[data-mode="dark"] .gs-row{background:rgba(var(--accent-rgb),0.10) !important;border-color:rgba(var(--accent-rgb),0.24) !important}' +
       // Welcome composer + biz cards on Ask the Brain
       'html[data-mode="dark"] .welcome-composer{background:rgba(24,28,36,0.78) !important;border-color:rgba(255,255,255,0.10) !important}' +
       'html[data-mode="dark"] .welcome-composer input{color:#F0F2F5 !important}' +
       'html[data-mode="dark"] .biz-card{background:rgba(255,255,255,0.04) !important;border-color:rgba(255,255,255,0.10) !important;color:#D5DAE2 !important}' +
-      'html[data-mode="dark"] .biz-card:hover{background:rgba(255,255,255,0.07) !important;border-color:rgba(201,123,58,0.40) !important}' +
+      'html[data-mode="dark"] .biz-card:hover{background:rgba(255,255,255,0.07) !important;border-color:rgba(var(--accent-rgb),0.40) !important}' +
       'html[data-mode="dark"] .biz-card-q{color:#F0F2F5 !important}' +
       // Misc: chips, agenda chip bar, view-toggle, today-btn, cal heads
       'html[data-mode="dark"] .chip{background:rgba(255,255,255,0.04) !important;color:rgba(255,255,255,0.65) !important;border-color:rgba(255,255,255,0.10) !important}' +
-      'html[data-mode="dark"] .chip.active{background:rgba(201,123,58,0.18) !important;color:#F0F2F5 !important;border-color:rgba(201,123,58,0.45) !important}' +
+      'html[data-mode="dark"] .chip.active{background:rgba(var(--accent-rgb),0.18) !important;color:#F0F2F5 !important;border-color:rgba(var(--accent-rgb),0.45) !important}' +
       'html[data-mode="dark"] .chips{background:rgba(255,255,255,0.02) !important;border-color:rgba(255,255,255,0.08) !important}' +
       'html[data-mode="dark"] .view-toggle{background:rgba(255,255,255,0.04) !important;border-color:rgba(255,255,255,0.10) !important}' +
       'html[data-mode="dark"] .vt-btn{color:rgba(255,255,255,0.55) !important}' +
@@ -174,7 +174,7 @@
       // Inbox: hover-action popover (opaque), conversation rows, inbound bubble
       'html[data-mode="dark"] .lead-actions{background:#1A1F2A !important;border-color:rgba(255,255,255,0.12) !important}' +
       'html[data-mode="dark"] .lead:hover{background:rgba(255,255,255,0.05) !important}' +
-      'html[data-mode="dark"] .lead.active{background:rgba(201,123,58,0.16) !important;border-color:rgba(201,123,58,0.30) !important}' +
+      'html[data-mode="dark"] .lead.active{background:rgba(var(--accent-rgb),0.16) !important;border-color:rgba(var(--accent-rgb),0.30) !important}' +
       'html[data-mode="dark"] .msg.in .bubble{background:rgba(255,255,255,0.07) !important;color:#D5DAE2 !important;border-color:rgba(255,255,255,0.10) !important}' +
       // Inbox: lead-tag chips (SCORE white chip + status tints with hardcoded dark text)
       'html[data-mode="dark"] .lt.score{background:rgba(255,255,255,0.08) !important;color:rgba(255,255,255,0.62) !important}' +
@@ -194,13 +194,13 @@
       'html[data-mode="dark"] .eb-coach.crit{background:rgba(163,82,92,0.12) !important}' +
       // Compliance page: info banner (inline styles), active tab, status pills, delete button
       'html[data-mode="dark"] #agentLicHint{background:rgba(255,255,255,0.03) !important;border-bottom-color:rgba(255,255,255,0.08) !important;color:#D5DAE2 !important}' +
-      'html[data-mode="dark"] .tab.active{background:rgba(201,123,58,0.18) !important;color:#F0F2F5 !important;border-color:rgba(201,123,58,0.45) !important}' +
+      'html[data-mode="dark"] .tab.active{background:rgba(var(--accent-rgb),0.18) !important;color:#F0F2F5 !important;border-color:rgba(var(--accent-rgb),0.45) !important}' +
       'html[data-mode="dark"] .pill.ok{background:rgba(79,130,104,0.18) !important;color:#9FD3B6 !important;border-color:rgba(79,130,104,0.35) !important}' +
       'html[data-mode="dark"] .pill.bad{background:rgba(163,82,92,0.18) !important;color:#E59AA0 !important;border-color:rgba(163,82,92,0.35) !important}' +
       'html[data-mode="dark"] .pill.mid{background:rgba(156,120,66,0.18) !important;color:#E9C98A !important;border-color:rgba(156,120,66,0.35) !important}' +
       'html[data-mode="dark"] .row-del{background:rgba(163,82,92,0.16) !important;color:#E59AA0 !important;border-color:rgba(163,82,92,0.35) !important}' +
       // Appointments page: day-group cards, day-view appointment rows, mini-cal,
-      // header bands, and calendar action buttons (all hardcoded #FFFFFF/#FBFAF7).
+      // header bands, and calendar action buttons (all hardcoded #FFFFFF/var(--n98)).
       'html[data-mode="dark"] .agent-day,html[data-mode="dark"] .ap-card{background:rgba(24,28,36,0.78) !important;border-color:rgba(255,255,255,0.08) !important;color:#D5DAE2}' +
       'html[data-mode="dark"] .cal-day-appt,html[data-mode="dark"] .cal-mini-day{background:rgba(255,255,255,0.05) !important;border-color:rgba(255,255,255,0.08) !important}' +
       'html[data-mode="dark"] .cal-day-appt:hover,html[data-mode="dark"] .cal-mini-day:hover{background:rgba(255,255,255,0.09) !important}' +
@@ -208,7 +208,7 @@
       'html[data-mode="dark"] .cal-min-btn,html[data-mode="dark"] .cal-exp-btn,html[data-mode="dark"] .ar-call,html[data-mode="dark"] .ar-btn{background:rgba(255,255,255,0.06) !important;color:#D5DAE2 !important;border-color:rgba(255,255,255,0.10) !important}' +
 
       // --- Dark mode: remaining white-filled surfaces → dark fill + light frame ---
-      // These keep light fills in dark mode (hardcoded #FBFAF7/#fff/#F8FAFC or a
+      // These keep light fills in dark mode (hardcoded var(--n98)/#fff/#F8FAFC or a
       // semi-white glass header), so they read as solid white panes. Recolor the
       // surface to the dark theme and let the (light) border be the visible frame.
       // Table pagination footer bar (deals, dashboard, agent-performance, upload-leads).
@@ -227,8 +227,8 @@
       // Appointments split Upcoming view: Scheduled pane (white) + Call now pane
       // (cream/orange), their count badges and the call-now header text.
       'html[data-mode="dark"] .agenda-pane{background:rgba(255,255,255,0.03) !important;border-color:rgba(255,255,255,0.08) !important}' +
-      'html[data-mode="dark"] .agenda-pane.callnow{background:rgba(201,123,58,0.10) !important;border-color:rgba(201,123,58,0.30) !important}' +
-      'html[data-mode="dark"] .agenda-pane.callnow .pane-h{color:#E0995E !important}' +
+      'html[data-mode="dark"] .agenda-pane.callnow{background:rgba(var(--accent-rgb),0.10) !important;border-color:rgba(var(--accent-rgb),0.30) !important}' +
+      'html[data-mode="dark"] .agenda-pane.callnow .pane-h{color:var(--accent-2) !important}' +
       'html[data-mode="dark"] .pane-n{background:rgba(255,255,255,0.10) !important;color:rgba(255,255,255,0.62) !important}' +
 
       // --- Dark mode: full-portal white-surface audit (consistency sweep) ---
@@ -300,21 +300,21 @@
       'html[data-sidebar="icons"]:not([data-mobile]) .topbar{left:64px !important}' +
       // Restore the brand logo to a proper size in icons mode. The base
       // injectLogoutCss() shrinks .sb-brand-dot to 17px so the wordmark
-      // "Endeavor" aligns with the nav icons below; with the wordmark
+      // "Insurance Alliance Group" aligns with the nav icons below; with the wordmark
       // hidden in icons mode there's nothing to align to and the tiny
       // 17px tile looked lost. Bump it back up to a real logo.
       'html[data-sidebar="icons"]:not([data-mobile]) .sb-brand-dot{width:28px !important;height:28px !important;border-radius:8px !important}' +
       'html[data-sidebar="icons"]:not([data-mobile]) .sb-brand-dot svg{width:16px !important;height:16px !important}' +
       // ----- Collapse toggle button (chevron handle on the sidebar edge) -----
       '.sb-collapse-btn{position:absolute;top:18px;right:-12px;width:24px;height:24px;border-radius:50%;background:#FFFFFF;border:1px solid var(--border);color:var(--text-muted);display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;box-shadow:0 1px 2px rgba(26,31,42,0.06),0 2px 8px rgba(26,31,42,0.08);z-index:50;transition:color 140ms var(--ease),background 140ms var(--ease),border-color 140ms var(--ease),transform 220ms var(--ease)}' +
-      '.sb-collapse-btn:hover{color:var(--text);background:#F6F4EF;border-color:var(--border-hover)}' +
+      '.sb-collapse-btn:hover{color:var(--text);background:var(--n95);border-color:var(--border-hover)}' +
       // Dark mode: the button hardcodes a white bg + muted chevron, which is a
       // white circle with an invisible light chevron on the dark canvas. Flip it.
       'html[data-mode="dark"] .sb-collapse-btn{background:#1A1F2A !important;border-color:rgba(255,255,255,0.14) !important;color:#D5DAE2 !important}' +
       'html[data-mode="dark"] .sb-collapse-btn:hover{background:#252B36 !important;color:#FFFFFF !important;border-color:rgba(255,255,255,0.24) !important}' +
       // Hirees detail modal — keep its bespoke surfaces in sync with dark mode.
       'html[data-mode="dark"] .modal-card{background:#12151B !important;border-color:rgba(255,255,255,0.10) !important}' +
-      'html[data-mode="dark"] .modal-card .mh{background:linear-gradient(180deg,rgba(var(--accent-rgb,201,123,58),0.16),transparent) !important;border-bottom-color:rgba(255,255,255,0.08) !important}' +
+      'html[data-mode="dark"] .modal-card .mh{background:linear-gradient(180deg,rgba(var(--accent-rgb),0.16),transparent) !important;border-bottom-color:rgba(255,255,255,0.08) !important}' +
       'html[data-mode="dark"] .modal-card .mactions{border-top-color:rgba(255,255,255,0.08) !important}' +
       'html[data-mode="dark"] .modal-card .mh-sub{color:rgba(255,255,255,0.62) !important}' +
       'html[data-mode="dark"] .modal-card .dcard,html[data-mode="dark"] .modal-card .doc-card{background:rgba(255,255,255,0.04) !important;border-color:rgba(255,255,255,0.08) !important}' +
@@ -331,18 +331,18 @@
       'html[data-mode="dark"] .modal-card .cbtn.pri{background:var(--warn) !important;color:#fff !important;border-color:transparent !important}' +
       'html[data-mode="dark"] .modal-card .callout-ta{background:rgba(255,255,255,0.04) !important;color:#F0F2F5 !important}' +
       'html[data-mode="dark"] .modal-card .callout .c-b{color:#F0F2F5 !important}' +
-      'html[data-mode="dark"] .modal-card .callout.pending{background:rgba(176,122,46,0.20) !important;color:#E0995E !important}' +
+      'html[data-mode="dark"] .modal-card .callout.pending{background:rgba(176,122,46,0.20) !important;color:var(--accent-2) !important}' +
       'html[data-mode="dark"] .modal-card .callout.rejected{background:rgba(163,82,92,0.22) !important;color:#E59AA0 !important}' +
       'html[data-mode="dark"] .modal-card .callout.approved{background:rgba(79,130,104,0.22) !important;color:#7FC59E !important}' +
-      'html[data-mode="dark"] .modal-card .chip{background:rgba(var(--accent-rgb,201,123,58),0.18) !important;color:var(--accent-2) !important}' +
+      'html[data-mode="dark"] .modal-card .chip{background:rgba(var(--accent-rgb),0.18) !important;color:var(--accent-2) !important}' +
       'html[data-mode="dark"] .modal-card .chip.subtle{background:rgba(255,255,255,0.06) !important;color:#D5DAE2 !important}' +
       'html[data-mode="dark"] .modal-card .pill.new{background:rgba(63,110,158,0.22) !important;color:#9DC2E8 !important}' +
-      'html[data-mode="dark"] .modal-card .pill.pending{background:rgba(176,122,46,0.22) !important;color:#E0995E !important}' +
+      'html[data-mode="dark"] .modal-card .pill.pending{background:rgba(176,122,46,0.22) !important;color:var(--accent-2) !important}' +
       'html[data-mode="dark"] .modal-card .pill.approved{background:rgba(79,130,104,0.22) !important;color:#7FC59E !important}' +
       'html[data-mode="dark"] .modal-card .pill.rejected{background:rgba(163,82,92,0.22) !important;color:#E59AA0 !important}' +
       'html[data-mode="dark"] .modal-card .chk-row.done .chk-ic{background:rgba(79,130,104,0.22) !important;color:#7FC59E !important}' +
-      'html[data-mode="dark"] .modal-card .chk-row.todo .chk-ic{background:rgba(176,122,46,0.22) !important;color:#E0995E !important}' +
-      'html[data-mode="dark"] .modal-card .chk-row.todo .chk-note{color:#E0995E !important}' +
+      'html[data-mode="dark"] .modal-card .chk-row.todo .chk-ic{background:rgba(176,122,46,0.22) !important;color:var(--accent-2) !important}' +
+      'html[data-mode="dark"] .modal-card .chk-row.todo .chk-note{color:var(--accent-2) !important}' +
       '.sb-collapse-btn svg{width:13px;height:13px;stroke-width:2.2;transition:transform 220ms var(--ease)}' +
       'html[data-sidebar="icons"]:not([data-mobile]) .sb-collapse-btn svg{transform:rotate(180deg)}' +
       '@media (max-width:820px){.sb-collapse-btn{display:none !important}}';
@@ -459,30 +459,14 @@
     document.head.appendChild(mst);
 
     // ===== Apply helpers =====
-    // Color theme (accent) — mirrors the per-theme map used by dashboard.html's
-    // head script, so pages WITHOUT that head script (deal/auto/dv/dispositions/
-    // pacing/…) still pick up the user's chosen accent theme.
-    var EB_TM = {
-      warm:   { a:'#C97B3A', a2:'#E0995E', ah:'#B26A2D', g:'linear-gradient(135deg,#FFFBF5 0%,#FFEFDC 50%,#FFF6E9 100%)', gl:'rgba(178,106,45,.08)' },
-      forest: { a:'#4F8268', a2:'#6B9F86', ah:'#3D6651', g:'linear-gradient(135deg,#F5FBF7 0%,#E0F1E6 50%,#E8F4ED 100%)', gl:'rgba(63,109,84,.08)' },
-      indigo: { a:'#5E7BA8', a2:'#7B96BD', ah:'#4A6488', g:'linear-gradient(135deg,#F5F7FB 0%,#DCE4F1 50%,#E5EBF4 100%)', gl:'rgba(74,100,136,.08)' },
-      rose:   { a:'#A3525C', a2:'#B97077', ah:'#82414B', g:'linear-gradient(135deg,#FBF5F6 0%,#F1DCDF 50%,#F4E5E8 100%)', gl:'rgba(130,65,75,.08)' },
-      slate:  { a:'#2D3340', a2:'#5A6275', ah:'#1A1F2A', g:'linear-gradient(135deg,#B8BCC5 0%,#9DA3AD 50%,#ABB0BA 100%)', gl:'rgba(26,31,42,.14)' },
-      amber:  { a:'#9C7842', a2:'#B89058', ah:'#7C5E2F', g:'linear-gradient(135deg,#FBF7F0 0%,#F0E5D0 50%,#F4EBDB 100%)', gl:'rgba(124,94,47,.08)' }
-    };
-    function ebHexToRgb(hex){
-      var h = (hex||'').trim().replace('#','');
-      if(h.length===3) h = h[0]+h[0]+h[1]+h[1]+h[2]+h[2];
-      if(h.length!==6) return '';
-      var n = parseInt(h,16); if(isNaN(n)) return '';
-      return ((n>>16)&255)+', '+((n>>8)&255)+', '+(n&255);
-    }
+    // Color theme (accent) — brand.js owns the palette AND writes every custom
+    // property (accent family, neutral ramp, page gradient) onto <html>. This
+    // only forwards the user's choice to it and then paints the couple of
+    // surfaces that can't read a variable through a pseudo-element shorthand.
     function applyTheme(v){
-      var t = EB_TM[v||'warm'] || EB_TM.warm;
-      D.style.setProperty('--accent', t.a);
-      D.style.setProperty('--accent-2', t.a2);
-      D.style.setProperty('--accent-hover', t.ah);
-      D.style.setProperty('--accent-rgb', ebHexToRgb(t.a));
+      if(!window.EB_BRAND) return;              // brand.js failed to load
+      window.EB_BRAND.apply(v);
+      var t = window.EB_BRAND.theme();
       // Phone sidebar background: on phones the sidebar slides in as a panel over the
       // page, so the desktop frosted-glass look (translucent white + blur) reads as a
       // wrong, inconsistent grey. Paint the SAME themed page gradient (t.g) on it so it
@@ -502,13 +486,6 @@
         'html[data-mode="dark"] .sidebar{background-color:#0F1216 !important;' +
         'background-image:linear-gradient(135deg,#0F1216 0%,#161A22 50%,#0F1216 100%) !important;' +
         'background-attachment:fixed !important;backdrop-filter:none !important;-webkit-backdrop-filter:none !important}}';
-      // Don't clobber a page's existing (richer) head-script theme style block.
-      if(document.getElementById('ebPrefsTheme')) return;
-      var st = document.createElement('style'); st.id = 'ebPrefsTheme'; document.head.appendChild(st);
-      st.textContent =
-        'body::before{background:' + t.g + ' !important}' +
-        'body::after{background:radial-gradient(ellipse 95% 85% at 50% 50%,transparent 55%,' + t.gl + ' 100%) !important}' +
-        '.sb-brand-dot{background:linear-gradient(135deg,' + t.a + ',' + t.a2 + ') !important}';
     }
     function applyMode(v){
       var m = v || 'light';
@@ -653,14 +630,14 @@
 
     // Don't clobber a page's own (richer, live-updating) theme applier
     // (e.g. settings.html defines its own for instant swatch preview).
-    if (!window.__ebApplyTheme) window.__ebApplyTheme = applyTheme;
+    window.__ebApplyTheme = applyTheme;
     window.__ebApplyMode     = applyMode;
     window.__ebApplyLayout   = applyLayout;
     window.__ebApplySidebar  = applySidebar;
     window.__ebApplyLanguage = applyLanguage;
 
     // ===== Initial apply from localStorage =====
-    applyTheme(localStorage.getItem('ebTheme') || 'warm');
+    applyTheme(localStorage.getItem('ebTheme') || window.EB_BRAND.DEFAULT);
     applyMode(localStorage.getItem('ebMode') || 'light');
     applyLayout(localStorage.getItem('ebLayout') || 'spacious');
     applySidebar(localStorage.getItem('ebSidebar') || 'labels');
@@ -795,10 +772,16 @@
         // Brand row: drop the separator and the negative side margin so it
         // sits inside the sidebar inset like .sb-item. Shrink the orange
         // logo block to 17px (the same width as the nav icons) so the
-        // "Endeavor" wordmark lines up exactly with each nav label below.
+        // "Insurance Alliance Group" wordmark lines up exactly with each nav label below.
         '.sb-brand{border-bottom:none !important;margin-left:0 !important;margin-right:0 !important}' +
         '.sb-brand-dot{width:17px !important;height:17px !important;border-radius:5px !important}' +
         '.sb-brand-dot svg{width:11px !important;height:11px !important}' +
+        // The wordmark is the full company name ("Insurance Alliance Group"),
+        // which is far too long for one line in a 220px sidebar — it wraps to
+        // two and used to spill out of the fixed topbar-height brand row. Let
+        // the row grow to fit and tighten the type so both lines sit inside it.
+        '.sb-brand{height:auto !important;min-height:var(--topbar-h);padding-top:12px !important;padding-bottom:12px !important}' +
+        '.sb-brand>span:nth-of-type(2){font-size:0.9375rem;line-height:1.2;letter-spacing:-0.02em}' +
         '.sb-bottom{flex-direction:row !important;align-items:center;gap:6px}' +
         '.sb-bottom .sb-item[href="settings.html"]{flex:0 1 auto;min-width:0}' +
         '.sb-bottom .sb-logout{flex:0 0 38px;width:38px;padding:0;justify-content:center;color:var(--text-muted);transition:color 150ms,background 150ms}' +
@@ -842,29 +825,29 @@
         // Notification badge on the bell icon (we add it via JS so the dot
         // is meaningful, not just decorative)
         '.topbar .icon-btn[aria-label="Notifications"]{cursor:pointer;position:relative}' +
-        '.eb-bell-badge{position:absolute;top:3px;right:3px;min-width:15px;height:15px;padding:0 4px;border-radius:8px;background:var(--accent,#C97B3A);color:#fff;font-size:9px;font-weight:700;line-height:15px;text-align:center;display:none;box-shadow:0 0 0 2px #FFFFFF}' +
+        '.eb-bell-badge{position:absolute;top:3px;right:3px;min-width:15px;height:15px;padding:0 4px;border-radius:8px;background:var(--accent);color:#fff;font-size:9px;font-weight:700;line-height:15px;text-align:center;display:none;box-shadow:0 0 0 2px #FFFFFF}' +
         '.eb-bell-menu{position:fixed;top:0;right:0;width:344px;max-width:92vw;background:#FFFFFF;border:1px solid rgba(26,31,42,0.10);border-radius:14px;box-shadow:0 18px 50px rgba(26,31,42,0.22);z-index:120;opacity:0;transform:translateY(-6px);pointer-events:none;transition:opacity .16s ease,transform .16s ease;overflow:hidden}' +
         '.eb-bell-menu.open{opacity:1;transform:none;pointer-events:auto}' +
         '.eb-bm-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:13px 15px;border-bottom:1px solid rgba(26,31,42,0.06);font-weight:700;font-size:13px;color:#1A1F2A}' +
         '.eb-bm-head .eb-bm-count{font-size:11px;font-weight:600;color:#9A9A9A}' +
         '.eb-bm-actions{display:flex;align-items:center;gap:8px}' +
-        '.eb-bm-readall{background:transparent;border:none;color:var(--accent,#C97B3A);font:600 12px Inter,system-ui,sans-serif;cursor:pointer;padding:2px 2px;border-radius:6px;white-space:nowrap}' +
+        '.eb-bm-readall{background:transparent;border:none;color:var(--accent);font:600 12px Inter,system-ui,sans-serif;cursor:pointer;padding:2px 2px;border-radius:6px;white-space:nowrap}' +
         '.eb-bm-readall:hover{text-decoration:underline}' +
         '.eb-bm-act{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:7px;border:1px solid rgba(26,31,42,0.10);background:#FFFFFF;color:#5B6270;cursor:pointer;padding:0}' +
-        '.eb-bm-act:hover{background:#F6F4EF;color:#1A1F2A}' +
+        '.eb-bm-act:hover{background:var(--n95);color:#1A1F2A}' +
         '.eb-bm-act svg{width:14px;height:14px}' +
         'html[data-mode="dark"] .eb-bm-act{background:rgba(255,255,255,0.06);border-color:rgba(255,255,255,0.12);color:#A8AEB8}' +
         'html[data-mode="dark"] .eb-bm-act:hover{background:rgba(255,255,255,0.10);color:#E8EAEE}' +
         '.eb-bm-list{max-height:320px;overflow-y:auto}' +
         '.eb-bm-item{display:block;padding:12px 15px;border-bottom:1px solid rgba(26,31,42,0.05);text-decoration:none;color:inherit}' +
         '.eb-bm-item:last-child{border-bottom:none}' +
-        '.eb-bm-item:hover{background:#F6F4EF}' +
+        '.eb-bm-item:hover{background:var(--n95)}' +
         '.eb-bm-title{font-size:13px;font-weight:600;color:#1A1F2A;margin-bottom:2px}' +
         '.eb-bm-body{font-size:12px;color:#5B6270;line-height:1.45;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}' +
         '.eb-bm-time{font-size:11px;color:#9A9A9A;margin-top:4px}' +
         '.eb-bm-empty{padding:26px 15px;text-align:center;font-size:12.5px;color:#8A8A8A}' +
         '.eb-bm-foot{padding:10px 15px;text-align:center;border-top:1px solid rgba(26,31,42,0.06)}' +
-        '.eb-bm-foot a{font-size:12.5px;font-weight:600;color:var(--accent,#C97B3A);text-decoration:none}' +
+        '.eb-bm-foot a{font-size:12.5px;font-weight:600;color:var(--accent);text-decoration:none}' +
         'html[data-mode="dark"] .eb-bell-menu{background:#161A22;border-color:rgba(255,255,255,0.10)}' +
         'html[data-mode="dark"] .eb-bm-head{color:#E8EAEE;border-bottom-color:rgba(255,255,255,0.08)}' +
         'html[data-mode="dark"] .eb-bm-item{border-bottom-color:rgba(255,255,255,0.06)}' +

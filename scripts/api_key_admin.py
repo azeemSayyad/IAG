@@ -22,7 +22,7 @@ import uuid
 import psycopg2
 from psycopg2.extras import Json
 
-# Our tenant (Launchpad / Endeavor). The key is pinned here — full SCOPE access,
+# Our tenant (Launchpad / Insurance Alliance Group). The key is pinned here — full SCOPE access,
 # never cross-tenant. Override with --tenant if ever needed.
 DEFAULT_TENANT = "04b5bd4c-0049-4f15-b6e7-339d59ee394e"
 _B62 = string.ascii_uppercase + string.ascii_lowercase + string.digits

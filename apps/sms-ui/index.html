@@ -9,6 +9,10 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
+    <!-- Brand palette — the portal's single source of truth for colour, served
+         from the site root (apps/frontendall/brand.js). Blocking + first so the
+         SPA's first paint is already branded. -->
+    <script src="/brand.js?v=1"></script>
     <title>SMS Workspace</title>
   </head>
   <body>
@@ -17,12 +21,12 @@
     <!-- Mobile hard gate (on phones replaces the whole UI with a compulsory
          "install the app" screen). Shared vanilla file served at the site root. -->
     <script>
-      (function () { var s = document.createElement("script"); s.src = "/app-gate.js"; s.defer = true; document.body.appendChild(s); })();
+      (function () { var s = document.createElement("script"); s.src = "/app-gate.js?v=2"; s.defer = true; document.body.appendChild(s); })();
     </script>
     <!-- Announcement gate (blocking blurred popup for admin announcements). Shared
          vanilla file served at the site root; loaded at runtime so Vite never bundles it. -->
     <script>
-      (function () { var s = document.createElement("script"); s.src = "/announcements.js"; s.defer = true; document.body.appendChild(s); })();
+      (function () { var s = document.createElement("script"); s.src = "/announcements.js?v=2"; s.defer = true; document.body.appendChild(s); })();
     </script>
   </body>
 </html>

@@ -48,7 +48,7 @@
     ov.innerHTML =
       '<div role="dialog" aria-modal="true" style="max-width:560px;width:92%;background:#fff;border-radius:16px;' +
       'box-shadow:0 24px 70px rgba(0,0,0,.35);padding:26px 28px;font-family:Inter,system-ui,-apple-system,sans-serif">' +
-        '<div style="font-size:.72rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#C97B3A;margin-bottom:10px">' +
+        '<div style="font-size:.72rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--accent);margin-bottom:10px">' +
           '📣 Announcement</div>' +
         '<div style="font-size:1.05rem;line-height:1.55;color:#0F172A;white-space:pre-wrap;font-weight:500">' + esc(ann.body) + '</div>' +
         '<label style="display:flex;align-items:center;gap:10px;margin:22px 0 16px;cursor:pointer;font-size:.9rem;color:#334155">' +

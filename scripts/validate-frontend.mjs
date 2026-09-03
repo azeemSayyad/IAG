@@ -52,7 +52,12 @@ for (const file of walk(root)) {
         // settings.html plus an in-page anchor, not a file literally named that).
         const raw = match[1].split("?")[0].split("#")[0];
         if (!isLocalAsset(raw)) continue;
-        const target = join(dirname(file), raw);
+        // A leading "/" is the deployed SITE root, which is apps/frontendall —
+        // not the directory the referencing file happens to live in. (e.g. the
+        // SMS SPA at /sms/ loads the shared /brand.js from the root.)
+        const target = raw.startsWith("/")
+          ? join(root, raw.slice(1))
+          : join(dirname(file), raw);
         if (!existsSync(target)) {
           errors.push(`${file}: missing local asset ${match[1]}`);
         }

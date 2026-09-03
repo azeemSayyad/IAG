@@ -3,9 +3,9 @@
    the native portal. Kept in its own file to stay faithful to the source. */
 
 :root {
-  --bg: #ddd8ce;
-  --bg-grad-1: #e2dcd0;
-  --bg-grad-2: #d2cdc2;
+  --bg: var(--n84);
+  --bg-grad-1: var(--n85);
+  --bg-grad-2: var(--n79);
   --border: rgba(26, 31, 42, 0.07);
   --border-hover: rgba(26, 31, 42, 0.14);
   --border-soft: rgba(26, 31, 42, 0.06);
@@ -13,13 +13,9 @@
   --text: #2d3340;
   --text-muted: rgba(26, 31, 42, 0.6);
   --text-faint: rgba(26, 31, 42, 0.42);
-  /* Accent vars are also set inline on <html> by the theme bridge (theme.ts),
-     which recolors them per the chosen ebTheme. These :root values are the
-     light/warm defaults so the app still renders correctly before the bridge
-     runs (and if localStorage is empty). */
-  --accent: #c97b3a;
-  --accent-2: #e0995e;
-  --accent-hover: #b26a2d;
+  /* --accent / --accent-2 / --accent-hover and the whole --nNN / --aNN ramp are
+     written onto <html> by /brand.js, the portal's single source of truth for
+     colour. Never restate a brand colour here — it would fork the palette. */
   --up: #4f8268;
   --down: #a3525c;
   --pending: #9c7842;
@@ -28,7 +24,7 @@
   --surface-2: rgba(255, 255, 255, 0.65);
   --surface-3: rgba(255, 255, 255, 0.6);
   --item-hover: rgba(26, 31, 42, 0.05);
-  --item-active-bg: rgba(var(--accent-rgb, 201, 123, 58), 0.1);
+  --item-active-bg: rgba(var(--accent-rgb), 0.1);
   --avatar-grad: linear-gradient(135deg, #2a2f3a, #1a1f2a);
   /* Opaque (non-translucent) surface for popovers like the account menu. */
   --menu-bg: #ffffff;
@@ -53,7 +49,7 @@ html[data-mode="dark"] {
   --surface-2: rgba(255, 255, 255, 0.05);
   --surface-3: rgba(255, 255, 255, 0.06);
   --item-hover: rgba(255, 255, 255, 0.06);
-  --item-active-bg: rgba(var(--accent-rgb, 201, 123, 58), 0.16);
+  --item-active-bg: rgba(var(--accent-rgb), 0.16);
   --avatar-grad: linear-gradient(135deg, #3a414f, #1a1f2a);
   --menu-bg: #1b2029;
 }
@@ -90,7 +86,7 @@ body::before {
   position: fixed;
   inset: -15%;
   z-index: -3;
-  background: linear-gradient(135deg, #fffbf5 0%, #ffefdc 50%, #fff6e9 100%);
+  background: var(--page-gradient);
 }
 body::after {
   content: "";
@@ -101,7 +97,7 @@ body::after {
   background: radial-gradient(
     ellipse 95% 85% at 50% 50%,
     transparent 55%,
-    rgba(var(--accent-rgb, 201, 123, 58), 0.08) 100%
+    rgba(var(--accent-rgb), 0.08) 100%
   );
 }
 
@@ -123,14 +119,18 @@ body::after {
   transition: width 220ms var(--ease);
 }
 .sb-brand {
-  height: var(--topbar-h);
+  /* The wordmark is the full company name ("Insurance Alliance Group"), too
+     long for one line in a 220px sidebar — it wraps to two, so the row grows
+     instead of clipping at the topbar height. Mirrors prefs-extras. */
+  min-height: var(--topbar-h);
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 0 10px;
+  padding: 12px 10px;
   font-weight: 600;
-  font-size: 1.0625rem;
-  letter-spacing: -0.015em;
+  font-size: 0.9375rem;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
   color: var(--text);
   /* Match the static pages (prefs-extras drops the separator + side margin so
      the logo lines up with the nav labels at the sidebar inset). */
@@ -144,7 +144,7 @@ body::after {
   border-radius: 5px;
   background: linear-gradient(135deg, var(--accent), var(--accent-2));
   box-shadow:
-    0 1px 2px rgba(var(--accent-rgb, 201, 123, 58), 0.3),
+    0 1px 2px rgba(var(--accent-rgb), 0.3),
     inset 0 1px 0 rgba(255, 255, 255, 0.22);
   flex-shrink: 0;
   display: flex;
@@ -236,17 +236,17 @@ body::after {
 .sb-featured {
   background: linear-gradient(
     135deg,
-    rgba(var(--accent-rgb, 201, 123, 58), 0.1),
-    rgba(var(--accent-rgb, 201, 123, 58), 0.04)
+    rgba(var(--accent-rgb), 0.1),
+    rgba(var(--accent-rgb), 0.04)
   );
-  border: 1px solid rgba(var(--accent-rgb, 201, 123, 58), 0.2);
+  border: 1px solid rgba(var(--accent-rgb), 0.2);
   margin-bottom: 6px;
 }
 .sb-featured:hover {
   background: linear-gradient(
     135deg,
-    rgba(var(--accent-rgb, 201, 123, 58), 0.16),
-    rgba(var(--accent-rgb, 201, 123, 58), 0.08)
+    rgba(var(--accent-rgb), 0.16),
+    rgba(var(--accent-rgb), 0.08)
   );
 }
 .sb-featured svg {
@@ -457,7 +457,7 @@ a.icon-btn {
   height: 15px;
   padding: 0 4px;
   border-radius: 8px;
-  background: var(--accent, #c97b3a);
+  background: var(--accent);
   color: #fff;
   font-size: 9px;
   font-weight: 700;
@@ -632,7 +632,7 @@ html[data-mode="dark"] .sb-collapse-btn {
        frosted-glass look (translucent --chrome-bg + blur) reads as a wrong grey.
        Paint the SAME page background gradient on it so it matches the page (this
        mirrors what prefs-extras does for the static portal pages). */
-    background: linear-gradient(135deg, #fffbf5 0%, #ffefdc 50%, #fff6e9 100%);
+    background: var(--page-gradient);
     background-attachment: fixed;
     backdrop-filter: none;
     -webkit-backdrop-filter: none;

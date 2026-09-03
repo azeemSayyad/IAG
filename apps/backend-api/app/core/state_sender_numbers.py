@@ -13,6 +13,11 @@ from __future__ import annotations
 from typing import List
 
 # Active dedicated SMS numbers, in E.164. Keyed by 2-letter US state code.
+# ⚠️ PREVIOUS OPERATOR'S NUMBERS — these DIDs belong to the company this
+# codebase came from and are registered to THEIR 10DLC campaign / provider
+# account. Insurance Alliance Group must replace this fleet with its own
+# provisioned numbers before enabling outbound SMS (SMS_LIVE_SEND_ENABLED).
+# Sending from these would put IAG traffic on another company's account.
 STATE_SENDER_NUMBERS: dict[str, List[str]] = {
     # Florida — 39 active (removed +14073093955 and +19413846705: deleted from Sinch inventory)
     "FL": [

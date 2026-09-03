@@ -3,9 +3,10 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<title>Deal Closed — Endeavor</title>
+<title>Deal Closed — Insurance Alliance Group</title>
+<script src="brand.js?v=1"></script>
 <script src="i18n-dict.js?v=2"></script>
-<script src="prefs-extras.js?v=28"></script>
+<script src="prefs-extras.js?v=30"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
@@ -45,7 +46,7 @@
 .cb-val{font-size:.9375rem;font-weight:600;color:var(--text-strong);letter-spacing:-0.005em}
 .cb-sub{font-size:.75rem;color:var(--text-muted);margin-top:2px}
 
-.drop{display:block;padding:18px 18px 16px;background:#FAF7F1;border:1px solid var(--border);border-radius:12px;text-align:left;margin-bottom:22px}
+.drop{display:block;padding:18px 18px 16px;background:var(--n96);border:1px solid var(--border);border-radius:12px;text-align:left;margin-bottom:22px}
 .drop-head{display:flex;align-items:center;gap:10px;margin-bottom:12px}
 .drop-icon{width:34px;height:34px;border-radius:9px;background:var(--c-soft);display:inline-flex;align-items:center;justify-content:center;color:var(--c);flex-shrink:0}
 .drop-icon svg{width:16px;height:16px;stroke-width:2}
@@ -63,7 +64,7 @@ html[data-mode="dark"] .drop-zone{background:rgba(255,255,255,0.04) !important;b
 .done-actions{display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap}
 .btn-done{height:42px;padding:0 18px;display:inline-flex;align-items:center;gap:8px;border-radius:10px;font-family:inherit;font-size:.875rem;font-weight:600;cursor:pointer;transition:transform 150ms var(--ease),background 200ms var(--ease),box-shadow 200ms var(--ease),color 150ms var(--ease)}
 .btn-done.ghost{background:#FFF;color:var(--text-strong);border:1px solid var(--border)}
-.btn-done.ghost:hover{background:#FAF7F1;border-color:var(--border-hover);transform:translateY(-1px)}
+.btn-done.ghost:hover{background:var(--n96);border-color:var(--border-hover);transform:translateY(-1px)}
 .btn-done.soft{background:#E87B45;color:#FFF;border:none;box-shadow:0 1px 2px rgba(184,72,23,0.18),0 6px 18px rgba(216,94,32,0.22)}
 .btn-done.soft:hover{background:#D85E20;transform:translateY(-1px)}
 .btn-done.solid{background:#D85E20;color:#FFF;border:none;box-shadow:0 1px 2px rgba(184,72,23,0.20),0 6px 18px rgba(216,94,32,0.28)}
@@ -110,14 +111,14 @@ html[data-mode="dark"] .drop-zone{background:rgba(255,255,255,0.04) !important;b
 }
 </style>
   <script src="services/api.js?v=10"></script>
-  <script src="services/error-boundary.js?v=19"></script>
+  <script src="services/error-boundary.js?v=20"></script>
 </head>
 <body data-chapter="done">
 
 <div class="wiz-shell">
-  <a class="ch-brand" href="appointments.html" aria-label="Endeavor">
+  <a class="ch-brand" href="appointments.html" aria-label="Insurance Alliance Group">
     <span class="ch-brand-dot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/><path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/></svg></span>
-    Endeavor
+    Insurance Alliance Group
   </a>
 
   <div class="wiz-card done-card">

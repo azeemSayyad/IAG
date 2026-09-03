@@ -3,32 +3,8 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<title>DID Fleet — Endeavor</title>
-<script>
-(function(){try{
-const FM={sm:'14px',md:'16px',lg:'18px',xl:'20px'};
-const TM={
-warm:{a:'#C97B3A',a2:'#E0995E',ah:'#B26A2D',g:'linear-gradient(135deg,#FFFBF5 0%,#FFEFDC 50%,#FFF6E9 100%)',gl:'rgba(178,106,45,.08)'},
-forest:{a:'#4F8268',a2:'#6B9F86',ah:'#3D6651',g:'linear-gradient(135deg,#F5FBF7 0%,#E0F1E6 50%,#E8F4ED 100%)',gl:'rgba(63,109,84,.08)'},
-indigo:{a:'#5E7BA8',a2:'#7B96BD',ah:'#4A6488',g:'linear-gradient(135deg,#F5F7FB 0%,#DCE4F1 50%,#E5EBF4 100%)',gl:'rgba(74,100,136,.08)'},
-rose:{a:'#A3525C',a2:'#B97077',ah:'#82414B',g:'linear-gradient(135deg,#FBF5F6 0%,#F1DCDF 50%,#F4E5E8 100%)',gl:'rgba(130,65,75,.08)'},
-slate:{a:'#2D3340',a2:'#5A6275',ah:'#1A1F2A',g:'linear-gradient(135deg,#B8BCC5 0%,#9DA3AD 50%,#ABB0BA 100%)',gl:'rgba(26,31,42,.14)'},
-amber:{a:'#9C7842',a2:'#B89058',ah:'#7C5E2F',g:'linear-gradient(135deg,#FBF7F0 0%,#F0E5D0 50%,#F4EBDB 100%)',gl:'rgba(124,94,47,.08)'}
-};
-window.__ebApplyFont=function(v){document.documentElement.style.fontSize=FM[v]||'16px';};
-window.__ebApplyTheme=function(v){
-var t=TM[v]||TM.warm,D=document.documentElement;
-D.style.setProperty('--accent',t.a);
-D.style.setProperty('--accent-2',t.a2);
-D.style.setProperty('--accent-hover',t.ah);
-var st=document.getElementById('ebPrefsTheme');
-if(!st){st=document.createElement('style');st.id='ebPrefsTheme';document.head.appendChild(st);}
-st.textContent='body::before{background:'+t.g+' !important}body::after{background:radial-gradient(ellipse 95% 85% at 50% 50%,transparent 55%,'+t.gl+' 100%) !important}.sb-brand-dot{background:linear-gradient(135deg,'+t.a+','+t.a2+') !important}.usage-fill{background:linear-gradient(90deg,'+t.a+','+t.a2+') !important}';
-};
-window.__ebApplyFont(localStorage.getItem('ebFontSize')||'md');
-window.__ebApplyTheme(localStorage.getItem('ebTheme')||'warm');
-}catch(e){}})();
-</script>
+<title>DID Fleet — Insurance Alliance Group</title>
+<script src="brand.js?v=1"></script>
 <script>
 // Page guard — DID Fleet is admin/dev only. A non-admin who opens this URL
 // directly is bounced out before any dashboard data is fetched. The nav link is
@@ -42,25 +18,24 @@ window.__ebApplyTheme(localStorage.getItem('ebTheme')||'warm');
 }catch(e){}})();
 </script>
 <script src="i18n-dict.js?v=2"></script>
-<script src="prefs-extras.js?v=28"></script>
+<script src="prefs-extras.js?v=30"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
 <style>
 *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
 :root{
-  --bg:#DDD8CE;
+  --bg:var(--n84);
   --border:rgba(26,31,42,0.07);--border-hover:rgba(26,31,42,0.14);--border-soft:rgba(26,31,42,0.06);
   --text-strong:#1A1F2A;--text:#2D3340;--text-muted:rgba(26,31,42,0.60);--text-faint:rgba(26,31,42,0.42);
-  --accent:#C97B3A;--accent-2:#E0995E;--accent-hover:#B26A2D;
   --up:#4F8268;--down:#A3525C;--pending:#9C7842;
   --sidebar-w:220px;--topbar-h:64px;
   --ease:cubic-bezier(0.4,0,0.2,1);
 }
 html,body{height:100%}
 body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;position:relative;overflow-x:hidden;-webkit-font-smoothing:antialiased}
-body::before{content:'';position:fixed;inset:-15%;z-index:-3;background:linear-gradient(135deg,#FFFBF5 0%,#FFEFDC 50%,#FFF6E9 100%);animation:bgDrift 22s ease-in-out infinite;transform-origin:center;will-change:transform}
-body::after{content:'';position:fixed;inset:-10%;z-index:-2;pointer-events:none;background:radial-gradient(ellipse 95% 85% at 50% 50%,transparent 55%,rgba(178,106,45,0.08) 100%);animation:bgFloat 28s ease-in-out infinite reverse;transform-origin:center;will-change:transform}
+body::before{content:'';position:fixed;inset:-15%;z-index:-3;background:linear-gradient(135deg,var(--a98) 0%,var(--a93) 50%,var(--a96) 100%);animation:bgDrift 22s ease-in-out infinite;transform-origin:center;will-change:transform}
+body::after{content:'';position:fixed;inset:-10%;z-index:-2;pointer-events:none;background:radial-gradient(ellipse 95% 85% at 50% 50%,transparent 55%,rgba(var(--accent-hover-rgb),0.08) 100%);animation:bgFloat 28s ease-in-out infinite reverse;transform-origin:center;will-change:transform}
 @keyframes bgDrift{0%{transform:scale(1) translate(0,0) rotate(0deg)}50%{transform:scale(1.1) translate(-2.5%,-3.5%) rotate(0.7deg)}100%{transform:scale(1) translate(0,0) rotate(0deg)}}
 @keyframes bgFloat{0%,100%{transform:scale(1) translate(0,0)}50%{transform:scale(1.08) translate(2%,-2%)}}
 @media (prefers-reduced-motion:reduce){body::before,body::after{animation:none}}
@@ -68,17 +43,17 @@ body::after{content:'';position:fixed;inset:-10%;z-index:-2;pointer-events:none;
 /* ===== shell (sidebar + topbar) — same conventions as the other portal pages ===== */
 .sidebar{position:fixed;top:0;left:0;width:var(--sidebar-w);height:100vh;background:rgba(255,255,255,0.55);backdrop-filter:blur(22px) saturate(160%);-webkit-backdrop-filter:blur(22px) saturate(160%);border-right:1px solid var(--border);display:flex;flex-direction:column;padding:0 12px 12px;z-index:40}
 .sb-brand{height:var(--topbar-h);display:flex;align-items:center;gap:10px;padding:0 10px;font-weight:600;font-size:1.0625rem;letter-spacing:-0.015em;color:var(--text);border-bottom:1px solid var(--border-soft);margin:0 -12px 12px;text-decoration:none}
-.sb-brand-dot{width:26px;height:26px;border-radius:8px;background:linear-gradient(135deg,#C97B3A,#E0995E);box-shadow:0 1px 2px rgba(178,106,45,0.30),inset 0 1px 0 rgba(255,255,255,0.22);flex-shrink:0;display:flex;align-items:center;justify-content:center}
+.sb-brand-dot{width:26px;height:26px;border-radius:8px;background:linear-gradient(135deg,var(--accent),var(--accent-2));box-shadow:0 1px 2px rgba(var(--accent-hover-rgb),0.30),inset 0 1px 0 rgba(255,255,255,0.22);flex-shrink:0;display:flex;align-items:center;justify-content:center}
 .sb-brand-dot svg{width:14px;height:14px;color:#fff;stroke-width:1.8}
 .sb-nav{display:flex;flex-direction:column;gap:2px;flex:1;width:100%}
 .sb-item{width:100%;height:38px;border-radius:8px;padding:0 10px;display:flex;align-items:center;gap:10px;color:var(--text-muted);font-family:inherit;font-size:.875rem;font-weight:500;cursor:pointer;text-decoration:none;transition:color 160ms var(--ease),background 160ms var(--ease);position:relative}
 .sb-item:hover{color:var(--text);background:rgba(26,31,42,0.05)}
-.sb-item.active{background:rgba(201,123,58,0.10);color:var(--text)}
+.sb-item.active{background:rgba(var(--accent-rgb),0.10);color:var(--text)}
 .sb-item.active svg{color:var(--accent)}
 .sb-item svg{width:17px;height:17px;stroke-width:1.7;flex-shrink:0}
 .sb-tip{font-size:.875rem;font-weight:500}
 .sb-badge{margin-left:auto;min-width:20px;height:18px;padding:0 6px;border-radius:9px;background:var(--accent);color:#fff;font-size:.6875rem;font-weight:600;display:inline-flex;align-items:center;justify-content:center;font-variant-numeric:tabular-nums}
-.sb-featured{background:linear-gradient(135deg,rgba(201,123,58,0.10),rgba(224,153,94,0.04));border:1px solid rgba(201,123,58,0.20);margin-bottom:6px}
+.sb-featured{background:linear-gradient(135deg,rgba(var(--accent-rgb),0.10),rgba(var(--accent-2-rgb),0.04));border:1px solid rgba(var(--accent-rgb),0.20);margin-bottom:6px}
 .sb-featured svg{color:var(--accent)}
 .sb-featured .sb-tip{font-weight:600;color:var(--text)}
 .sb-group{display:flex;flex-direction:column;width:100%;margin-top:6px}
@@ -187,7 +162,7 @@ body::after{content:'';position:fixed;inset:-10%;z-index:-2;pointer-events:none;
 .fc-chip-ok{background:rgba(79,130,104,.14);color:var(--up)}
 .fc-chip-warn{background:rgba(156,120,66,.16);color:#7C5E2F}
 .fc-chip-crit{background:rgba(163,82,92,.14);color:var(--down)}
-.cc-cta{height:30px;padding:0 12px;border-radius:8px;border:none;background:var(--accent);color:#fff;font-family:inherit;font-size:.75rem;font-weight:600;cursor:pointer;box-shadow:0 1px 2px rgba(178,106,45,.2)}
+.cc-cta{height:30px;padding:0 12px;border-radius:8px;border:none;background:var(--accent);color:#fff;font-family:inherit;font-size:.75rem;font-weight:600;cursor:pointer;box-shadow:0 1px 2px rgba(var(--accent-hover-rgb),.2)}
 .cc-cta:hover{background:var(--accent-hover)}
 
 /* Engine toggles */
@@ -317,7 +292,7 @@ html[data-mode="dark"] .held-v{color:#E6989F}
 }
 </style>
 <script src="services/api.js?v=10"></script>
-<script src="services/error-boundary.js?v=19"></script>
+<script src="services/error-boundary.js?v=20"></script>
 </head>
 <body>
 
@@ -326,7 +301,7 @@ html[data-mode="dark"] .held-v{color:#E6989F}
 <aside class="sidebar" id="sidebar">
   <a class="sb-brand" href="ask-the-brain.html">
     <span class="sb-brand-dot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/><path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/></svg></span>
-    <span>Endeavor</span>
+    <span>Insurance Alliance Group</span>
   </a>
   <nav class="sb-nav">
     <a class="sb-item sb-featured" href="ask-the-brain.html" aria-label="Ask the Brain">

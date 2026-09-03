@@ -3,40 +3,15 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<title>Mobile App Required — Endeavor</title>
-<script>
-(function(){try{
-const FM={sm:'14px',md:'16px',lg:'18px',xl:'20px'};
-const TM={
-warm:{a:'#C97B3A',a2:'#E0995E',ah:'#B26A2D',b1:'rgba(224,153,94,.40)',b2:'rgba(201,123,58,.32)',b3:'rgba(255,200,150,.22)',g:'linear-gradient(135deg,#FFFBF5 0%,#FFEFDC 50%,#FFF6E9 100%)',gl:'rgba(178,106,45,.08)'},
-forest:{a:'#4F8268',a2:'#6B9F86',ah:'#3D6651',b1:'rgba(107,159,134,.40)',b2:'rgba(79,130,104,.32)',b3:'rgba(180,220,200,.22)',g:'linear-gradient(135deg,#F5FBF7 0%,#E0F1E6 50%,#E8F4ED 100%)',gl:'rgba(63,109,84,.08)'},
-indigo:{a:'#5E7BA8',a2:'#7B96BD',ah:'#4A6488',b1:'rgba(123,150,189,.40)',b2:'rgba(94,123,168,.32)',b3:'rgba(180,200,230,.22)',g:'linear-gradient(135deg,#F5F7FB 0%,#DCE4F1 50%,#E5EBF4 100%)',gl:'rgba(74,100,136,.08)'},
-rose:{a:'#A3525C',a2:'#B97077',ah:'#82414B',b1:'rgba(185,112,119,.40)',b2:'rgba(163,82,92,.32)',b3:'rgba(230,180,190,.22)',g:'linear-gradient(135deg,#FBF5F6 0%,#F1DCDF 50%,#F4E5E8 100%)',gl:'rgba(130,65,75,.08)'},
-slate:{a:'#2D3340',a2:'#5A6275',ah:'#1A1F2A',b1:'rgba(90,98,117,.45)',b2:'rgba(45,51,64,.38)',b3:'rgba(150,156,170,.28)',g:'linear-gradient(135deg,#B8BCC5 0%,#9DA3AD 50%,#ABB0BA 100%)',gl:'rgba(26,31,42,.14)'},
-amber:{a:'#9C7842',a2:'#B89058',ah:'#7C5E2F',b1:'rgba(184,144,88,.40)',b2:'rgba(156,120,66,.32)',b3:'rgba(245,220,180,.22)',g:'linear-gradient(135deg,#FBF7F0 0%,#F0E5D0 50%,#F4EBDB 100%)',gl:'rgba(124,94,47,.08)'}
-};
-window.__ebApplyFont=function(v){document.documentElement.style.fontSize=FM[v]||'16px';};
-window.__ebApplyTheme=function(v){
-var t=TM[v]||TM.warm,D=document.documentElement;
-D.style.setProperty('--accent',t.a);
-D.style.setProperty('--accent-2',t.a2);
-D.style.setProperty('--accent-hover',t.ah);
-var st=document.getElementById('ebPrefsTheme');
-if(!st){st=document.createElement('style');st.id='ebPrefsTheme';document.head.appendChild(st);}
-st.textContent='body::before{background:'+t.g+' !important}body::after{background:radial-gradient(ellipse 95% 85% at 50% 50%,transparent 55%,'+t.gl+' 100%) !important}';
-};
-window.__ebApplyFont(localStorage.getItem('ebFontSize')||'md');
-window.__ebApplyTheme(localStorage.getItem('ebTheme')||'warm');
-if(localStorage.getItem('ebMode')==='dark')document.documentElement.setAttribute('data-mode','dark');
-}catch(e){}})();
-</script>
+<title>Mobile App Required — Insurance Alliance Group</title>
+<script src="brand.js?v=1"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
 <style>
 *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
 :root{
-  --bg:#FFF8EE;
+  --bg:var(--a97);
   --glass:rgba(255,255,255,0.60);
   --glass-hover:rgba(255,255,255,0.80);
   --border:rgba(26,31,42,0.09);
@@ -45,10 +20,7 @@ if(localStorage.getItem('ebMode')==='dark')document.documentElement.setAttribute
   --text:#2D3340;
   --text-muted:rgba(26,31,42,0.58);
   --text-faint:rgba(26,31,42,0.40);
-  --accent:#C97B3A;
-  --accent-2:#E0995E;
-  --accent-hover:#B26A2D;
-  --accent-glow:rgba(201,123,58,0.28);
+  --accent-glow:rgba(var(--accent-rgb),0.28);
   --ease:cubic-bezier(0.4,0,0.2,1);
 }
 html,body{height:100%}
@@ -69,11 +41,11 @@ body{
 /* Background is stationary (no drift) so the card sits on a steady canvas. */
 body::before{
   content:'';position:fixed;inset:-15%;z-index:-3;
-  background:linear-gradient(135deg,#FFFBF5 0%,#FFEFDC 50%,#FFF6E9 100%);
+  background:linear-gradient(135deg,var(--a98) 0%,var(--a93) 50%,var(--a96) 100%);
 }
 body::after{
   content:'';position:fixed;inset:-10%;z-index:-2;pointer-events:none;
-  background:radial-gradient(ellipse 95% 85% at 50% 50%,transparent 55%,rgba(178,106,45,0.08) 100%);
+  background:radial-gradient(ellipse 95% 85% at 50% 50%,transparent 55%,rgba(var(--accent-hover-rgb),0.08) 100%);
 }
 @keyframes bgDrift{0%{transform:scale(1) translate(0,0) rotate(0deg)}20%{transform:scale(1.10) translate(-3.5%,2.5%) rotate(0.6deg)}40%{transform:scale(1.06) translate(3%,-3%) rotate(-0.5deg)}60%{transform:scale(1.12) translate(-2.5%,-3.5%) rotate(0.7deg)}80%{transform:scale(1.08) translate(3%,2%) rotate(-0.4deg)}100%{transform:scale(1) translate(0,0) rotate(0deg)}}
 @keyframes bgFloat{0%,100%{transform:scale(1) translate(0,0)}50%{transform:scale(1.08) translate(2%,-2%)}}
@@ -91,7 +63,7 @@ body::after{
   padding:40px 48px 22px;
   box-shadow:
     0 1px 2px rgba(26,31,42,0.04),
-    0 28px 72px rgba(178,106,45,0.14),
+    0 28px 72px rgba(var(--accent-hover-rgb),0.14),
     0 10px 24px rgba(26,31,42,0.09),
     inset 0 1px 0 rgba(255,255,255,0.60);
   text-align:center;
@@ -100,7 +72,7 @@ body::after{
 .gate-card::before{
   content:'';
   position:absolute;top:0;left:10%;right:10%;height:1px;
-  background:linear-gradient(90deg,transparent,rgba(201,123,58,0.38),transparent);
+  background:linear-gradient(90deg,transparent,rgba(var(--accent-rgb),0.38),transparent);
   pointer-events:none;
 }
 .gate-card>*{position:relative;z-index:1}
@@ -115,11 +87,11 @@ body::after{
 }
 .gate-logo{
   width:80px;height:80px;border-radius:22px;
-  background:linear-gradient(135deg,#C97B3A,#E0995E);
+  background:linear-gradient(135deg,var(--accent),var(--accent-2));
   border:1px solid rgba(255,255,255,0.22);
   box-shadow:
-    0 6px 24px rgba(201,123,58,0.40),
-    0 2px 6px rgba(178,106,45,0.28),
+    0 6px 24px rgba(var(--accent-rgb),0.40),
+    0 2px 6px rgba(var(--accent-hover-rgb),0.28),
     inset 0 1px 0 rgba(255,255,255,0.30);
   display:flex;align-items:center;justify-content:center;
 }
@@ -128,13 +100,13 @@ body::after{
   width:16px;height:16px;border-radius:50%;
   background:#fff;
   position:absolute;bottom:-2px;right:-2px;
-  box-shadow:0 2px 6px rgba(178,106,45,0.30);
-  border:2.5px solid rgba(201,123,58,0.20);
+  box-shadow:0 2px 6px rgba(var(--accent-hover-rgb),0.30);
+  border:2.5px solid rgba(var(--accent-rgb),0.20);
   display:flex;align-items:center;justify-content:center;
 }
 .gate-logo-dot::after{
   content:'';width:6px;height:6px;border-radius:50%;
-  background:linear-gradient(135deg,#C97B3A,#E0995E);
+  background:linear-gradient(135deg,var(--accent),var(--accent-2));
 }
 
 
@@ -180,8 +152,8 @@ body::after{
 }
 .store-btn:hover{
   background:rgba(255,255,255,0.92);
-  border-color:rgba(201,123,58,0.30);
-  box-shadow:0 4px 14px rgba(178,106,45,0.14),0 1px 3px rgba(26,31,42,0.08),inset 0 1px 0 rgba(255,255,255,0.80);
+  border-color:rgba(var(--accent-rgb),0.30);
+  box-shadow:0 4px 14px rgba(var(--accent-hover-rgb),0.14),0 1px 3px rgba(26,31,42,0.08),inset 0 1px 0 rgba(255,255,255,0.80);
   transform:translateY(-1px);
 }
 .store-btn:active{transform:translateY(0)}
@@ -221,9 +193,9 @@ html[data-mode="dark"] .gate-card{
   box-shadow:0 1px 2px rgba(0,0,0,0.30),0 28px 72px rgba(0,0,0,0.40),0 10px 24px rgba(0,0,0,0.22),inset 0 1px 0 rgba(255,255,255,0.06);
 }
 html[data-mode="dark"] .gate-card::before{
-  background:linear-gradient(90deg,transparent,rgba(201,123,58,0.28),transparent);
+  background:linear-gradient(90deg,transparent,rgba(var(--accent-rgb),0.28),transparent);
 }
-html[data-mode="dark"] .gate-heading{color:#F0EAE0}
+html[data-mode="dark"] .gate-heading{color:var(--n91)}
 html[data-mode="dark"] .gate-body{color:rgba(240,234,224,0.58)}
 html[data-mode="dark"] .gate-footer{color:rgba(240,234,224,0.45)}
 html[data-mode="dark"] .store-btn{
@@ -233,14 +205,14 @@ html[data-mode="dark"] .store-btn{
 }
 html[data-mode="dark"] .store-btn:hover{
   background:rgba(255,255,255,0.10);
-  border-color:rgba(201,123,58,0.28);
+  border-color:rgba(var(--accent-rgb),0.28);
   box-shadow:0 4px 14px rgba(0,0,0,0.28),inset 0 1px 0 rgba(255,255,255,0.08);
 }
-html[data-mode="dark"] .store-label-main{color:#F0EAE0}
+html[data-mode="dark"] .store-label-main{color:var(--n91)}
 html[data-mode="dark"] .store-label-sub{color:rgba(240,234,224,0.40)}
 html[data-mode="dark"] .store-btn-arrow{color:rgba(240,234,224,0.40)}
-html[data-mode="dark"] .gate-logo{box-shadow:0 6px 24px rgba(201,123,58,0.30),inset 0 1px 0 rgba(255,255,255,0.22)}
-html[data-mode="dark"] .store-icon svg .apple-fill{fill:#F0EAE0}
+html[data-mode="dark"] .gate-logo{box-shadow:0 6px 24px rgba(var(--accent-rgb),0.30),inset 0 1px 0 rgba(255,255,255,0.22)}
+html[data-mode="dark"] .store-icon svg .apple-fill{fill:var(--n91)}
 html[data-mode="dark"] .store-icon svg .play-c1{fill:#34A853}
 html[data-mode="dark"] .store-icon svg .play-c2{fill:#FBBC04}
 html[data-mode="dark"] .store-icon svg .play-c3{fill:#EA4335}
@@ -255,7 +227,7 @@ html[data-mode="dark"] .store-icon svg .play-c4{fill:#4285F4}
   <!-- Logo -->
   <div class="gate-logo-wrap">
     <div class="gate-logo">
-      <!-- Endeavor icon -->
+      <!-- Insurance Alliance Group icon -->
       <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" width="36" height="36">
         <path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/>
         <path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/>

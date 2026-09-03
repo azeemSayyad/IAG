@@ -11,8 +11,8 @@
   --text:#2D3340;
   --text-muted:rgba(26,31,42,0.60);
   --text-faint:rgba(26,31,42,0.42);
-  --field-bg:#F2EEE6;
-  --field-bg-hover:#EBE6DC;
+  --field-bg:var(--n93);
+  --field-bg-hover:var(--n89);
   --field-bg-focus:#FFFFFF;
   --ease:cubic-bezier(0.4,0,0.2,1);
 }
@@ -68,7 +68,7 @@ body[data-chapter="done"]{
 }
 
 html,body{height:100%}
-body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:#DDD8CE;color:var(--text);min-height:100vh;position:relative;overflow-x:hidden;-webkit-font-smoothing:antialiased}
+body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:var(--n84);color:var(--text);min-height:100vh;position:relative;overflow-x:hidden;-webkit-font-smoothing:antialiased}
 body::before{content:'';position:fixed;inset:-15%;z-index:-3;background:radial-gradient(ellipse 60% 55% at 18% 28%, var(--bg1), transparent 62%),radial-gradient(ellipse 58% 52% at 82% 75%, var(--bg2), transparent 62%),radial-gradient(ellipse 42% 45% at 50% 50%, var(--bg3), transparent 70%),var(--bgg);animation:bgDrift 22s ease-in-out infinite;will-change:transform}
 body::after{content:'';position:fixed;inset:-10%;z-index:-2;pointer-events:none;background:radial-gradient(ellipse 95% 85% at 50% 50%, transparent 55%, rgba(26,31,42,0.06) 100%);animation:bgFloat 28s ease-in-out infinite reverse}
 @keyframes bgDrift{0%{transform:scale(1) translate(0,0) rotate(0deg)}20%{transform:scale(1.10) translate(-3.5%,2.5%) rotate(0.6deg)}40%{transform:scale(1.06) translate(3%,-3%) rotate(-0.5deg)}60%{transform:scale(1.12) translate(-2.5%,-3.5%) rotate(0.7deg)}80%{transform:scale(1.08) translate(3%,2%) rotate(-0.4deg)}100%{transform:scale(1) translate(0,0) rotate(0deg)}}
@@ -161,7 +161,7 @@ body::after{content:'';position:fixed;inset:-10%;z-index:-2;pointer-events:none;
 .banner-btn svg{width:14px;height:14px;stroke-width:2.4}
 
 /* ─── Summary mini-card on Lock-the-sale ─── */
-.summary{background:linear-gradient(135deg,#FAF7F1 0%,#F2EEE6 100%);border:1px solid var(--border);border-radius:14px;padding:22px 24px;display:grid;grid-template-columns:1fr 1fr;gap:8px 40px;margin-top:22px}
+.summary{background:linear-gradient(135deg,var(--n96) 0%,var(--n93) 100%);border:1px solid var(--border);border-radius:14px;padding:22px 24px;display:grid;grid-template-columns:1fr 1fr;gap:8px 40px;margin-top:22px}
 .sum-col-eyebrow{color:var(--c);font-size:.6875rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;padding-bottom:6px;border-bottom:1px solid var(--c-border);margin-bottom:6px}
 .sum-row{display:flex;justify-content:space-between;align-items:baseline;gap:14px;padding:6px 0;font-size:.875rem}
 .sum-row .k{color:var(--text-muted)}

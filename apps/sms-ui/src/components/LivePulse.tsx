@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "../lib/api";
 import { getSocket } from "../lib/socket";
+import { brandColor } from "../lib/theme";
 
 /* Live ECG-style activity strip. Polls /sms/monitoring/pulse-events for DB
    activity (polls + messages) AND reacts instantly to realtime socket events
@@ -14,13 +15,18 @@ const LABELS: Record<string, string> = {
   outbound: "OUTBOUND",
   broadcast: "BROADCAST",
 };
-const SPIKE_COLOR: Record<string, string> = {
-  poll_success: "rgba(120,255,180,0.95)",
-  poll_fail: "rgba(255,120,120,0.95)",
-  inbound: "rgba(120,220,255,0.95)",
-  outbound: "rgba(224,153,94,0.95)",
-  broadcast: "rgba(201,123,58,0.95)",
-};
+// Canvas cannot resolve var(), so the two brand-coloured series read the live
+// values from /brand.js instead of restating them.
+function spikeColor(type: string): string {
+  switch (type) {
+    case "poll_success": return "rgba(120,255,180,0.95)";
+    case "poll_fail": return "rgba(255,120,120,0.95)";
+    case "inbound": return "rgba(120,220,255,0.95)";
+    case "outbound": return `rgba(${brandColor("--accent-2-rgb")},0.95)`;
+    case "broadcast": return `rgba(${brandColor("--accent-rgb")},0.95)`;
+    default: return "rgba(255,255,255,0.8)";
+  }
+}
 const WINDOW_MS = 90_000; // span shown across the strip (right->left travel time)
 const POLL_MS = 5_000;
 
@@ -136,7 +142,7 @@ export default function LivePulse() {
         const ex = ((WINDOW_MS - age) / WINDOW_MS) * w;
         const x = Math.min(ex + 4, w - 64);
         const ts = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
-        ctx!.fillStyle = SPIKE_COLOR[e.type] || "rgba(255,255,255,0.8)";
+        ctx!.fillStyle = spikeColor(e.type);
         ctx!.font = "bold 10px ui-monospace, monospace";
         ctx!.fillText(LABELS[e.type] || e.type, x, mid - 30);
         ctx!.fillStyle = "rgba(200,230,210,0.55)";

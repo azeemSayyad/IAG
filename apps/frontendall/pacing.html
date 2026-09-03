@@ -3,19 +3,20 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<title>Capacity Engine — Endeavor</title>
+<title>Capacity Engine — Insurance Alliance Group</title>
+<script src="brand.js?v=1"></script>
 <script src="i18n-dict.js?v=2"></script>
-<script src="prefs-extras.js?v=28"></script>
+<script src="prefs-extras.js?v=30"></script>
 <script src="services/api.js?v=10"></script>
-<script src="services/error-boundary.js?v=19"></script>
+<script src="services/error-boundary.js?v=20"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-:root{--bg:#DDD8CE;--card:#fff;--border:rgba(26,31,42,.08);--text:#2D3340;--strong:#1A1F2A;--muted:rgba(26,31,42,.62);--faint:rgba(26,31,42,.42);--accent:#C97B3A;--accent-hover:#B26A2D;--up:#4F8268;--down:#A3525C;--pending:#9C7842;--topbar-h:64px;--ease:cubic-bezier(.4,0,.2,1)}
-body{font-family:Inter,system-ui,-apple-system,sans-serif;background:linear-gradient(135deg,#FFFBF5 0%,#FFEFDC 52%,#FFF6E9 100%);color:var(--text);min-height:100vh;-webkit-font-smoothing:antialiased}
+:root{--bg:var(--n84);--card:#fff;--border:rgba(26,31,42,.08);--text:#2D3340;--strong:#1A1F2A;--muted:rgba(26,31,42,.62);--faint:rgba(26,31,42,.42);--up:#4F8268;--down:#A3525C;--pending:#9C7842;--topbar-h:64px;--ease:cubic-bezier(.4,0,.2,1)}
+body{font-family:Inter,system-ui,-apple-system,sans-serif;background:linear-gradient(135deg,var(--a98) 0%,var(--a93) 52%,var(--a96) 100%);color:var(--text);min-height:100vh;-webkit-font-smoothing:antialiased}
 .topbar{position:fixed;top:0;left:0;right:0;height:var(--topbar-h);background:rgba(255,255,255,.62);backdrop-filter:blur(22px) saturate(160%);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:14px;padding:0 22px;z-index:10}
 .brand{display:flex;align-items:center;gap:9px;font-weight:700;color:var(--strong);text-decoration:none}
-.brand-dot{width:26px;height:26px;border-radius:8px;background:linear-gradient(135deg,#C97B3A,#E0995E)}
+.brand-dot{width:26px;height:26px;border-radius:8px;background:linear-gradient(135deg,var(--accent),var(--accent-2))}
 .topbar a.back{margin-left:auto;font-size:.8125rem;color:var(--muted);text-decoration:none;font-weight:600}
 .topbar a.back:hover{color:var(--accent)}
 .main{max-width:1100px;margin:0 auto;padding:calc(var(--topbar-h) + 26px) 22px 40px}
@@ -25,21 +26,21 @@ h1{font-size:1.6rem;letter-spacing:-.015em;color:var(--strong);font-weight:700}
 .badge.on{background:rgba(79,130,104,.14);color:#2E5A45}.badge.off{background:rgba(163,82,92,.12);color:#7A2F39}
 .badge.dry{background:rgba(156,120,66,.14);color:#7C5E2F}
 .tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;margin:20px 0}
-.tile{background:rgba(255,255,255,.82);border:1px solid var(--border);border-radius:12px;padding:15px 16px;box-shadow:0 1px 2px rgba(26,31,42,.04),0 6px 18px rgba(178,106,45,.07)}
+.tile{background:rgba(255,255,255,.82);border:1px solid var(--border);border-radius:12px;padding:15px 16px;box-shadow:0 1px 2px rgba(26,31,42,.04),0 6px 18px rgba(var(--accent-hover-rgb),.07)}
 .tile .k{font-size:.6875rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:700}
 .tile .v{font-size:1.7rem;font-weight:700;color:var(--strong);margin-top:6px;font-variant-numeric:tabular-nums}
 .tile .m{font-size:.72rem;color:var(--muted);margin-top:3px}
-.panel{background:rgba(255,255,255,.82);border:1px solid var(--border);border-radius:12px;overflow:hidden;box-shadow:0 1px 2px rgba(26,31,42,.04),0 6px 18px rgba(178,106,45,.07)}
+.panel{background:rgba(255,255,255,.82);border:1px solid var(--border);border-radius:12px;overflow:hidden;box-shadow:0 1px 2px rgba(26,31,42,.04),0 6px 18px rgba(var(--accent-hover-rgb),.07)}
 .panel-head{padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
 .panel-title{font-weight:700;color:var(--strong)}
 .tw{overflow:auto}
 table{width:100%;border-collapse:collapse;min-width:780px}
 th,td{padding:11px 14px;text-align:left;border-bottom:1px solid rgba(26,31,42,.06);font-size:.8125rem;white-space:nowrap}
-th{font-size:.625rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:800;background:rgba(251,250,247,.7)}
+th{font-size:.625rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:800;background:rgba(var(--n98-rgb),.7)}
 td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 .fill{display:flex;align-items:center;gap:8px;min-width:120px}
 .fill-bar{flex:1;height:7px;border-radius:4px;background:rgba(26,31,42,.08);overflow:hidden}
-.fill-in{height:100%;border-radius:4px;background:linear-gradient(90deg,var(--accent),#E0995E)}
+.fill-in{height:100%;border-radius:4px;background:linear-gradient(90deg,var(--accent),var(--accent-2))}
 .warn{color:var(--down);font-weight:700}
 .empty{padding:40px;text-align:center;color:var(--faint)}
 .muted{color:var(--muted)}
@@ -47,7 +48,7 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 </head>
 <body>
 <header class="topbar">
-  <a class="brand" href="dashboard.html"><span class="brand-dot"></span><span>Endeavor</span></a>
+  <a class="brand" href="dashboard.html"><span class="brand-dot"></span><span>Insurance Alliance Group</span></a>
   <a class="back" href="dashboard.html">← Back to dashboard</a>
 </header>
 <main class="main">

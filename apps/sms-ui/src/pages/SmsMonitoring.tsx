@@ -10,6 +10,7 @@ import {
 } from "recharts";
 import { api } from "../lib/api";
 import LivePulse from "../components/LivePulse";
+import { brandColor } from "../lib/theme";
 
 type Stats = {
   polling: { success_rate_pct: number; last24h_polls_succeeded: number; last24h_polls_attempted: number };
@@ -189,12 +190,12 @@ export default function SmsMonitoring() {
                 <YAxis tick={{ fontSize: 10, fill: "rgba(26,31,42,0.5)" }} />
                 <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8 }} />
                 <Line type="monotone" dataKey="inbound" name="Inbound" stroke="#4f8268" strokeWidth={2} dot={false} />
-                <Line type="monotone" dataKey="outbound" name="Outbound" stroke="#c97b3a" strokeWidth={2} dot={false} />
+                <Line type="monotone" dataKey="outbound" name="Outbound" stroke={brandColor("--accent")} strokeWidth={2} dot={false} />
               </LineChart>
             </ResponsiveContainer>
             <div className="flex justify-center gap-4 text-xs text-ink-muted">
               <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-sm" style={{ background: "#4f8268" }} />Inbound</span>
-              <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-sm" style={{ background: "#c97b3a" }} />Outbound</span>
+              <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-sm" style={{ background: "var(--accent)" }} />Outbound</span>
             </div>
           </div>
 

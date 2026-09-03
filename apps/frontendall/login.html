@@ -3,38 +3,14 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<title>Sign in — Endeavor</title>
+<title>Sign in — Insurance Alliance Group</title>
 <!-- Mobile hard gate: on phones the whole login page is replaced by a compulsory
      "install the app" screen. Loaded directly (not just via prefs-extras) so it
      fires early and reliably on the login page too. -->
-<script src="/app-gate.js" defer></script>
-<script>
-(function(){try{
-const FM={sm:'14px',md:'16px',lg:'18px',xl:'20px'};
-const TM={
-warm:{a:'#C97B3A',a2:'#E0995E',ah:'#B26A2D',b1:'rgba(224,153,94,.40)',b2:'rgba(201,123,58,.32)',b3:'rgba(255,200,150,.22)',g:'linear-gradient(135deg,#FFFBF5 0%,#FFEFDC 50%,#FFF6E9 100%)',gl:'rgba(178,106,45,.08)'},
-forest:{a:'#4F8268',a2:'#6B9F86',ah:'#3D6651',b1:'rgba(107,159,134,.40)',b2:'rgba(79,130,104,.32)',b3:'rgba(180,220,200,.22)',g:'linear-gradient(135deg,#F5FBF7 0%,#E0F1E6 50%,#E8F4ED 100%)',gl:'rgba(63,109,84,.08)'},
-indigo:{a:'#5E7BA8',a2:'#7B96BD',ah:'#4A6488',b1:'rgba(123,150,189,.40)',b2:'rgba(94,123,168,.32)',b3:'rgba(180,200,230,.22)',g:'linear-gradient(135deg,#F5F7FB 0%,#DCE4F1 50%,#E5EBF4 100%)',gl:'rgba(74,100,136,.08)'},
-rose:{a:'#A3525C',a2:'#B97077',ah:'#82414B',b1:'rgba(185,112,119,.40)',b2:'rgba(163,82,92,.32)',b3:'rgba(230,180,190,.22)',g:'linear-gradient(135deg,#FBF5F6 0%,#F1DCDF 50%,#F4E5E8 100%)',gl:'rgba(130,65,75,.08)'},
-slate:{a:'#2D3340',a2:'#5A6275',ah:'#1A1F2A',b1:'rgba(90,98,117,.45)',b2:'rgba(45,51,64,.38)',b3:'rgba(150,156,170,.28)',g:'linear-gradient(135deg,#B8BCC5 0%,#9DA3AD 50%,#ABB0BA 100%)',gl:'rgba(26,31,42,.14)'},
-amber:{a:'#9C7842',a2:'#B89058',ah:'#7C5E2F',b1:'rgba(184,144,88,.40)',b2:'rgba(156,120,66,.32)',b3:'rgba(245,220,180,.22)',g:'linear-gradient(135deg,#FBF7F0 0%,#F0E5D0 50%,#F4EBDB 100%)',gl:'rgba(124,94,47,.08)'}
-};
-window.__ebApplyFont=function(v){document.documentElement.style.fontSize=FM[v]||'16px';};
-window.__ebApplyTheme=function(v){
-var t=TM[v]||TM.warm,D=document.documentElement;
-D.style.setProperty('--accent',t.a);
-D.style.setProperty('--accent-2',t.a2);
-D.style.setProperty('--accent-hover',t.ah);
-var st=document.getElementById('ebPrefsTheme');
-if(!st){st=document.createElement('style');st.id='ebPrefsTheme';document.head.appendChild(st);}
-st.textContent='body::before{background:'+t.g+' !important}body::after{background:radial-gradient(ellipse 95% 85% at 50% 50%,transparent 55%,'+t.gl+' 100%) !important}.sb-brand-dot{background:linear-gradient(135deg,'+t.a+','+t.a2+') !important}.usage-fill{background:linear-gradient(90deg,'+t.a+','+t.a2+') !important}.av-circle{background:linear-gradient(135deg,'+t.a+','+t.a2+') !important}';
-};
-window.__ebApplyFont(localStorage.getItem('ebFontSize')||'md');
-window.__ebApplyTheme(localStorage.getItem('ebTheme')||'warm');
-}catch(e){}})();
-</script>
+<script src="/app-gate.js?v=2" defer></script>
+<script src="brand.js?v=1"></script>
 <script src="i18n-dict.js?v=2"></script>
-<script src="prefs-extras.js?v=28"></script>
+<script src="prefs-extras.js?v=30"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
@@ -42,7 +18,7 @@ window.__ebApplyTheme(localStorage.getItem('ebTheme')||'warm');
 *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
 :root{
   /* Background */
-  --bg:#FFF8EE;
+  --bg:var(--a97);
   /* Glass */
   --glass:rgba(255,255,255,0.55);
   --glass-hover:rgba(255,255,255,0.75);
@@ -55,10 +31,7 @@ window.__ebApplyTheme(localStorage.getItem('ebTheme')||'warm');
   --text-muted:rgba(26,31,42,0.60);
   --text-faint:rgba(26,31,42,0.42);
   /* Accent — warm amber */
-  --accent:#C97B3A;
-  --accent-2:#E0995E;
-  --accent-hover:#B26A2D;
-  --accent-glow:rgba(201,123,58,0.32);
+  --accent-glow:rgba(var(--accent-rgb),0.32);
   /* Status */
   --error:#A3525C;
   --success:#4F8268;
@@ -82,12 +55,12 @@ body{
 /* === Background — light white→orange radial gradient with slow drift === */
 body::before{
   content:'';position:fixed;inset:-15%;z-index:-3;
-  background:linear-gradient(135deg, #FFFBF5 0%, #FFEFDC 50%, #FFF6E9 100%);
+  background:linear-gradient(135deg, var(--a98) 0%, var(--a93) 50%, var(--a96) 100%);
   animation:bgDrift 22s ease-in-out infinite;transform-origin:center;will-change:transform;
 }
 body::after{
   content:'';position:fixed;inset:-10%;z-index:-2;pointer-events:none;
-  background:radial-gradient(ellipse 95% 85% at 50% 50%, transparent 55%, rgba(178,106,45,0.08) 100%);
+  background:radial-gradient(ellipse 95% 85% at 50% 50%, transparent 55%, rgba(var(--accent-hover-rgb),0.08) 100%);
   animation:bgFloat 28s ease-in-out infinite reverse;transform-origin:center;will-change:transform;
 }
 @keyframes bgDrift{0%{transform:scale(1) translate(0,0) rotate(0deg)}20%{transform:scale(1.10) translate(-3.5%,2.5%) rotate(0.6deg)}40%{transform:scale(1.06) translate(3%,-3%) rotate(-0.5deg)}60%{transform:scale(1.12) translate(-2.5%,-3.5%) rotate(0.7deg)}80%{transform:scale(1.08) translate(3%,2%) rotate(-0.4deg)}100%{transform:scale(1) translate(0,0) rotate(0deg)}}
@@ -109,7 +82,7 @@ body::after{
   padding:56px 64px 52px;
   box-shadow:
     0 1px 2px rgba(26,31,42,0.04),
-    0 30px 80px rgba(178,106,45,0.16),
+    0 30px 80px rgba(var(--accent-hover-rgb),0.16),
     0 12px 28px rgba(26,31,42,0.10),
     inset 0 1px 0 rgba(255,255,255,0.55);
   overflow:hidden;
@@ -119,7 +92,7 @@ body::after{
   content:'';
   position:absolute;
   top:0;left:10%;right:10%;height:1px;
-  background:linear-gradient(90deg,transparent,rgba(201,123,58,0.40),transparent);
+  background:linear-gradient(90deg,transparent,rgba(var(--accent-rgb),0.40),transparent);
   pointer-events:none;
 }
 .login-card>*{position:relative;z-index:1}
@@ -133,7 +106,7 @@ body::after{
   width:40px;height:40px;border-radius:11px;
   background:linear-gradient(135deg,var(--accent),var(--accent-2));
   display:inline-flex;align-items:center;justify-content:center;
-  box-shadow:0 1px 2px rgba(178,106,45,0.30),0 6px 18px rgba(201,123,58,0.32),inset 0 1px 0 rgba(255,255,255,0.30);
+  box-shadow:0 1px 2px rgba(var(--accent-hover-rgb),0.30),0 6px 18px rgba(var(--accent-rgb),0.32),inset 0 1px 0 rgba(255,255,255,0.30);
   flex-shrink:0;
 }
 .brand-dot svg{width:21px;height:21px;color:#fff;stroke-width:1.8}
@@ -182,7 +155,7 @@ form{display:flex;flex-direction:column;gap:18px}
 .input:focus{
   border-color:var(--accent);
   background:#FFFFFF;
-  box-shadow:0 0 0 3px rgba(201,123,58,0.18),0 0 28px rgba(201,123,58,0.12);
+  box-shadow:0 0 0 3px rgba(var(--accent-rgb),0.18),0 0 28px rgba(var(--accent-rgb),0.12);
 }
 .input.has-icon{padding-right:46px}
 
@@ -288,7 +261,7 @@ form.has-failed .forgot{display:inline-block;opacity:1;transform:translateY(0)}
   height:46px;
   margin-top:6px;
   display:inline-flex;align-items:center;justify-content:center;gap:8px;
-  background:linear-gradient(180deg,#E0995E 0%,#C97B3A 50%,#B26A2D 100%);
+  background:linear-gradient(180deg,var(--accent-2) 0%,var(--accent) 50%,var(--accent-hover) 100%);
   color:#fff;
   border:none;
   border-radius:10px;
@@ -299,15 +272,15 @@ form.has-failed .forgot{display:inline-block;opacity:1;transform:translateY(0)}
   cursor:pointer;
   transition:background 150ms var(--ease),box-shadow 200ms var(--ease),transform 150ms var(--ease);
   box-shadow:
-    0 6px 18px rgba(201,123,58,0.32),
+    0 6px 18px rgba(var(--accent-rgb),0.32),
     inset 0 1px 0 rgba(255,255,255,0.22),
     inset 0 -1px 0 rgba(0,0,0,0.06);
 }
 .btn-primary:hover{
   background:linear-gradient(180deg,#E8A572 0%,#D58646 50%,#BC7330 100%);
   box-shadow:
-    0 8px 24px rgba(201,123,58,0.42),
-    0 0 32px rgba(201,123,58,0.22),
+    0 8px 24px rgba(var(--accent-rgb),0.42),
+    0 0 32px rgba(var(--accent-rgb),0.22),
     inset 0 1px 0 rgba(255,255,255,0.28);
   transform:translateY(-1px);
 }
@@ -321,14 +294,14 @@ form.has-failed .forgot{display:inline-block;opacity:1;transform:translateY(0)}
 .btn-secondary{
   width:100%;height:46px;
   display:inline-flex;align-items:center;justify-content:center;gap:8px;
-  background:transparent;color:#B26A2D;
-  border:1px solid rgba(201,123,58,0.45);
+  background:transparent;color:var(--accent-hover);
+  border:1px solid rgba(var(--accent-rgb),0.45);
   border-radius:10px;
   font-family:inherit;font-size:.9375rem;font-weight:600;letter-spacing:.005em;
   text-decoration:none;cursor:pointer;
   transition:background 150ms var(--ease),border-color 150ms var(--ease),transform 150ms var(--ease);
 }
-.btn-secondary:hover{background:rgba(201,123,58,0.08);border-color:rgba(201,123,58,0.7);transform:translateY(-1px)}
+.btn-secondary:hover{background:rgba(var(--accent-rgb),0.08);border-color:rgba(var(--accent-rgb),0.7);transform:translateY(-1px)}
 .btn-secondary:active{transform:translateY(0)}
 .btn-secondary svg{width:16px;height:16px}
 
@@ -368,7 +341,7 @@ form.has-failed .forgot{display:inline-block;opacity:1;transform:translateY(0)}
   .login-card{animation:none}
 }
 </style>
-  <script src="services/error-boundary.js?v=19"></script>
+  <script src="services/error-boundary.js?v=20"></script>
 </head>
 <body>
 
@@ -382,7 +355,7 @@ form.has-failed .forgot{display:inline-block;opacity:1;transform:translateY(0)}
         <path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/>
       </svg>
     </span>
-    <span class="brand-name">Endeavor</span>
+    <span class="brand-name">Insurance Alliance Group</span>
   </div>
 
   <h1 class="login-title">Welcome back</h1>
@@ -429,11 +402,10 @@ form.has-failed .forgot{display:inline-block;opacity:1;transform:translateY(0)}
     </button>
   </form>
 
-  <div class="alt-divider">New here?</div>
-  <a class="btn-secondary" href="https://careers.getquotedtoday.com">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/></svg>
-    Create agent login
-  </a>
+  <!-- "Create agent login" pointed at careers.getquotedtoday.com — the PREVIOUS
+       operator's careers site. Removed rather than repointed: Insurance Alliance
+       Group has no hiring/onboarding site wired up yet. Restore this block with
+       the IAG careers URL once one exists. -->
 
 </div>
 

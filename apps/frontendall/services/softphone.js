@@ -137,7 +137,7 @@
     w.id = 'ebSoftphone';
     w.style.cssText = 'position:fixed;right:20px;bottom:20px;z-index:9999;background:#1A1F2A;color:#fff;border-radius:14px;padding:16px 18px;min-width:240px;box-shadow:0 12px 40px rgba(0,0,0,.35);font-family:inherit';
     w.innerHTML =
-      '<div style="font-size:.7rem;letter-spacing:.08em;text-transform:uppercase;color:#C97B3A;font-weight:700">On call</div>'+
+      '<div style="font-size:.7rem;letter-spacing:.08em;text-transform:uppercase;color:var(--accent);font-weight:700">On call</div>'+
       '<div style="font-size:1rem;font-weight:600;margin-top:4px">'+name+'</div>'+
       '<div style="font-size:.8rem;color:rgba(255,255,255,.7)">'+(number||'')+'</div>'+
       '<div id="ebSpStatus" style="font-size:.8rem;margin-top:8px;color:#9FE3B0">Calling…</div>'+

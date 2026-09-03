@@ -5,12 +5,14 @@
    the theme bridge in src/lib/theme.ts on <html>) so that:
      - switching ebTheme recolors every accent utility (bg-accent, text-accent…)
      - dark mode (html[data-mode="dark"]) flips the ink/hairline palette.
-   Fallbacks keep the light/warm look if the bridge hasn't run yet. */
+   Brand colours have NO literal fallback on purpose: /brand.js is the single
+   source of truth and is a blocking script in index.html, so it has always run
+   by the time this stylesheet applies. */
 @theme {
-  --color-cream: #fff8ee;
-  --color-accent: var(--accent, #c97b3a);
-  --color-accent-hover: var(--accent-hover, #b26a2d);
-  --color-accent2: var(--accent-2, #e0995e);
+  --color-cream: var(--a97);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent2: var(--accent-2);
   --color-ink: var(--text-strong, #1a1f2a);
   --color-ink-soft: var(--text, #2d3340);
   --color-ink-muted: var(--text-muted, rgba(26, 31, 42, 0.6));

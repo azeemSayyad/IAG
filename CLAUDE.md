@@ -4,7 +4,7 @@ Guidance for AI agents (and humans) working in this repo. Read this first.
 
 ## What this is
 
-"Launchpad" / "Endeavor" — an insurance call-center portal (leads, deals, SMS
+"Launchpad" / "Insurance Alliance Group" — an insurance call-center portal (leads, deals, SMS
 outreach, appointments, compliance/licensing). npm monorepo. GitHub:
 `Buissn885/Launchpadacacallcenter`.
 
@@ -70,7 +70,9 @@ npm test                                  # pytest (apps/backend-api)
 2. **`main` is shared. ALWAYS `git pull --rebase origin main` before pushing.**
    Commit/push only when asked. Deploy is automatic on push (Railway/Netlify/Docker).
 3. **Cache-busting:** portal pages load scripts with a version query, e.g.
-   `prefs-extras.js?v=5`, `error-boundary.js?v=9`, `api.js?v=9`. If you change one
+   `brand.js?v=1`, `prefs-extras.js?v=30`, `error-boundary.js?v=20`, `api.js?v=10`.
+   `app-gate.js?v=2` / `announcements.js?v=2` are versioned at their injection
+   site inside `prefs-extras.js`, not in the HTML. If you change one
    of these JS files you MUST bump its `?v=N` across **all** `apps/frontendall/*.html`
    or deployed/cached browsers keep serving the old file. (One-liner:
    `perl -pi -e 's/prefs-extras\.js\?v=5/prefs-extras.js?v=6/g' apps/frontendall/*.html`)
@@ -80,6 +82,33 @@ npm test                                  # pytest (apps/backend-api)
    `sms/index.html` and delete the old hashed assets.
 
 ## Architecture notes / gotchas
+
+### Colour — `apps/frontendall/brand.js` is the SINGLE SOURCE OF TRUTH
+**Never hardcode a brand colour anywhere.** `brand.js` holds three hexes
+(`BRAND.accent` / `accent2` / `accentHover` — currently a navy→sky blue) and
+DERIVES everything else from them at runtime, writing it onto `<html>` as custom
+properties: the accent family + `r,g,b` triplets, the page gradient and corner
+glow, and two ramps whose names encode HSL lightness —
+`--n99 … --n68` (neutral surfaces) and `--a98 … --a92` (accent-tinted washes),
+each also as `--n95-rgb` / `--a93-rgb` for `rgba(var(--n95-rgb),0.5)`.
+The ramps take their HUE from the active accent, so switching theme recolours
+every surface, and **rebranding is a one-line change in `brand.js`.**
+
+- It is a blocking `<script src="brand.js?v=1">` first in every page `<head>`
+  (and in the SPA's `index.html` as `/brand.js`), so first paint is branded.
+- Consume it as `var(--accent)`, `rgba(var(--accent-rgb),0.12)`, `var(--n95)`, …
+  `<canvas>` and SVG presentation attributes can't resolve `var()` — use
+  `EB_BRAND.theme().a`, `EB_BRAND.rgba(0.2)` or `EB_BRAND.css('--n95')` there
+  (in the SPA: `brandColor('--accent')` from `lib/theme.ts`).
+- `prefs-extras.js`, `app-gate.js` and `sms-ui/src/lib/theme.ts` used to each
+  carry their own copy of the theme map — they now all forward to `EB_BRAND`.
+- Theme keys are `brand | forest | indigo | rose | slate | amber` (default
+  `brand`). The retired orange `warm` key is aliased to `brand` for users whose
+  localStorage still holds it — see `LEGACY` / `normalize()` in brand.js.
+- Colours deliberately NOT derived from the brand: status (`--up/--down/
+  --pending`, hot-lead red-orange), the product-segment palette (ACA gold /
+  Dental / Vision), leaderboard rank medals, `wizard.css`'s per-chapter accents
+  (aca green, dv purple, auto orange) and `sms-ui/.../charts/jewel.ts`.
 
 ### Dark mode
 Applied globally by **`apps/frontendall/prefs-extras.js`**, which injects a large

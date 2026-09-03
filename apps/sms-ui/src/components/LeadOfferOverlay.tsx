@@ -145,9 +145,9 @@ export default function LeadOfferOverlay() {
         {/* Light header bar — "New lead" with a person-add icon */}
         <div
           className="flex items-center gap-2.5"
-          style={{ background: "#F6EEE1", color: "#1A1F2A", padding: "14px 20px" }}
+          style={{ background: "var(--a92)", color: "#1A1F2A", padding: "14px 20px" }}
         >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#9c5e23" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" style={{ stroke: "var(--accent-ink)" }} strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
             <circle cx="9" cy="8" r="3.5" />
             <path d="M3.5 20c0-3.3 2.7-6 6-6" />
             <path d="M17 9v6M14 12h6" />
@@ -157,7 +157,7 @@ export default function LeadOfferOverlay() {
         <div className="flex items-center gap-3" style={{ padding: "18px 20px 6px" }}>
           <div
             className="flex flex-shrink-0 items-center justify-center font-bold"
-            style={{ width: 48, height: 48, borderRadius: "50%", background: "#F6EEE1", color: "#C97B3A", fontSize: 16, letterSpacing: ".02em" }}
+            style={{ width: 48, height: 48, borderRadius: "50%", background: "var(--a92)", color: "var(--accent)", fontSize: 16, letterSpacing: ".02em" }}
           >
             {initials(lead.customer_name)}
           </div>
