@@ -101,7 +101,7 @@ body::after{
 
 /* Brand mark at the top of the card */
 .brand-mark{
-  display:flex;align-items:center;gap:12px;
+  display:flex;align-items:center;justify-content:center;gap:12px;
   margin-bottom:28px;
 }
 .brand-dot{
@@ -115,7 +115,7 @@ body::after{
 .brand-name{font-size:1.1875rem;font-weight:600;letter-spacing:-0.015em;color:var(--text-strong)}
 /* Full brand lockup — assets/logo.png. Navy artwork on a transparent
    ground, so dark mode gets a light plate rather than a recolour. */
-.brand-logo{width:230px;max-width:70%;height:auto;display:block}
+.brand-logo{width:150px;max-width:60%;height:auto;display:block}
 html[data-mode="dark"] .brand-logo{background:#FFFFFF;border-radius:12px;padding:10px 14px}
 
 .login-title{
@@ -267,7 +267,7 @@ form.has-failed .forgot{display:inline-block;opacity:1;transform:translateY(0)}
   height:46px;
   margin-top:6px;
   display:inline-flex;align-items:center;justify-content:center;gap:8px;
-  background:linear-gradient(180deg,var(--accent-2) 0%,var(--accent) 50%,var(--accent-hover) 100%);
+  background:linear-gradient(90deg,var(--accent-2) 0%,var(--accent) 55%,var(--accent-hover) 100%);
   color:#fff;
   border:none;
   border-radius:10px;
@@ -283,7 +283,7 @@ form.has-failed .forgot{display:inline-block;opacity:1;transform:translateY(0)}
     inset 0 -1px 0 rgba(0,0,0,0.06);
 }
 .btn-primary:hover{
-  background:linear-gradient(180deg,#E8A572 0%,#D58646 50%,#BC7330 100%);
+  background:linear-gradient(90deg,var(--accent-2) 0%,var(--accent-2) 25%,var(--accent) 100%);
   box-shadow:
     0 8px 24px rgba(var(--accent-rgb),0.42),
     0 0 32px rgba(var(--accent-rgb),0.22),
@@ -335,7 +335,7 @@ form.has-failed .forgot{display:inline-block;opacity:1;transform:translateY(0)}
   .login-title{font-size:1.5rem}
   .login-sub{font-size:.875rem;margin-bottom:24px}
   .brand-mark{margin-bottom:18px}
-  .brand-logo{width:186px}
+  .brand-logo{width:128px}
   .brand-dot{width:34px;height:34px;border-radius:10px}
   .brand-dot svg{width:18px;height:18px}
   .brand-name{font-size:1.0625rem}
