@@ -166,6 +166,9 @@ class DealSubmitRequest(BaseModel):
     # Up to 4 recordings; the first is the primary recording_id. The frontend gate
     # requires at least one. Optional here so non-form callers stay valid.
     recording_ids: Optional[List[UUID]] = None
+    # Signed consent forms uploaded on the same form (deal_recordings ids, kind='consent').
+    # Optional — unlike the call recording these do not gate submission.
+    consent_form_ids: Optional[List[UUID]] = None
 
     @field_validator("state")
     @classmethod

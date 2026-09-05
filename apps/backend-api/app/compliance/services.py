@@ -460,6 +460,7 @@ async def submit_deal_with_approval(
     products: Optional[list] = None,
     recording_id: Optional[UUID] = None,
     recording_ids: Optional[list] = None,
+    consent_form_ids: Optional[list] = None,
 ) -> tuple[Deal, DealApprovalLog]:
     from decimal import Decimal
     products_json = None
@@ -513,6 +514,8 @@ async def submit_deal_with_approval(
     # recording_ids holds the full set. Accept either a list or the single legacy id.
     _rec_ids = [r for r in (recording_ids or ([recording_id] if recording_id else [])) if r]
     _primary_rec = recording_id or (_rec_ids[0] if _rec_ids else None)
+    # Consent forms are attached to every deal in the household submission.
+    _consent_ids = [str(c) for c in (consent_form_ids or []) if c]
     deal = Deal(
         tenant_id=tenant_id,
         agent_id=agent_id,
@@ -540,6 +543,7 @@ async def submit_deal_with_approval(
         products=products_json,
         recording_id=_primary_rec,
         recording_ids=([str(r) for r in _rec_ids] or None),
+        consent_form_ids=(_consent_ids or None),
         status="approved" if decision.decision == APPROVED else "blocked",
         approval_decision=decision.decision,
         approval_reason=decision.reason,

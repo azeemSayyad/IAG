@@ -16,6 +16,13 @@ from app.models.compliance import (
     Deal,
     DealApprovalLog,
 )
+from app.models.contact import Contact
+from app.models.expense import (
+    AgentRate,
+    ExpenseCategory,
+    ExpenseEntry,
+    ExpenseItem,
+)
 from app.models.hiree import HireeOnboarding, OnboardingDocument
 from app.models.applicant_message import ApplicantMessage
 from app.models.direct_message import DirectMessage
@@ -51,6 +58,11 @@ __all__ = [
     "ComplianceEvent",
     "Deal",
     "DealApprovalLog",
+    "ExpenseCategory",
+    "ExpenseItem",
+    "ExpenseEntry",
+    "AgentRate",
+    "Contact",
     "HireeOnboarding",
     "OnboardingDocument",
     "ApplicantMessage",

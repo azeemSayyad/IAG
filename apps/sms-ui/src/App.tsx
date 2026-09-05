@@ -4,8 +4,11 @@ import SmsQueue from "./pages/SmsQueue";
 import SmsManager from "./pages/SmsManager";
 import SmsMonitoring from "./pages/SmsMonitoring";
 import SalesDashboard from "./pages/SalesDashboard";
+import Expenses from "./pages/Expenses";
+import Contacts from "./pages/Contacts";
 import {
   isAdmin,
+  isOwner,
   canSeeQueue,
   canSeeManager,
   canSeeMonitoring,
@@ -16,6 +19,7 @@ import { useI18n } from "./lib/useI18n";
 export default function App() {
   useI18n();
   const admin = isAdmin();
+  const owner = isOwner();
   const home = smsDefaultRoute();
   return (
     <Routes>
@@ -30,6 +34,16 @@ export default function App() {
         <Route
           path="/sales-dashboard"
           element={admin ? <SalesDashboard /> : <Navigate to={home} replace />}
+        />
+        {/* Expenses: OWNER only (super_admin/dev) — payroll is not admin-visible. */}
+        <Route
+          path="/expenses"
+          element={owner ? <Expenses /> : <Navigate to={home} replace />}
+        />
+        {/* Contacts: the company phone book — admin-class (not owner-only). */}
+        <Route
+          path="/contacts"
+          element={admin ? <Contacts /> : <Navigate to={home} replace />}
         />
         {/* SMS Manager: manager-class + admin + dev. */}
         <Route

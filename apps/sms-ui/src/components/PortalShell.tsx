@@ -1,7 +1,7 @@
 import { NavLink, Outlet } from "react-router-dom";
 import { useEffect, useRef, useState } from "react";
 import { api } from "../lib/api";
-import { getRole, isAdmin, canSeeQueue, canSeeManager, canSeeMonitoring, logout } from "../lib/auth";
+import { getRole, isAdmin, isOwner, canSeeQueue, canSeeManager, canSeeMonitoring, logout } from "../lib/auth";
 import { getSocket } from "../lib/socket";
 import { leadOfferedSound } from "../lib/sound";
 import LeadOfferOverlay from "./LeadOfferOverlay";
@@ -95,6 +95,25 @@ function Icon({ name }: { name: string }) {
         <svg {...common}>
           <path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z" />
           <path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z" />
+        </svg>
+      );
+    case "contacts":
+      // Contacts — an address book with tabbed edge and a person on the page.
+      return (
+        <svg {...common}>
+          <path d="M4 4h13a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4z" />
+          <path d="M4 8H2M4 12H2M4 16H2" />
+          <circle cx="11.5" cy="10.5" r="2" />
+          <path d="M8 16c.6-1.8 2-2.5 3.5-2.5s2.9.7 3.5 2.5" />
+        </svg>
+      );
+    case "wallet":
+      // Expenses — a wallet/billfold with a card peeking out.
+      return (
+        <svg {...common}>
+          <path d="M3 7a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2" />
+          <path d="M3 7v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-6a2 2 0 0 0-2-2H5a2 2 0 0 1-2-2Z" />
+          <circle cx="16.5" cy="13" r="1.2" />
         </svg>
       );
     case "ceo":
@@ -254,6 +273,7 @@ export default function PortalShell() {
   const [unread, setUnread] = useState(0);
   const menuRef = useRef<HTMLDivElement>(null);
   const admin = isAdmin();
+  const owner = isOwner();
   const roleKey = (role || "agent").toLowerCase();
   const roleLabel = ROLE_LABEL[roleKey] || "Admin";
   const agentView = roleKey === "agent";
@@ -460,6 +480,30 @@ export default function PortalShell() {
                   <span className="sb-tip">{agentView && l.agentLabel ? l.agentLabel : l.label}</span>
                 </a>
               ))}
+              {/* Expenses + Contacts are INTERNAL SPA routes, so they're NavLinks
+                  rather than PortalLink hrefs — but they belong with the back-office
+                  pages here, not in the Leads group. Mirrors the static sidebar
+                  (services/error-boundary.js injects the same two). */}
+              {owner && (
+                <NavLink
+                  to="/expenses"
+                  className={({ isActive }) => `sb-item${isActive ? " active" : ""}`}
+                  onClick={() => setNavOpen(false)}
+                >
+                  <Icon name="wallet" />
+                  <span className="sb-tip">Expenses</span>
+                </NavLink>
+              )}
+              {admin && (
+                <NavLink
+                  to="/contacts"
+                  className={({ isActive }) => `sb-item${isActive ? " active" : ""}`}
+                  onClick={() => setNavOpen(false)}
+                >
+                  <Icon name="contacts" />
+                  <span className="sb-tip">Contacts</span>
+                </NavLink>
+              )}
             </div>
           </div>
         </nav>

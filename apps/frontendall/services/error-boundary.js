@@ -217,6 +217,10 @@
       var canManager = ['manager', 'head', 'tenant_admin', 'admin', 'super_admin', 'dev'].indexOf(role) !== -1;
       var canQueue = role === 'agent' || isDev;
       var isAdmin = ['tenant_admin', 'super_admin', 'admin', 'dev'].indexOf(role) !== -1;
+      // Owner/CEO only — deliberately TIGHTER than isAdmin (payroll is not
+      // admin-visible). Mirrors isOwner() in sms-ui/src/lib/auth.ts and the
+      // backend's require_role("super_admin") on /expenses.
+      var isOwner = ['super_admin', 'dev'].indexOf(role) !== -1;
 
       var items = [];
       if (canQueue) {
@@ -276,6 +280,30 @@
       var apptLink = nav.querySelector('a[href="appointments.html"]');
       var gbody = group.querySelector('.sb-group-body');
       if (apptLink && gbody) gbody.appendChild(apptLink);
+
+      // Expenses + Contacts are SPA routes but belong with the back-office pages,
+      // so they go in WORKSPACES, not the Leads group. Injected here (rather than
+      // in prefs-extras) because this injector runs last and has the final say on
+      // nav order. Expenses is owner-only; Contacts is admin-class.
+      var ws = document.querySelector('#sbWorkspaces .sb-group-body');
+      if (ws) {
+        [
+          { show: isOwner, href: '/sms/#/expenses', label: 'Expenses',
+            svg: '<path d="M3 7a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2"/><path d="M3 7v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-6a2 2 0 0 0-2-2H5a2 2 0 0 1-2-2Z"/><circle cx="16.5" cy="13" r="1.2"/>' },
+          { show: isAdmin, href: '/sms/#/contacts', label: 'Contacts',
+            svg: '<path d="M4 4h13a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4z"/><path d="M4 8H2M4 12H2M4 16H2"/><circle cx="11.5" cy="10.5" r="2"/><path d="M8 16c.6-1.8 2-2.5 3.5-2.5s2.9.7 3.5 2.5"/>' },
+        ].forEach(function (it) {
+          if (!it.show || ws.querySelector('a[href="' + it.href + '"]')) return;
+          var a = document.createElement('a');
+          a.className = 'sb-item';
+          a.href = it.href;
+          a.setAttribute('aria-label', it.label);
+          a.innerHTML =
+            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">' + it.svg + '</svg>' +
+            '<span class="sb-tip">' + it.label + '</span>';
+          ws.appendChild(a);
+        });
+      }
     } catch (e) {
       /* never let nav injection break a page */
     }

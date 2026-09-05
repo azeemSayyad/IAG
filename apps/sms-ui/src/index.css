@@ -145,3 +145,40 @@ html[data-mode="dark"] .recharts-cartesian-axis-tick-value tspan { fill: rgba(25
 html[data-mode="dark"] .text-\[\#1d4ed8\] { color: #93c5fd !important; } /* blue  → light */
 html[data-mode="dark"] .text-\[\#047857\] { color: #6ee7b7 !important; } /* green → light */
 html[data-mode="dark"] .text-\[\#be123c\] { color: #fda4af !important; } /* rose  → light */
+
+/* ── Drawer (right-hand slide-over used by the Expenses forms) ─────────────
+   Scrim + panel animate in; both collapse to a plain fade when the viewer has
+   asked for reduced motion. The panel itself is `bg-white`, which the dark
+   overrides above already flip, so no dark-mode rule is needed here. */
+.drawer-scrim {
+  background: rgba(10, 14, 22, 0.5);
+  backdrop-filter: blur(2px);
+  animation: drawer-fade 160ms ease-out;
+}
+.drawer-panel {
+  animation: drawer-slide 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+@keyframes drawer-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes drawer-slide {
+  from { transform: translateX(24px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .drawer-panel { animation: drawer-fade 160ms ease-out; }
+}
+
+/* ── Contacts avatar ───────────────────────────────────────────────────────
+   A soft tinted disc, not a saturated block: the hue only distinguishes one
+   person from the next, so it stays quiet and lets the name and number lead.
+   `--h` is set per contact inline; both modes get their own steps. */
+.contact-avatar {
+  background: hsl(var(--h) 60% 48% / 0.14);
+  color: hsl(var(--h) 55% 36%);
+}
+html[data-mode="dark"] .contact-avatar {
+  background: hsl(var(--h) 62% 60% / 0.20);
+  color: hsl(var(--h) 70% 74%);
+}

@@ -8,15 +8,24 @@
 <link rel="apple-touch-icon" href="assets/apple-touch-icon.png"/>
 <script src="brand.js?v=2"></script>
 <script src="i18n-dict.js?v=2"></script>
-<script src="prefs-extras.js?v=31"></script>
+<script src="prefs-extras.js?v=32"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
 <link rel="stylesheet" href="wizard.css"/>
   <script src="services/api.js?v=10"></script>
-  <script src="services/error-boundary.js?v=20"></script>
+  <script src="services/error-boundary.js?v=22"></script>
 <style>
   .ch-prog{display:flex;gap:14px}
+  /* Required-field marker (Phone) */
+  .req{color:#A3525C;font-weight:800}
+  /* Attached-file rows (call recordings + consent forms) are built with inline
+     light styles, which prefs-extras' global dark block doesn't reach — recolour
+     them here so both lists read correctly in dark mode. */
+  html[data-mode="dark"] #recList>div,
+  html[data-mode="dark"] #conList>div{background:rgba(255,255,255,.05)!important;border-color:rgba(255,255,255,.14)!important}
+  html[data-mode="dark"] #recList>div>span,
+  html[data-mode="dark"] #conList>div>span{color:#E2E8F0!important}
   .person-card{position:relative}
   /* Log Sale loading spinner (shown while the deal(s) are being submitted) */
   .ld-spin{display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,.5);border-top-color:#fff;border-radius:50%;vertical-align:-2px;margin-right:6px;animation:ldspin .7s linear infinite}
@@ -104,6 +113,21 @@
     <input id="recInput" type="file" accept="audio/*,video/*" style="display:none"/>
   </div>
 
+  <!-- Consent forms — the signed consent / scope-of-appointment paperwork for this
+       enrollment. Optional at submit (the call recording is the hard gate), but it
+       is stored on every deal in the household so compliance can pull it later. -->
+  <div class="wiz-card" id="consentCard">
+    <div class="wiz-eyebrow">Documentation</div>
+    <h2 class="wiz-title">Consent forms</h2>
+    <p class="wiz-sub">Attach the signed consent form(s) for this enrollment — PDF, photo or document, up to 6. They’re saved against every person on this deal.</p>
+    <div id="conList" style="display:flex;flex-direction:column;gap:8px;margin-bottom:10px"></div>
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+      <button id="conBtn" type="button" style="height:42px;padding:0 18px;border-radius:10px;border:1.5px solid var(--accent);background:transparent;color:var(--accent);font:700 .88rem inherit;cursor:pointer;white-space:nowrap">⬆ Upload consent form</button>
+      <span id="conStatus" style="font-size:.85rem;color:#64748B;font-weight:600">No consent forms attached yet.</span>
+    </div>
+    <input id="conInput" type="file" accept=".pdf,.doc,.docx,.txt,image/*,application/pdf" multiple style="display:none"/>
+  </div>
+
   <div class="wiz-card res-card" id="resultBox" style="display:none">
     <div class="wiz-eyebrow">Result</div>
     <div id="resultRows"></div>
@@ -132,8 +156,7 @@
       <div class="field"><label class="field-label">First name</label><input class="ctl" data-f="first" type="text" placeholder="Maria"/></div>
       <div class="field"><label class="field-label">Last name</label><input class="ctl" data-f="last" type="text" placeholder="Rodriguez"/></div>
       <div class="field"><label class="field-label">Date of birth</label><input class="ctl" data-f="dob" type="date"/></div>
-      <div class="field"><label class="field-label">Phone</label><input class="ctl" data-f="phone" type="text" inputmode="tel" autocomplete="tel" placeholder="(555) 123-4567"/></div>
-      <div class="field"><label class="field-label">Email</label><input class="ctl" data-f="email" type="email" placeholder="maria@email.com"/></div>
+      <div class="field"><label class="field-label">Phone <span class="req" title="Required">*</span></label><input class="ctl" data-f="phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="(555) 123-4567" required aria-required="true"/></div>
       <div class="field" style="grid-column:1/-1"><label class="field-label">Address</label><input class="ctl" data-f="address" type="text" autocomplete="address-line1" placeholder="102 North Church Avenue"/></div>
       <div class="field" style="grid-column:1/-1"><label class="field-label">Apt / Unit #</label><input class="ctl" data-f="apartment" type="text" autocomplete="address-line2" placeholder="Apt, suite, unit (optional)"/></div>
       <div class="field"><label class="field-label">City</label><input class="ctl" data-f="city" type="text" autocomplete="address-level2" placeholder="Fort Meade"/></div>
@@ -180,11 +203,13 @@
   const $ = (s,r=document)=>r.querySelector(s);
   const $$ = (s,r=document)=>Array.from(r.querySelectorAll(s));
   const PRODUCTS = ['ACA','Dental','Vision'];
-  const HH_FIELDS = ['phone','email','address','apartment','city','zip'];   // household fields shared across persons (Person 1 -> all, editable)
+  const HH_FIELDS = ['phone','address','apartment','city','zip'];   // household fields shared across persons (Person 1 -> all, editable)
   const wrap = $('#peopleWrap');
 
   let RECORDING_IDS = [];           // up to 4 attached recordings: {id, name}
   const REC_MAX = 4;
+  let CONSENT_IDS = [];             // attached consent forms: {id, name} — optional, not gated
+  const CON_MAX = 6;
   function setLocked(locked){
     // Recording gate: the agent CAN fill the whole form; only SUBMIT (Log Sale)
     // is gated until a call recording is attached.
@@ -310,7 +335,7 @@
       products.push({ product: cb.dataset.prod, carrier: pf('carrier'), tier: pf('tier') });
     });
     return { first: get('first').trim(), last: get('last').trim(), dob: get('dob'), phone: get('phone').trim(),
-             email: get('email').trim(), address: get('address').trim(), apartment: get('apartment').trim(), city: get('city').trim(),
+             address: get('address').trim(), apartment: get('apartment').trim(), city: get('city').trim(),
              zip: get('zip').trim(), gender: get('gender'),
              marital: get('marital'), tobacco: get('tobacco'), income: get('income').trim(),
              ssn: get('ssn').trim(), products };
@@ -388,6 +413,47 @@
     if(i>=0 && i<RECORDING_IDS.length){ RECORDING_IDS.splice(i,1); renderRecList(); }
   });
 
+  // Consent forms: signed consent / scope-of-appointment paperwork. Unlike the call
+  // recording these do NOT gate Log Sale — they're attached to every deal created by
+  // this submission so compliance can pull them from All Deals later.
+  function renderConList(){
+    const list=$('#conList'), btn=$('#conBtn'), st=$('#conStatus'); const n=CONSENT_IDS.length;
+    list.innerHTML = CONSENT_IDS.map(function(c,i){
+      return '<div style="display:flex;align-items:center;gap:10px;padding:8px 12px;border:1px solid #E2E8F0;border-radius:9px;background:#F8FAFC">'
+        +'<span aria-hidden="true">\ud83d\udcc4</span>'
+        +'<span style="flex:1;min-width:0;font-size:.85rem;font-weight:600;color:#0F172A;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(c.name||('Consent form '+(i+1)))+'</span>'
+        +'<button type="button" data-con-rm="'+i+'" title="Remove consent form" style="border:none;background:transparent;color:#A3525C;font-size:1.15rem;line-height:1;cursor:pointer">\u00d7</button>'
+        +'</div>';
+    }).join('');
+    if(n>=CON_MAX){ btn.disabled=true; btn.style.opacity='.5'; btn.style.cursor='default'; btn.textContent='Maximum '+CON_MAX+' consent forms'; }
+    else { btn.disabled=false; btn.style.opacity=''; btn.style.cursor='pointer'; btn.textContent = n ? ('\u2b06 Add another consent form ('+n+'/'+CON_MAX+')') : '\u2b06 Upload consent form'; }
+    if(n){ st.style.color='#2E5A45'; st.textContent='\u2713 '+n+' consent form'+(n>1?'s':'')+' attached.'; }
+    else { st.style.color='#64748B'; st.textContent='No consent forms attached yet.'; }
+  }
+  $('#conBtn').addEventListener('click', ()=>{ if(CONSENT_IDS.length<CON_MAX) $('#conInput').click(); });
+  $('#conInput').addEventListener('change', async function(e){
+    const files = Array.from(e.target.files||[]); if(!files.length) return;
+    const btn=$('#conBtn'), st=$('#conStatus');
+    btn.disabled=true; btn.textContent='Uploading\u2026';
+    for(const f of files){
+      if(CONSENT_IDS.length>=CON_MAX){ flash('Only '+CON_MAX+' consent forms can be attached \u2014 '+f.name+' was skipped.'); break; }
+      st.style.color='#64748B'; st.textContent='Uploading '+f.name+'\u2026';
+      try{
+        const fd=new FormData(); fd.append('file', f);
+        const r = await window.__ebAPI.upload('/compliance/deals/consent-form', fd);
+        CONSENT_IDS.push({ id:r.id, name:(r.filename||f.name) });
+      }catch(err){
+        flash('Consent form upload failed: '+((err&&err.message)||'try again'));
+      }
+    }
+    e.target.value=''; renderConList();
+  });
+  $('#conList').addEventListener('click', function(e){
+    const b=e.target.closest('[data-con-rm]'); if(!b) return;
+    const i=parseInt(b.getAttribute('data-con-rm'),10);
+    if(i>=0 && i<CONSENT_IDS.length){ CONSENT_IDS.splice(i,1); renderConList(); }
+  });
+
   // Required-field highlighting: outline a missing field red and clear it the moment
   // the agent fills it. Used by the Log Sale validation below so the reason is shown
   // ON the field, not just in the toast.
@@ -424,7 +490,6 @@
       // (Requiring them for everyone made 2+ person deals impossible to submit.)
       if(i===0) req(!p.dob,'Date of birth','dob');
       req(!p.phone,'Phone','phone');
-      req(!p.email,'Email','email');
       req(!p.address,'Address','address');
       // Apt / Unit # is intentionally NOT required — most addresses have no unit.
       req(!p.city,'City','city');
@@ -452,12 +517,13 @@
       const p=people[i];
       const body={ agent_id:agentId, customer_name:[p.first,p.last].filter(Boolean).join(' '),
         customer_phone:p.phone||'', customer_dob:p.dob||null,
-        customer_email:p.email||null, customer_address:[p.address, p.apartment].filter(Boolean).join(', ')||null, customer_city:p.city||null,
+        customer_address:[p.address, p.apartment].filter(Boolean).join(', ')||null, customer_city:p.city||null,
         customer_zip:p.zip||null, customer_gender:p.gender||null,
         customer_marital_status:p.marital||null, customer_tobacco:p.tobacco||null, customer_income:p.income||null,
         customer_ssn:p.ssn||null,
         state:state, products:p.products,
-        recording_id:RECORDING_IDS[0].id, recording_ids:RECORDING_IDS.map(function(r){return r.id;}) };
+        recording_id:RECORDING_IDS[0].id, recording_ids:RECORDING_IDS.map(function(r){return r.id;}),
+        consent_form_ids:CONSENT_IDS.map(function(c){return c.id;}) };
       try{
         const r = await window.__ebAPI.post('/compliance/deals/submit', body);
         rows.push({ name: body.customer_name||('Person '+(i+1)), ok: r.decision==='APPROVED', reason: r.reason||'', n: p.products.length });
@@ -585,6 +651,7 @@
   // lock everything until at least one call recording is uploaded
   setLocked(true);
   renderRecList();
+  renderConList();
 })();
 </script>
 </body>

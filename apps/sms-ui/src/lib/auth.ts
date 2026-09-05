@@ -43,6 +43,16 @@ export function isAdmin(): boolean {
   return ADMIN_ROLES.has(roleName());
 }
 
+// Owner/CEO gate — the Expenses page and nothing else. Deliberately TIGHTER than
+// isAdmin(): tenant_admins and managers must not see payroll. Mirrors the backend's
+// require_role("super_admin") on /expenses, including "dev" (which passes every
+// role gate in this app by design).
+const OWNER_ROLES = new Set(["super_admin", "dev"]);
+
+export function isOwner(): boolean {
+  return OWNER_ROLES.has(roleName());
+}
+
 // Per-page SMS visibility rules:
 //   - SMS Queue:      agents + dev only        (admin/manager-class do NOT see it)
 //   - SMS Manager:    manager-class + admin + dev

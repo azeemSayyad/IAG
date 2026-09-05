@@ -30,6 +30,8 @@ from app.calls.routers.calls import router as calls_router
 from app.coaching.routers.coaching import router as coaching_router
 from app.workflows.routers.workflows import router as workflows_router
 from app.compliance.router import router as compliance_router
+from app.expenses.router import router as expenses_router
+from app.contacts.router import router as contacts_router
 from app.announcements.router import router as announcements_router
 from app.sms_queue.routers.monitoring import router as sms_monitoring_router
 from app.sms_queue.routers.manager import router as sms_manager_router
@@ -113,6 +115,8 @@ app.include_router(calls_router, prefix="/api/v1")
 app.include_router(coaching_router, prefix="/api/v1")
 app.include_router(workflows_router, prefix="/api/v1")
 app.include_router(compliance_router, prefix="/api/v1")
+app.include_router(expenses_router, prefix="/api/v1")
+app.include_router(contacts_router, prefix="/api/v1")
 app.include_router(announcements_router, prefix="/api/v1")
 app.include_router(reports_router, prefix="/api/v1")
 app.include_router(sms_monitoring_router, prefix="/api/v1")

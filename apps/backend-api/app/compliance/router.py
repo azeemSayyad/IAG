@@ -682,6 +682,7 @@ async def submit_deal(
         products=[p.model_dump() for p in request.products] if request.products else None,
         recording_id=request.recording_id,
         recording_ids=request.recording_ids,
+        consent_form_ids=request.consent_form_ids,
     )
 
     # Capacity engine: logging a deal frees this agent for the next lead. Mark the
@@ -743,6 +744,7 @@ async def upload_deal_recording(
         tenant_id=tenant_id,
         filename=fname[:255],
         content_type=(ctype or "application/octet-stream")[:100],
+        kind="recording",
         byte_size=size,
         storage="db",
     )
@@ -806,6 +808,115 @@ def get_deal_recording(
         content=bytes(rec.data or b""),
         media_type=rec.content_type or "application/octet-stream",
         headers={"Content-Disposition": f'inline; filename="{rec.filename or "recording"}"'},
+    )
+
+
+# Consent forms are documents, not call audio, so they DO get a size cap — a signed
+# PDF or a phone photo of one is comfortably under this.
+_CONSENT_EXTS = (
+    ".pdf", ".png", ".jpg", ".jpeg", ".gif", ".webp", ".heic", ".heif",
+    ".tif", ".tiff", ".doc", ".docx", ".txt", ".rtf",
+)
+_CONSENT_MAX_BYTES = 25 * 1024 * 1024
+
+
+@router.post("/deals/consent-form", status_code=status.HTTP_201_CREATED)
+async def upload_deal_consent_form(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    tenant_id: str = Depends(get_tenant_id),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Store a signed consent / scope-of-appointment form uploaded on the Add Deal
+    form. Shares the deal_recordings table (kind='consent') and the same S3-or-inline
+    storage. Returns the id to attach as consent_form_ids on /deals/submit."""
+    raw = await file.read()
+    size = len(raw)
+    if size == 0:
+        raise HTTPException(status_code=400, detail="The consent form file is empty.")
+    if size > _CONSENT_MAX_BYTES:
+        raise HTTPException(status_code=413, detail="Consent forms must be 25 MB or smaller.")
+    fname = file.filename or "consent-form"
+    ctype = (file.content_type or "").lower()
+    is_doc = (
+        ctype.startswith("image/")
+        or ctype in ("application/pdf", "text/plain", "application/rtf", "application/msword")
+        or ctype.startswith("application/vnd.openxmlformats-officedocument")
+        or ctype in ("application/octet-stream", "")
+        or fname.lower().endswith(_CONSENT_EXTS)
+    )
+    if not is_doc:
+        raise HTTPException(status_code=415, detail="Please upload the consent form as a PDF, image or document.")
+
+    doc = DealRecording(
+        tenant_id=tenant_id,
+        filename=fname[:255],
+        content_type=(ctype or "application/octet-stream")[:100],
+        kind="consent",
+        byte_size=size,
+        storage="db",
+    )
+    try:
+        agent = db.query(Agent).filter(Agent.tenant_id == tenant_id, Agent.user_id == current_user.id).first()
+        if agent:
+            doc.agent_id = agent.id
+    except Exception:
+        pass
+    stored_to_s3 = False
+    try:
+        from app.calls.s3_storage import s3_storage
+        if s3_storage.configured():
+            ext = (fname.rsplit(".", 1)[-1] if "." in fname else "pdf").lower()[:8] or "pdf"
+            key = f"deal-consent-forms/{tenant_id}/{uuid4()}.{ext}"
+            out = s3_storage.upload_bytes(raw, key, content_type=doc.content_type)
+            doc.storage, doc.s3_bucket, doc.s3_key, doc.data = "s3", out["bucket"], out["key"], None
+            stored_to_s3 = True
+    except Exception:
+        stored_to_s3 = False
+    if not stored_to_s3:
+        doc.storage, doc.data = "db", raw
+
+    db.add(doc)
+    db.commit()
+    db.refresh(doc)
+    return {
+        "id": str(doc.id),
+        "filename": doc.filename,
+        "byte_size": doc.byte_size,
+        "content_type": doc.content_type,
+        "storage": doc.storage,
+    }
+
+
+@router.get("/deals/consent-form/{consent_form_id}")
+def get_deal_consent_form(
+    consent_form_id: UUID,
+    db: Session = Depends(get_db),
+    tenant_id: str = Depends(get_tenant_id),
+    current_user: User = Depends(get_current_active_user),
+):
+    """View / download a stored consent form (tenant-scoped)."""
+    doc = (
+        db.query(DealRecording)
+        .filter(
+            DealRecording.id == consent_form_id,
+            DealRecording.tenant_id == tenant_id,
+            DealRecording.kind == "consent",
+        )
+        .first()
+    )
+    if not doc:
+        raise HTTPException(status_code=404, detail="Consent form not found")
+    if doc.storage == "s3" and doc.s3_key:
+        from app.calls.s3_storage import s3_storage
+        url = s3_storage.signed_url(doc.s3_key)
+        if not url:
+            raise HTTPException(status_code=404, detail="Consent form is unavailable")
+        return RedirectResponse(url)
+    return Response(
+        content=bytes(doc.data or b""),
+        media_type=doc.content_type or "application/octet-stream",
+        headers={"Content-Disposition": f'inline; filename="{doc.filename or "consent-form"}"'},
     )
 
 
@@ -1055,6 +1166,21 @@ def all_deals_today(
         ):
             rec_map[rid] = fn
 
+    # Same for the consent forms attached to each deal, so All Deals can link them.
+    def _as_uuid(v):
+        try:
+            return v if isinstance(v, UUID) else UUID(str(v))
+        except Exception:
+            return None
+    con_ids = {u for d in deals for u in map(_as_uuid, (d.consent_form_ids or [])) if u}
+    con_map = {}
+    if con_ids:
+        for cid, fn in (
+            db.query(DealRecording.id, DealRecording.filename)
+            .filter(DealRecording.id.in_(con_ids)).all()
+        ):
+            con_map[str(cid)] = fn
+
     # The LIST (items below, capped 500) shows ALL statuses so admins can review/approve
     # pending deals; the CARD totals count APPROVED-only so they match every other page.
     approved = [d for d in deals if (d.status or "").lower() in APPROVED_STATUSES]
@@ -1087,6 +1213,9 @@ def all_deals_today(
         "approval_decision": d.approval_decision,
         "recording_id": str(d.recording_id) if d.recording_id else None,
         "recording_filename": rec_map.get(d.recording_id),
+        "consent_forms": [
+            {"id": str(c), "filename": con_map.get(str(c))} for c in (d.consent_form_ids or [])
+        ],
         "created_at": d.created_at.isoformat() if d.created_at else None,
     } for d in deals[:500]]   # table capped at 500; totals below span ALL of the range
     return {

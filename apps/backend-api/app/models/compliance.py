@@ -131,6 +131,10 @@ class Deal(Base):
     # Up to 4 call recordings (list of UUID strings). recording_id above stays the
     # PRIMARY (first) for back-compat; this holds the full set for this submission.
     recording_ids = Column(JSONB, nullable=True)
+    # Signed consent / scope-of-appointment paperwork for this enrollment (list of
+    # deal_recordings UUID strings with kind='consent'). Optional: the call recording
+    # is the hard gate on the Add Deal form, consent forms are attached alongside it.
+    consent_form_ids = Column(JSONB, nullable=True)
     status = Column(String(50), nullable=False, default="submitted")
     approval_decision = Column(String(50), nullable=True)
     approval_reason = Column(Text, nullable=True)
@@ -189,6 +193,9 @@ class DealRecording(Base):
     agent_id = Column(UUID(as_uuid=True), ForeignKey("agents.id"), nullable=True, index=True)
     filename = Column(String(255), nullable=True)
     content_type = Column(String(100), nullable=True)
+    # 'recording' -> audio/video of the sales call; 'consent' -> a signed consent form
+    # (PDF/image/doc) uploaded on the same Add Deal form. Same storage, different gate.
+    kind = Column(String(20), nullable=False, default="recording", server_default="recording")
     byte_size = Column(Integer, nullable=False, default=0, server_default="0")
     # 'db' -> bytes live in `data`; 's3' -> object at s3_bucket/s3_key.
     storage = Column(String(10), nullable=False, default="db", server_default="db")

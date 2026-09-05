@@ -8,9 +8,9 @@
 <link rel="apple-touch-icon" href="assets/apple-touch-icon.png"/>
 <script src="brand.js?v=2"></script>
 <script src="i18n-dict.js?v=2"></script>
-<script src="prefs-extras.js?v=31"></script>
+<script src="prefs-extras.js?v=32"></script>
 <script src="services/api.js?v=10"></script>
-<script src="services/error-boundary.js?v=20"></script>
+<script src="services/error-boundary.js?v=22"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
@@ -493,12 +493,20 @@ html[data-mode="dark"] #recPlayer{background:#1C2029;border-color:rgba(255,255,2
     return '<select class="status-sel st-'+esc(cur)+'" data-id="'+esc(d.id)+'" data-prev="'+esc(cur)+'">'+opts.join('')+'</select>';
   }
 
-  // Per-deal recording cell: Play (inline audio) + Download. "—" when none.
+  // Per-deal attachments cell: the call recording (Play + Download) followed by one
+  // download button per consent form uploaded on the Add Deal sheet. "—" when neither.
   function recCell(d){
-    if(!d.recording_id) return '<span class="muted">—</span>';
-    var nm = esc(d.recording_filename||'recording');
-    return '<button class="btn icon-btn rec-play" data-id="'+esc(d.recording_id)+'" data-name="'+nm+'" type="button" title="Play recording" aria-label="Play recording"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></button>'
-         + '<button class="btn icon-btn rec-dl" data-id="'+esc(d.recording_id)+'" data-name="'+nm+'" type="button" title="Download recording" aria-label="Download recording"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg></button>';
+    var out = '';
+    if(d.recording_id){
+      var nm = esc(d.recording_filename||'recording');
+      out += '<button class="btn icon-btn rec-play" data-id="'+esc(d.recording_id)+'" data-name="'+nm+'" type="button" title="Play recording" aria-label="Play recording"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></button>'
+           + '<button class="btn icon-btn rec-dl" data-id="'+esc(d.recording_id)+'" data-name="'+nm+'" type="button" title="Download recording" aria-label="Download recording"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg></button>';
+    }
+    (d.consent_forms||[]).forEach(function(c,i){
+      var cn = esc(c.filename||('consent-form-'+(i+1)));
+      out += '<button class="btn icon-btn con-dl" data-id="'+esc(c.id)+'" data-name="'+cn+'" type="button" title="Consent form: '+cn+'" aria-label="Download consent form"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></button>';
+    });
+    return out || '<span class="muted">—</span>';
   }
   // The GET recording route needs the auth header, so fetch as an authed blob
   // (a plain <a href> would 401). Works same-origin in prod and cross-origin in dev.
@@ -533,6 +541,25 @@ html[data-mode="dark"] #recPlayer{background:#1C2029;border-color:rgba(255,255,2
       if(window.__ebShowToast) window.__ebShowToast('Could not load recording', 'error');
     }finally{ btn.disabled=false; btn.innerHTML=orig; }
   });
+  // Consent forms download the same authed-blob way (the GET route needs the header).
+  document.addEventListener('click', async function(e){
+    var btn = e.target.closest('.con-dl'); if(!btn) return;
+    var id = btn.getAttribute('data-id'), name = btn.getAttribute('data-name')||'consent-form';
+    var orig = btn.innerHTML; btn.disabled = true; btn.innerHTML = '…';
+    try{
+      var tok = localStorage.getItem('access_token');
+      var base = (window.__ebAPI && window.__ebAPI.baseUrl) || '';
+      var res = await fetch(base + '/api/v1/compliance/deals/consent-form/' + encodeURIComponent(id),
+                            { headers: tok ? { Authorization: 'Bearer ' + tok } : {} });
+      if(!res.ok) throw new Error('HTTP '+res.status);
+      var url = URL.createObjectURL(await res.blob());
+      var a=document.createElement('a'); a.href=url; a.download=name; document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(function(){ URL.revokeObjectURL(url); }, 15000);
+    }catch(err){
+      if(window.__ebShowToast) window.__ebShowToast('Could not load consent form', 'error');
+    }finally{ btn.disabled=false; btn.innerHTML=orig; }
+  });
+
   // Close the mini-player: stop playback and hide it.
   $('#recClose').addEventListener('click', function(){
     var ra=$('#recAudio'); if(ra){ ra.pause(); ra.removeAttribute('src'); ra.load(); }
@@ -689,8 +716,8 @@ html[data-mode="dark"] #recPlayer{background:#1C2029;border-color:rgba(255,255,2
     $('#mBody').innerHTML = rows.map(function(r){
       return '<div class="mrow"><span class="mk">'+esc(r[0])+'</span><span class="mv">'+esc(String(r[1]))+'</span></div>';
     }).join('')
-    + '<div class="mrow"><span class="mk">Recording</span><span class="mv">'
-      + (d.recording_id ? recCell(d) : '<span class="muted">No recording</span>') + '</span></div>';
+    + '<div class="mrow"><span class="mk">Attachments</span><span class="mv">'
+      + ((d.recording_id || (d.consent_forms||[]).length) ? recCell(d) : '<span class="muted">No recording</span>') + '</span></div>';
     $('#modal').classList.add('open');
   }
   function closeModal(){ $('#modal').classList.remove('open'); }
