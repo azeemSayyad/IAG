@@ -196,7 +196,117 @@ html[data-mode="dark"] .text-\[\#be123c\] { color: #fda4af !important; } /* rose
 }
 @media (prefers-reduced-motion: reduce) {
   .drawer-panel { animation: drawer-fade 160ms ease-out; }
+  .drawer-orb { animation: none; }
 }
+
+/* ── Drawer dressing ───────────────────────────────────────────────────────
+   Header = brand gradient wash with two blurred orbs drifting behind the
+   title; the chip is a solid brand gradient; body sits on a faintly tinted
+   ground so the floating section cards (.dsec) read as raised; footer is
+   frosted so it floats over scrolling content. Every colour derives from the
+   runtime brand vars (or a `tone` passed by the caller) — nothing hardcoded. */
+.drawer-panel {
+  --drawer-tone-rgb: var(--accent-rgb);
+  background:
+    linear-gradient(180deg, rgba(var(--accent-rgb), 0.05), transparent 220px),
+    var(--n99, #fff);
+  box-shadow: -24px 0 60px -20px rgba(26, 31, 42, 0.35);
+}
+.drawer-head {
+  background:
+    linear-gradient(135deg, rgba(var(--accent-rgb), 0.18) 0%, rgba(var(--accent-2-rgb), 0.12) 60%, transparent 100%);
+  border-bottom: 1px solid rgba(var(--accent-rgb), 0.14);
+}
+.drawer-orb {
+  position: absolute; border-radius: 999px; pointer-events: none; filter: blur(18px);
+  animation: drawer-orb 9s ease-in-out infinite alternate;
+}
+.drawer-orb-a {
+  width: 170px; height: 170px; right: -50px; top: -80px;
+  background: radial-gradient(circle, rgba(var(--accent-rgb), 0.45), rgba(var(--accent-rgb), 0) 70%);
+}
+.drawer-orb-b {
+  width: 120px; height: 120px; left: 40%; bottom: -70px; animation-delay: -4s;
+  background: radial-gradient(circle, rgba(var(--accent-2-rgb), 0.45), rgba(var(--accent-2-rgb), 0) 70%);
+}
+@keyframes drawer-orb {
+  from { transform: translate3d(0, 0, 0) scale(1); }
+  to { transform: translate3d(-14px, 10px, 0) scale(1.12); }
+}
+.drawer-chip {
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  box-shadow: 0 10px 22px -8px rgba(var(--accent-rgb), 0.7), inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  transform: translateY(-2px);
+}
+.drawer-close { background: rgba(255, 255, 255, 0.55); border: 1px solid rgba(var(--accent-rgb), 0.18); }
+.drawer-close:hover { background: #fff; box-shadow: 0 6px 14px -6px rgba(26, 31, 42, 0.3); }
+.drawer-foot {
+  border-top: 1px solid var(--color-hairline);
+  background: rgba(255, 255, 255, 0.72);
+  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+}
+.drawer-ctl { background: rgba(255, 255, 255, 0.75); }
+.drawer-ctl:focus { box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.16); background: #fff; }
+
+/* Floating section cards. `--sec-rgb` is set per tone below. */
+.dsec {
+  --sec-rgb: var(--accent-rgb);
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(var(--sec-rgb), 0.18);
+  box-shadow: 0 14px 30px -18px rgba(var(--sec-rgb), 0.55), 0 1px 0 rgba(255, 255, 255, 0.8) inset;
+  transition: transform 160ms ease, box-shadow 160ms ease;
+}
+.dsec::before {
+  content: ""; position: absolute; left: 0; top: 18px; bottom: 18px; width: 3px; border-radius: 0 3px 3px 0;
+  background: linear-gradient(180deg, rgba(var(--sec-rgb), 0.9), rgba(var(--sec-rgb), 0.25));
+}
+.dsec:focus-within { transform: translateY(-1px); box-shadow: 0 18px 36px -18px rgba(var(--sec-rgb), 0.7); }
+.dsec-badge {
+  background: linear-gradient(135deg, rgb(var(--sec-rgb)), rgba(var(--sec-rgb), 0.72));
+  box-shadow: 0 8px 16px -8px rgba(var(--sec-rgb), 0.8);
+}
+.dsec-accent  { --sec-rgb: var(--accent-rgb); }
+.dsec-accent2 { --sec-rgb: var(--accent-2-rgb); }
+.dsec-success { --sec-rgb: 79, 130, 104; }   /* = --color-success */
+.dsec-pending { --sec-rgb: 156, 120, 66; }   /* = --color-pending */
+
+/* Segmented control (Video: None / Link / Upload) + dropzone. */
+.dseg { background: rgba(var(--accent-rgb), 0.08); border: 1px solid rgba(var(--accent-rgb), 0.12); }
+.dseg-on {
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  box-shadow: 0 8px 18px -8px rgba(var(--accent-rgb), 0.8);
+}
+.ddrop {
+  border: 1.5px dashed rgba(var(--accent-2-rgb), 0.45);
+  background:
+    radial-gradient(80% 120% at 50% 0%, rgba(var(--accent-2-rgb), 0.10), transparent 70%),
+    rgba(255, 255, 255, 0.6);
+  transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
+}
+.ddrop:hover { transform: translateY(-2px); border-color: rgb(var(--accent-2-rgb)); box-shadow: 0 16px 30px -18px rgba(var(--accent-2-rgb), 0.7); }
+.ddrop-icon {
+  background: linear-gradient(135deg, var(--accent-2), var(--accent));
+  box-shadow: 0 8px 16px -8px rgba(var(--accent-2-rgb), 0.8);
+}
+.btn-glow {
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  box-shadow: 0 10px 22px -10px rgba(var(--accent-rgb), 0.9);
+  transition: transform 140ms ease, box-shadow 140ms ease, filter 140ms ease;
+}
+.btn-glow:hover:not(:disabled) { transform: translateY(-1px); filter: brightness(1.06); box-shadow: 0 14px 26px -10px rgba(var(--accent-rgb), 0.95); }
+
+html[data-mode="dark"] .drawer-panel {
+  background: linear-gradient(180deg, rgba(var(--accent-rgb), 0.10), transparent 220px), #171b24;
+  box-shadow: -24px 0 60px -20px rgba(0, 0, 0, 0.7);
+}
+html[data-mode="dark"] .drawer-head { border-bottom-color: rgba(var(--accent-rgb), 0.22); }
+html[data-mode="dark"] .drawer-close { background: rgba(255, 255, 255, 0.06); border-color: rgba(255, 255, 255, 0.1); }
+html[data-mode="dark"] .drawer-close:hover { background: rgba(255, 255, 255, 0.12); }
+html[data-mode="dark"] .drawer-foot { background: rgba(23, 27, 36, 0.8); }
+html[data-mode="dark"] .drawer-ctl { background: rgba(255, 255, 255, 0.05) !important; }
+html[data-mode="dark"] .drawer-ctl:focus { background: rgba(255, 255, 255, 0.08) !important; }
+html[data-mode="dark"] .dsec { background: rgba(255, 255, 255, 0.04); border-color: rgba(var(--sec-rgb), 0.3); box-shadow: 0 14px 30px -18px rgba(0, 0, 0, 0.6); }
+html[data-mode="dark"] .ddrop { background: rgba(255, 255, 255, 0.04); }
 
 /* ── Contacts avatar ───────────────────────────────────────────────────────
    A soft tinted disc, not a saturated block: the hue only distinguishes one

@@ -8,10 +8,10 @@
  * Data lives in /training/steps (backend/app/training). Uploaded videos go to
  * S3 when it's configured, DB bytes otherwise — the page doesn't care which.
  */
-import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from "react";
 import { api } from "../lib/api";
 import { getAccessToken, isAdmin } from "../lib/auth";
-import { Drawer, Field, drawerCtl } from "../components/Drawer";
+import { Drawer, DrawerSection, Field, drawerCtl } from "../components/Drawer";
 import ScriptBlocks from "../components/training/ScriptBlocks";
 import VideoEmbed, { embedFor, type VideoKind } from "../components/training/VideoEmbed";
 
@@ -393,7 +393,7 @@ export default function Training() {
         footer={
           <>
             <button className={btnGhost} onClick={closeDrawer} disabled={!!busy}>Cancel</button>
-            <button className={`${btnCls} inline-flex items-center gap-2`} disabled={!!busy || !valid} onClick={save}>
+            <button className="btn-glow inline-flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-bold text-white disabled:opacity-50" disabled={!!busy || !valid} onClick={save}>
               {(busy === "save" || busy === "upload") && <Spinner />}
               {busy === "upload" ? "Uploading video…" : busy === "save" ? "Saving…" : drawer?.step ? "Save changes" : "Add step"}
             </button>
@@ -409,20 +409,28 @@ export default function Training() {
             )}
           </div>
         )}
-        <Field label="Title" required>
-          <input className={drawerCtl} value={f.title} placeholder="e.g. How to use HealthSherpa"
-                 onChange={(e) => setF({ ...f, title: e.target.value })} />
-        </Field>
-        <Field label="Short description" hint="One line under the title — what the agent gets out of this step.">
-          <input className={drawerCtl} value={f.description} placeholder="Optional"
-                 onChange={(e) => setF({ ...f, description: e.target.value })} />
-        </Field>
+        <DrawerSection tone="accent" title="Basics" sub="What the agent sees in the step list."
+                       icon={<svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" /></svg>}>
+          <Field label="Title" required>
+            <input className={drawerCtl} value={f.title} placeholder="e.g. How to use HealthSherpa"
+                   onChange={(e) => setF({ ...f, title: e.target.value })} />
+          </Field>
+          <Field label="Short description" hint="One line under the title — what the agent gets out of this step.">
+            <input className={drawerCtl} value={f.description} placeholder="Optional"
+                   onChange={(e) => setF({ ...f, description: e.target.value })} />
+          </Field>
+        </DrawerSection>
 
-        <Field label="Video" plain>
-          <div className="flex rounded-lg bg-black/5 p-1 text-xs font-semibold">
+        <DrawerSection tone="accent2" title="Video" sub="Paste a link or upload a file. Agents watch it at the top of the step."
+                       icon={<svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="6" width="13" height="12" rx="2" /><path d="m16 10 5-3v10l-5-3Z" /></svg>}>
+        <Field label="Source" plain>
+          <div className="dseg flex rounded-xl p-1 text-xs font-semibold">
             {(["none", "link", "upload"] as VideoKind[]).map((m) => (
               <button key={m} type="button" onClick={() => setF({ ...f, videoMode: m })}
-                      className={`flex-1 rounded-md py-1.5 transition ${f.videoMode === m ? "bg-accent text-white shadow" : "text-ink-muted hover:text-ink"}`}>
+                      className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg py-2 transition ${f.videoMode === m ? "dseg-on text-white" : "text-ink-muted hover:text-ink"}`}>
+                {m === "none" && <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><circle cx="12" cy="12" r="9" /><path d="m5.5 5.5 13 13" /></svg>}
+                {m === "link" && <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1" /><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1" /></svg>}
+                {m === "upload" && <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v12" /><path d="m7 8 5-5 5 5" /><path d="M5 17v2a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-2" /></svg>}
                 {m === "none" ? "None yet" : m === "link" ? "Link" : "Upload file"}
               </button>
             ))}
@@ -446,9 +454,14 @@ export default function Training() {
                   <button type="button" className="shrink-0 font-semibold text-danger hover:underline" disabled={!!busy} onClick={removeVideo}>Remove</button>
                 </div>
               )}
-              <label className="flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-hairline px-3 py-4 text-xs text-ink-muted hover:border-accent hover:text-accent">
-                <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v12" /><path d="m7 8 5-5 5 5" /><path d="M5 17v2a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-2" /></svg>
-                {f.file ? <span className="truncate text-ink"><b>{f.file.name}</b> · {fmtBytes(f.file.size)}</span> : (drawer?.step?.video_kind === "upload" ? "Choose a replacement video…" : "Choose a video file (mp4, webm, mov…)")}
+              <label className="ddrop flex cursor-pointer flex-col items-center justify-center gap-2 rounded-2xl px-3 py-5 text-xs text-ink-muted">
+                <span className="ddrop-icon grid h-10 w-10 place-items-center rounded-2xl text-white" aria-hidden="true">
+                  <svg className="h-4.5 w-4.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v12" /><path d="m7 8 5-5 5 5" /><path d="M5 17v2a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-2" /></svg>
+                </span>
+                {f.file
+                  ? <span className="max-w-full truncate text-ink"><b>{f.file.name}</b> · {fmtBytes(f.file.size)}</span>
+                  : <span className="font-semibold text-ink">{drawer?.step?.video_kind === "upload" ? "Choose a replacement video…" : "Choose a video file"}</span>}
+                {!f.file && <span className="text-[0.68rem] text-ink-faint">mp4, webm, mov, m4v</span>}
                 <input type="file" accept="video/*,.mp4,.webm,.mov,.m4v" className="hidden"
                        onChange={(e) => setF({ ...f, file: e.target.files?.[0] || null })} />
               </label>
@@ -456,30 +469,35 @@ export default function Training() {
             </div>
           )}
         </Field>
+        </DrawerSection>
 
-        <Field label="Script / notes under the video" hint="Leave empty for video-only steps.">
+        <DrawerSection tone="success" title="Script & notes" sub="Shown under the video. Leave empty for video-only steps."
+                       icon={<svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9Z" /><path d="M14 3v6h6" /><path d="M8 13h8M8 17h6" /></svg>}>
           <textarea className={`${drawerCtl} font-mono text-[0.78rem] leading-relaxed`} rows={12} value={f.content}
                     placeholder={"# Phase 1 — Introduction\n[Agent]: \"Hello, my name is…\"\n> Customer Response\n1. First verification question"}
-                    onChange={(e) => setF({ ...f, content: e.target.value })} spellCheck={false} />
-        </Field>
-        <details className="rounded-lg border border-hairline px-3 py-2 text-[0.72rem] text-ink-muted">
-          <summary className="cursor-pointer font-semibold text-ink">Formatting cheat-sheet</summary>
-          <div className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 font-mono">
-            <span className="text-accent"># Title</span><span className="font-sans">section heading</span>
-            <span className="text-accent">[Agent]: text</span><span className="font-sans">speaker quote card (any [Label]:)</span>
-            <span className="text-accent">&gt; text</span><span className="font-sans">customer response / stage direction</span>
-            <span className="text-accent">1. text</span><span className="font-sans">numbered checklist</span>
-            <span className="text-accent">- text</span><span className="font-sans">bullet</span>
-            <span className="text-accent">++ Title | body</span><span className="font-sans">green callout</span>
-            <span className="text-accent">:: Title | body</span><span className="font-sans">neutral callout</span>
-            <span className="text-accent">!! text</span><span className="font-sans">red "must do" callout</span>
-          </div>
-        </details>
-        {f.content.trim() && (
-          <details className="rounded-lg border border-hairline px-3 py-2 text-xs" open>
-            <summary className="cursor-pointer font-semibold text-ink">Preview</summary>
-            <div className="mt-3"><ScriptBlocks content={f.content} /></div>
+                    onChange={(e) => setF({ ...f, content: e.target.value })} spellCheck={false} aria-label="Script / notes under the video" />
+          <details className="rounded-xl border border-hairline bg-white/60 px-3 py-2 text-[0.72rem] text-ink-muted">
+            <summary className="cursor-pointer font-semibold text-ink">Formatting cheat-sheet</summary>
+            <div className="mt-2 grid grid-cols-[auto_1fr] items-center gap-x-3 gap-y-1.5">
+              {([
+                ["# Title", "section heading"], ["[Agent]: text", "speaker quote card (any [Label]:)"],
+                ["> text", "customer response / stage direction"], ["1. text", "numbered checklist"],
+                ["- text", "bullet"], ["++ Title | body", "green callout"],
+                [":: Title | body", "neutral callout"], ["!! text", "red \"must do\" callout"],
+              ] as [string, string][]).map(([k, v]) => (
+                <Fragment key={k}>
+                  <code className="rounded-md bg-accent/10 px-1.5 py-0.5 font-mono text-[0.68rem] font-semibold text-accent">{k}</code>
+                  <span>{v}</span>
+                </Fragment>
+              ))}
+            </div>
           </details>
+        </DrawerSection>
+        {f.content.trim() && (
+          <DrawerSection tone="pending" title="Preview" sub="Exactly how agents will see the script."
+                         icon={<svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z" /><circle cx="12" cy="12" r="3" /></svg>}>
+            <ScriptBlocks content={f.content} />
+          </DrawerSection>
         )}
       </Drawer>
     </div>
