@@ -29,8 +29,6 @@ type Step = {
   video_src: string | null;
 };
 
-type StorageStatus = { configured: boolean; bucket: string | null; endpoint: string | null; prefix: string };
-
 const PROGRESS_KEY = "ebTrainingProgress";
 const btnCls = "rounded-lg bg-accent px-3 py-1.5 text-xs font-bold text-white hover:bg-accent-hover disabled:opacity-50";
 const btnGhost = "rounded-lg border border-hairline px-3 py-1.5 text-xs font-semibold text-ink-muted hover:bg-black/5 hover:text-ink disabled:opacity-50";
@@ -79,15 +77,7 @@ export default function Training() {
   const [busy, setBusy] = useState<string | null>(null);
   const [dragId, setDragId] = useState<string | null>(null);
   const [overId, setOverId] = useState<string | null>(null);
-  const [storage, setStorage] = useState<StorageStatus | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
-
-  // Where uploads land on this server — shown in edit mode so an admin isn't
-  // left staring at an empty bucket wondering where the file went.
-  useEffect(() => {
-    if (!editMode || storage) return;
-    api<StorageStatus>("/training/storage").then(setStorage).catch(() => setStorage(null));
-  }, [editMode, storage]);
 
   const load = useCallback(() => {
     api<Step[]>("/training/steps")
@@ -256,20 +246,6 @@ export default function Training() {
       {err && (
         <div className="rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-xs font-semibold text-danger">{err}</div>
       )}
-      {editMode && storage && (
-        storage.configured ? (
-          <div className="rounded-lg border border-success/30 bg-success/10 px-3 py-2 text-xs text-success">
-            <b>Video uploads go to the bucket</b> <span className="font-mono">{storage.bucket}</span>
-            {storage.endpoint && <> via <span className="font-mono">{storage.endpoint}</span></>} under <span className="font-mono">{storage.prefix}/</span>.
-          </div>
-        ) : (
-          <div className="rounded-lg border border-pending/30 bg-pending/10 px-3 py-2 text-xs text-pending">
-            <b>S3 is not configured on this server</b> — video uploads are being stored in the database instead.
-            Set <span className="font-mono">AWS_ACCESS_KEY_ID</span>, <span className="font-mono">AWS_SECRET_ACCESS_KEY</span>,{" "}
-            <span className="font-mono">S3_BUCKET</span> and <span className="font-mono">S3_ENDPOINT_URL</span> on the backend, redeploy, then re-upload.
-          </div>
-        )
-      )}
 
       {steps === null ? (
         <div className="glass rounded-2xl p-10 text-center text-sm text-ink-muted">Loading the program…</div>
@@ -417,12 +393,22 @@ export default function Training() {
         footer={
           <>
             <button className={btnGhost} onClick={closeDrawer} disabled={!!busy}>Cancel</button>
-            <button className={btnCls} disabled={!!busy || !valid} onClick={save}>
+            <button className={`${btnCls} inline-flex items-center gap-2`} disabled={!!busy || !valid} onClick={save}>
+              {(busy === "save" || busy === "upload") && <Spinner />}
               {busy === "upload" ? "Uploading video…" : busy === "save" ? "Saving…" : drawer?.step ? "Save changes" : "Add step"}
             </button>
           </>
         }
       >
+        {(busy === "save" || busy === "upload") && (
+          <div className="drawer-busy absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 rounded-none" aria-live="polite">
+            <Spinner large />
+            <span className="text-sm font-bold text-ink">{busy === "upload" ? "Uploading video…" : "Saving…"}</span>
+            {busy === "upload" && f.file && (
+              <span className="text-xs text-ink-muted">{f.file.name} · {fmtBytes(f.file.size)} — please keep this window open.</span>
+            )}
+          </div>
+        )}
         <Field label="Title" required>
           <input className={drawerCtl} value={f.title} placeholder="e.g. How to use HealthSherpa"
                  onChange={(e) => setF({ ...f, title: e.target.value })} />
@@ -497,6 +483,14 @@ export default function Training() {
         )}
       </Drawer>
     </div>
+  );
+}
+
+function Spinner({ large }: { large?: boolean }) {
+  const s = large ? "h-9 w-9 border-[3px]" : "h-3.5 w-3.5 border-2";
+  return (
+    <span className={`inline-block ${s} animate-spin rounded-full border-current border-t-transparent ${large ? "text-accent" : ""}`}
+          role="status" aria-label="Working" />
   );
 }
 

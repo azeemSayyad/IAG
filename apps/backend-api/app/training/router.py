@@ -103,20 +103,6 @@ def list_steps(
     return [_to_response(s) for s in _live(db, tenant_id).all()]
 
 
-@router.get("/storage")
-def storage_status(_user: User = Depends(_require_admin)):
-    """Where video uploads will land on THIS server — so an admin can see at a
-    glance whether the bucket is wired up instead of guessing from an empty
-    bucket listing."""
-    from app.calls.s3_storage import s3_storage
-    return {
-        "configured": s3_storage.configured(),
-        "bucket": s3_storage.bucket or None,
-        "endpoint": s3_storage.endpoint_url,
-        "prefix": "training-videos",
-    }
-
-
 # --- write (admin-class) ----------------------------------------------------
 
 @router.post("/steps", response_model=TrainingStepResponse, status_code=status.HTTP_201_CREATED)
