@@ -41,6 +41,7 @@ from app.sales_dashboard.router import router as sales_dashboard_router
 from app.onboarding.router import router as onboarding_router
 from app.applicant_inbox.router import router as applicant_inbox_router
 from app.direct_messages.router import router as direct_messages_router
+from app.training.router import router as training_router
 
 
 def _cors_origins() -> list[str]:
@@ -128,6 +129,7 @@ app.include_router(sales_dashboard_router, prefix="/api/v1")
 app.include_router(onboarding_router, prefix="/api/v1")
 app.include_router(applicant_inbox_router, prefix="/api/v1")
 app.include_router(direct_messages_router, prefix="/api/v1")
+app.include_router(training_router, prefix="/api/v1")
 
 
 @app.get("/health")

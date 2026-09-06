@@ -26,6 +26,7 @@ from app.models.expense import (
 from app.models.hiree import HireeOnboarding, OnboardingDocument
 from app.models.applicant_message import ApplicantMessage
 from app.models.direct_message import DirectMessage
+from app.models.training import TrainingStep
 from app.models.notification import Notification
 from app.models.api_key import ApiKey
 from app.models.sms import (
@@ -68,6 +69,7 @@ __all__ = [
     "OnboardingDocument",
     "ApplicantMessage",
     "DirectMessage",
+    "TrainingStep",
     "Notification",
     "ApiKey",
     "SmsLead",

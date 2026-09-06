@@ -185,6 +185,31 @@ self-service view + admin view that manages any agent). Backend under
   Performance/Dispositions toggle at `#dispView`); `dispositions.html` is now a
   redirect stub to `agent-performance.html#dispView`.
 
+## Training program (agent onboarding)
+
+Lives in the **SMS SPA** at `/sms/#/training` (`apps/sms-ui/src/pages/Training.tsx`
++ `components/training/`), NOT a static page — there is no `training.html`.
+Backend domain `apps/backend-api/app/training/` (router + `defaults.py`), model
+`app/models/training.py` (`training_steps`, migration 052).
+
+- Everyone signed in can read; **admin-class edits** (add / remove / rename /
+  drag-reorder steps, paste a Vimeo/YouTube link or upload a video file, edit
+  the script text). Agents' completion progress is per-browser (`localStorage`).
+- Uploaded videos go through the same `app/calls/s3_storage.py` client as call
+  recordings (Railway Buckets / any S3-compatible via `S3_ENDPOINT_URL`); with
+  no S3 configured they fall back to DB bytes. Playback is
+  `GET /training/steps/{id}/video` — redirects to a signed URL for S3, streams
+  with Range support from DB — and accepts the JWT as `?token=` because
+  `<video>` can't send headers. `/training/steps` is exempt from the 10 MB body cap.
+- A tenant with **no rows at all** is seeded with `DEFAULT_STEPS` on first read
+  (7 steps; the master call script sits under "How to Sell"). Deleting every
+  step does NOT re-seed.
+- `content` is line-based script markup rendered by `ScriptBlocks.tsx`
+  (`# heading`, `[Agent]: quote`, `> note`, `1. item`, `- item`,
+  `++ Title | body`, `:: Title | body`, `!! text`). The cheat-sheet is in the editor.
+- Sidebar: the SPA shell renders it via `canSeeTraining()` (agents + admin-class
+  + dev); static pages get it injected by `prefs-extras.js` (`injectTrainingLink`).
+
 ## SMS pool — two ways a lead gets to an agent
 
 The agent pool is `sms_leads WHERE status='QUEUED'`; everything downstream

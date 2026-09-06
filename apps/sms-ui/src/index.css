@@ -53,6 +53,30 @@ html[data-mode="dark"] .recharts-tooltip-label {
   color: var(--text) !important;
 }
 
+/* ── Training page surfaces ─────────────────────────────────────────────
+   Script cards + the hero wash. Tinted from the runtime brand vars so they
+   follow the active theme; dark mode swaps to translucent white tiles. */
+.tr-hero::before {
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  background:
+    radial-gradient(60% 120% at 100% 0%, rgba(var(--accent-rgb), 0.16), transparent 60%),
+    radial-gradient(40% 90% at 0% 100%, rgba(var(--accent-2-rgb), 0.12), transparent 60%);
+}
+.tr-quote { background: var(--a98); }
+.tr-note, .tr-tile { background: var(--n96); }
+.tr-tile { border: 1px solid var(--color-hairline-soft); }
+.tr-placeholder {
+  background:
+    repeating-linear-gradient(135deg, var(--n96) 0 10px, var(--n98) 10px 20px);
+}
+.tr-video { box-shadow: 0 18px 40px -12px rgba(26, 31, 42, 0.35); }
+html[data-mode="dark"] .tr-quote { background: rgba(var(--accent-rgb), 0.14); }
+html[data-mode="dark"] .tr-note,
+html[data-mode="dark"] .tr-tile { background: rgba(255, 255, 255, 0.05); border-color: rgba(255, 255, 255, 0.08); }
+html[data-mode="dark"] .tr-placeholder {
+  background: repeating-linear-gradient(135deg, rgba(255,255,255,0.04) 0 10px, rgba(255,255,255,0.07) 10px 20px);
+}
+
 /* Glass card surface, matching the portal's translucent panels. */
 @utility glass {
   background: rgba(255, 255, 255, 0.55);

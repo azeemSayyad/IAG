@@ -1,7 +1,7 @@
 import { NavLink, Outlet } from "react-router-dom";
 import { useEffect, useRef, useState } from "react";
 import { api } from "../lib/api";
-import { getRole, isAdmin, isOwner, canSeeQueue, canSeeManager, canSeeMonitoring, logout } from "../lib/auth";
+import { getRole, isAdmin, isOwner, canSeeQueue, canSeeManager, canSeeMonitoring, canSeeTraining, logout } from "../lib/auth";
 import { getSocket } from "../lib/socket";
 import { leadOfferedSound } from "../lib/sound";
 import LeadOfferOverlay from "./LeadOfferOverlay";
@@ -78,6 +78,14 @@ function Icon({ name }: { name: string }) {
     strokeLinejoin: "round" as const,
   };
   switch (name) {
+    case "graduation":
+      // Training — mortarboard; matches the static sidebar's injected Training icon.
+      return (
+        <svg {...common}>
+          <path d="M22 10 12 5 2 10l10 5 10-5Z" />
+          <path d="M6 12v5c0 1.5 3 3 6 3s6-1.5 6-3v-5" />
+        </svg>
+      );
     case "broadcast":
       // DID Fleet — broadcast/signal tower; matches the static sidebar icon (error-boundary.js).
       return (
@@ -480,6 +488,18 @@ export default function PortalShell() {
                   <span className="sb-tip">{agentView && l.agentLabel ? l.agentLabel : l.label}</span>
                 </a>
               ))}
+              {/* Training — INTERNAL SPA route for agents + admin-class + dev (the
+                  static sidebar injects the same link via prefs-extras.js). */}
+              {canSeeTraining() && (
+                <NavLink
+                  to="/training"
+                  className={({ isActive }) => `sb-item${isActive ? " active" : ""}`}
+                  onClick={() => setNavOpen(false)}
+                >
+                  <Icon name="graduation" />
+                  <span className="sb-tip">Training</span>
+                </NavLink>
+              )}
               {/* Expenses + Contacts are INTERNAL SPA routes, so they're NavLinks
                   rather than PortalLink hrefs — but they belong with the back-office
                   pages here, not in the Leads group. Mirrors the static sidebar

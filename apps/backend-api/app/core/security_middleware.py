@@ -65,6 +65,7 @@ class SecurityMiddleware(BaseHTTPMiddleware):
         large_upload_paths: tuple = (
             "/compliance/deals/recording",
             "/ingestion/campaigns/upload",
+            "/training/steps",  # training video uploads (admin-only, can be hundreds of MB)
         ),
     ):
         super().__init__(app)

@@ -6,12 +6,14 @@ import SmsMonitoring from "./pages/SmsMonitoring";
 import SalesDashboard from "./pages/SalesDashboard";
 import Expenses from "./pages/Expenses";
 import Contacts from "./pages/Contacts";
+import Training from "./pages/Training";
 import {
   isAdmin,
   isOwner,
   canSeeQueue,
   canSeeManager,
   canSeeMonitoring,
+  canSeeTraining,
   smsDefaultRoute,
 } from "./lib/auth";
 import { useI18n } from "./lib/useI18n";
@@ -44,6 +46,11 @@ export default function App() {
         <Route
           path="/contacts"
           element={admin ? <Contacts /> : <Navigate to={home} replace />}
+        />
+        {/* Training: agents (its audience) + admin-class (who edit it) + dev. */}
+        <Route
+          path="/training"
+          element={canSeeTraining() ? <Training /> : <Navigate to={home} replace />}
         />
         {/* SMS Manager: manager-class + admin + dev. */}
         <Route

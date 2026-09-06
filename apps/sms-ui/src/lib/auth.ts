@@ -67,6 +67,10 @@ export function canSeeManager(): boolean {
 export function canSeeMonitoring(): boolean {
   return isDev();
 }
+// Training: the agents it's for, plus admin-class (who edit it) and dev.
+export function canSeeTraining(): boolean {
+  return roleName() === "agent" || isAdmin();
+}
 
 // Where to send a user who lands on the SMS app root or a page they can't see.
 // Agents/dev get the queue; admin & manager-class get their only page (Manager).
