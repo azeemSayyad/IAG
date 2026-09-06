@@ -1539,7 +1539,7 @@ html[data-mode="dark"] .um-tag.mut{background:rgba(255,255,255,.08);color:#C9CFD
         <div class="field"><label class="field-label" for="nuFirst">First name</label><input id="nuFirst" type="text"/></div>
         <div class="field"><label class="field-label" for="nuLast">Last name</label><input id="nuLast" type="text"/></div>
         <div class="field"><label class="field-label" for="nuEmail">Email</label><input id="nuEmail" type="email"/></div>
-        <div class="field"><label class="field-label" for="nuRole">Role</label><select id="nuRole"><option value="agent">Agent</option><option value="lead">Team Leader</option><option value="head">Head Manager</option><option value="manager">Manager</option><option value="tenant_admin">Admin</option></select></div>
+        <div class="field"><label class="field-label" for="nuRole">Role</label><select id="nuRole"><option value="agent">Agent</option><option value="super_admin">Super Admin</option></select></div>
         <div class="field"><label class="field-label" for="nuPhone">Personal phone <span class="opt">agents</span></label><input id="nuPhone" type="tel" placeholder="+1..."/></div>
         <div class="field"><label class="field-label" for="nuPass">Password</label><input id="nuPass" type="text" placeholder="min 8 characters"/></div>
       </div>
@@ -2775,7 +2775,10 @@ html[data-mode="dark"] .um-tag.mut{background:rgba(255,255,255,.08);color:#C9CFD
     if(!createBtn) return;
     var msg=document.getElementById('nuMsg'), list=document.getElementById('userList');
     function val(id){ var e=document.getElementById(id); return e?e.value.trim():''; }
-    var ROLES=['agent','lead','manager','head','tenant_admin'];
+    // IAG has exactly two assignable roles. A user still on a legacy role
+    // (lead/manager/head/tenant_admin) shows that role as the selected option
+    // so the dropdown never lies — the admin can move them to Agent/Super Admin.
+    var ROLES=['agent','super_admin'];
     // Only a dev can create/assign the "dev" role — add it to the dropdowns
     // (create + per-user edit) for dev logins only. Admins never see this option.
     if(role==='dev'){
@@ -2794,7 +2797,7 @@ html[data-mode="dark"] .um-tag.mut{background:rgba(255,255,255,.08);color:#C9CFD
     function avatarInner(name,url){ return url ? '<img src="'+esc(url)+'" alt=""/>' : esc(initials(name).toUpperCase()); }
     function fmtDate(iso){ if(!iso) return '—'; var d=new Date(iso); if(isNaN(d)) return '—'; return ('0'+(d.getMonth()+1)).slice(-2)+'/'+('0'+d.getDate()).slice(-2)+'/'+d.getFullYear(); }
     function money(v){ if(v==null||v==='') return '—'; var n=Number(v); if(isNaN(n)) return '—'; return '$'+n.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}); }
-    function roleLabel(r){ return ({agent:'Agent',lead:'Team Leader',manager:'Manager',head:'Head Manager',tenant_admin:'Admin',super_admin:'Admin',dev:'Dev'}[r])||r||'—'; }
+    function roleLabel(r){ return ({agent:'Agent',super_admin:'Super Admin',dev:'Dev',lead:'Team Leader (legacy)',manager:'Manager (legacy)',head:'Head Manager (legacy)',tenant_admin:'Admin (legacy)'}[r])||r||'—'; }
     function expTag(iso){
       if(!iso) return '<span class="um-tag mut">No expiry</span>';
       var d=new Date(iso), now=new Date(), days=Math.round((d-now)/86400000);
@@ -2831,7 +2834,9 @@ html[data-mode="dark"] .um-tag.mut{background:rgba(255,255,255,.08);color:#C9CFD
       });
       function rowHtml(u){
         var ag=agentByUser[String(u.id)];
-        var opts=ROLES.map(function(rl){ return '<option value="'+rl+'"'+(rl===u.role?' selected':'')+'>'+rl+'</option>'; }).join('');
+        var rowRoles=ROLES.slice();
+        if(u.role && rowRoles.indexOf(u.role)<0) rowRoles.push(u.role);   // legacy role: show it, don't fake "agent"
+        var opts=rowRoles.map(function(rl){ return '<option value="'+esc(rl)+'"'+(rl===u.role?' selected':'')+'>'+esc(roleLabel(rl))+'</option>'; }).join('');
         var suspended=(u.status==='suspended');
         var licBadge=ag?('<span class="ulic" title="State licenses on file"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7h18v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/><path d="M3 7l2-3h14l2 3"/></svg>'+(ag.license_count||0)+' lic</span>'):'';
         return '<div class="urow clk'+(suspended?' susp':'')+'" data-uid="'+esc(u.id)+'">'+
@@ -2888,7 +2893,7 @@ html[data-mode="dark"] .um-tag.mut{background:rgba(255,255,255,.08);color:#C9CFD
       list.querySelectorAll('select.u-role').forEach(function(sel){
         sel.addEventListener('change',function(){
           window.__ebAPI.patch('/admin/users/'+sel.getAttribute('data-id'),{role:sel.value})
-            .then(function(){ toast('Role updated to '+sel.value,'accent'); var u=allUsers.filter(function(x){return String(x.id)===sel.getAttribute('data-id');})[0]; if(u) u.role=sel.value; })
+            .then(function(){ toast('Role updated to '+roleLabel(sel.value),'accent'); var u=allUsers.filter(function(x){return String(x.id)===sel.getAttribute('data-id');})[0]; if(u) u.role=sel.value; })
             .catch(function(e){ toast('Failed: '+((e&&e.message)||'error'),'danger'); loadUsers(); });
         });
       });

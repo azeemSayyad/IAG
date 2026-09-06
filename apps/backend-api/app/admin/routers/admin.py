@@ -282,7 +282,10 @@ def ai_objections(
 from app.core.security import hash_password
 from app.models.agent import Agent
 
-_ALLOWED_NEW_ROLES = {"agent", "lead", "head", "manager", "tenant_admin"}
+# IAG runs with exactly two roles: "agent" and "super_admin". The legacy
+# lead/manager/head/tenant_admin roles are still understood by the gates (so an
+# old row keeps working until it is reassigned) but can no longer be assigned.
+_ALLOWED_NEW_ROLES = {"agent", "super_admin"}
 
 
 def _assignable_roles(current_user: User) -> set[str]:
@@ -359,7 +362,8 @@ def create_user(
     if len(request.password or "") < 8:
         raise HTTPException(status_code=422, detail="Password must be at least 8 characters")
     email = request.email.strip().lower()
-    if db.query(User).filter(User.email == email, User.deleted_at.is_(None)).first():
+    existing = db.query(User).filter(User.email == email).first()
+    if existing and existing.deleted_at is None:
         raise HTTPException(status_code=409, detail="A user with that email already exists")
 
     prefs = {}
@@ -367,6 +371,31 @@ def create_user(
         # Admin-assigned personal work number. Stored on the USER, never on the
         # AI sender pool — the AI never uses it for outbound. Agent can't edit it.
         prefs["personal_phone"] = request.personal_phone.strip()
+
+    if existing is not None:
+        # The email belongs to a user that was removed (soft-deleted; users.email
+        # is globally unique so a fresh INSERT would 500). Re-adding the same
+        # email means "bring this login back" — revive the row as a new account.
+        if str(existing.tenant_id) != str(tenant_id):
+            raise HTTPException(status_code=409, detail="A user with that email already exists")
+        existing.deleted_at = None
+        existing.password_hash = hash_password(request.password)
+        existing.first_name = request.first_name.strip()
+        existing.last_name = request.last_name.strip()
+        existing.role = role
+        existing.status = "active"
+        existing.preferences = prefs
+        existing.failed_login_attempts = 0
+        existing.locked_until = None
+        agent = db.query(Agent).filter(Agent.user_id == existing.id).first()
+        if role in _AGENT_ROLES:
+            if agent:
+                agent.status = "active"
+            else:
+                db.add(Agent(tenant_id=tenant_id, user_id=existing.id, status="active"))
+        db.commit()
+        db.refresh(existing)
+        return {"id": str(existing.id), "email": existing.email, "role": existing.role}
 
     user = User(
         tenant_id=tenant_id,
