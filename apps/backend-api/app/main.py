@@ -36,6 +36,7 @@ from app.announcements.router import router as announcements_router
 from app.sms_queue.routers.monitoring import router as sms_monitoring_router
 from app.sms_queue.routers.manager import router as sms_manager_router
 from app.sms_queue.routers.queue import router as sms_queue_router
+from app.sms_queue.routers.pool import router as sms_pool_router
 from app.sales_dashboard.router import router as sales_dashboard_router
 from app.onboarding.router import router as onboarding_router
 from app.applicant_inbox.router import router as applicant_inbox_router
@@ -122,6 +123,7 @@ app.include_router(reports_router, prefix="/api/v1")
 app.include_router(sms_monitoring_router, prefix="/api/v1")
 app.include_router(sms_manager_router, prefix="/api/v1")
 app.include_router(sms_queue_router, prefix="/api/v1")
+app.include_router(sms_pool_router, prefix="/api/v1")
 app.include_router(sales_dashboard_router, prefix="/api/v1")
 app.include_router(onboarding_router, prefix="/api/v1")
 app.include_router(applicant_inbox_router, prefix="/api/v1")

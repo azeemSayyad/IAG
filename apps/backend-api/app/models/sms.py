@@ -42,6 +42,21 @@ class SmsLead(Base):
     customer_name = Column(String(255), nullable=True)
     last_message = Column(Text, nullable=True)
 
+    # How this lead entered the pool:
+    #   REPLY      — the customer texted back to a first-template blast (the
+    #                original Sinch flow, mirrored in by lead_ingest / inbound_sync)
+    #   CSV_DIRECT — an admin uploaded a list straight to the agent pool; NO SMS
+    #                was ever sent. Served after REPLY leads (see
+    #                queue_service._next_queued_lead) and worked by phone.
+    source = Column(String(20), nullable=False, default="REPLY", server_default="REPLY")
+    # The upload batch a CSV_DIRECT lead came from (so a wrong file can be
+    # pulled back out of the pool in one action). NULL for REPLY leads.
+    batch_id = Column(UUID(as_uuid=True), ForeignKey("sms_pool_batches.id"), nullable=True)
+    # Everything else the CSV row carried, shown to the agent on the lead card:
+    #   {"fields": [[label, value], ...],   # column order preserved (JSONB reorders object keys)
+    #    "address": "…"}                     # composed display address
+    details = Column(JSONB, nullable=True)
+
     # HOT | WARM | NORMAL
     priority = Column(String(20), nullable=False, default="NORMAL")
     # QUEUED | ASSIGNED | IN_PROGRESS | DISPOSITIONED | PARKED | BLOCKED
@@ -64,6 +79,40 @@ class SmsLead(Base):
         Index("idx_sms_leads_tenant_status", "tenant_id", "status"),
         Index("idx_sms_leads_tenant_agent", "tenant_id", "assigned_agent_id"),
         Index("idx_sms_leads_created", "tenant_id", "created_at"),
+        Index("idx_sms_leads_tenant_source", "tenant_id", "source"),
+        Index("idx_sms_leads_batch", "batch_id"),
+    )
+
+
+class SmsPoolBatch(Base):
+    """One admin CSV upload that went STRAIGHT into the agent pool (no SMS).
+
+    Groups its sms_leads (source=CSV_DIRECT, batch_id=this) so the upload shows
+    as one card on the Upload Leads page and can be removed as a unit. The
+    summary counters are frozen at upload time; live pool/worked counts are
+    computed from sms_leads."""
+
+    __tablename__ = "sms_pool_batches"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False)
+    name = Column(String(255), nullable=False)               # the uploaded filename
+    uploaded_by = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
+
+    total_rows = Column(Integer, nullable=False, default=0)
+    imported = Column(Integer, nullable=False, default=0)
+    skipped_duplicates = Column(Integer, nullable=False, default=0)  # in-file + already in pool
+    skipped_dnc = Column(Integer, nullable=False, default=0)         # on the Do-Not-Call list
+    failed = Column(Integer, nullable=False, default=0)              # no usable name/phone
+    # The extra (non-core) column labels the file carried, in order — what the
+    # agent card will show for every lead in this batch.
+    columns = Column(JSONB, default=[])
+
+    created_at = Column(DateTime(timezone=True), nullable=False, default=_now)
+    deleted_at = Column(DateTime(timezone=True), nullable=True)
+
+    __table_args__ = (
+        Index("idx_sms_pool_batches_tenant_created", "tenant_id", "created_at"),
     )
 
 

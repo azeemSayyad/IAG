@@ -4,6 +4,7 @@ import { api } from "../lib/api";
 import { isAdmin } from "../lib/auth";
 import { formatPhone } from "../lib/phone";
 import { getSocket } from "../lib/socket";
+import { DetailGrid, SourceBadge, isPoolLead, type DetailField } from "../components/LeadDetails";
 import {
   initSound,
   inboundTick,
@@ -24,6 +25,9 @@ type Lead = {
   message_count: number;
   accepted_at: string | null;
   created_at: string | null;
+  source?: string;          // REPLY | CSV_DIRECT
+  details?: DetailField[];  // CSV_DIRECT: the uploaded row, in file order
+  disposition?: string | null;
 };
 type Status = {
   status: string;
@@ -557,6 +561,46 @@ export default function SmsQueue() {
       {/* Active chat + disposition */}
       {inChat && current && (
         <div className="grid gap-4 lg:grid-cols-3">
+          {isPoolLead(current) ? (
+          /* Uploaded-list lead: there is no conversation. Show the whole row,
+             big phone to dial, and the same disposition panel. */
+          <div className="glass flex min-h-[28rem] flex-col rounded-2xl lg:col-span-2">
+            <div className="flex items-start justify-between gap-3 border-b border-hairline-soft p-4">
+              <div className="min-w-0">
+                {current.customer_name && (
+                  <div className="text-lg font-semibold text-ink">{current.customer_name}</div>
+                )}
+                <div className="mt-1">
+                  <span className="inline-block rounded-lg bg-accent/10 px-3 py-1 text-2xl font-bold tracking-wide text-accent">
+                    {formatPhone(current.phone_number)}
+                  </span>
+                </div>
+                {current.address && (
+                  <div className="mt-1.5">
+                    <span className="inline-flex items-center gap-1 rounded-lg bg-accent/10 px-3 py-1 text-sm font-bold text-accent">
+                      <span aria-hidden>📍</span>
+                      {current.address}
+                    </span>
+                  </div>
+                )}
+              </div>
+              <div className="flex flex-shrink-0 flex-col items-end gap-1.5">
+                <SourceBadge source={current.source} />
+                <span className="text-[11px] text-ink-faint">Call from your phone</span>
+              </div>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4">
+              {(current.details || []).length === 0 ? (
+                <div className="py-8 text-center text-sm text-ink-faint">No extra details came with this lead.</div>
+              ) : (
+                <>
+                  <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-faint">Lead details</div>
+                  <DetailGrid fields={current.details} />
+                </>
+              )}
+            </div>
+          </div>
+          ) : (
           <div className="glass flex h-[28rem] flex-col rounded-2xl lg:col-span-2">
             <div className="flex items-center justify-between border-b border-hairline-soft p-4">
               <div>
@@ -638,6 +682,7 @@ export default function SmsQueue() {
               )}
             </div>
           </div>
+          )}
 
           <div className="glass rounded-2xl p-4">
             <h3 className="mb-3 text-sm font-semibold text-ink">Disposition</h3>
@@ -739,6 +784,7 @@ export default function SmsQueue() {
                   )}
                 </div>
                 <span className="flex flex-shrink-0 items-center gap-2 text-xs">
+                  {isPoolLead(l) && <SourceBadge source={l.source} />}
                   <span className="text-ink-faint">{l.status}</span>
                   {l.disposition && (
                     <span className="rounded bg-black/5 px-2 py-0.5 text-ink-muted">

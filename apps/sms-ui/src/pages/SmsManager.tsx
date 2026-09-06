@@ -46,12 +46,12 @@ type DailyRow = {
   agent_name: string; shift_seconds: number; break_seconds: number; billable_seconds: number;
   applications: number; appts: number; avg_response_ms: number; conv_pct: number;
 };
-type QueuedLead = { id: string; phone_number: string; priority: string; last_message: string | null; created_at: string | null; last_message_at?: string | null };
+type QueuedLead = { id: string; phone_number: string; customer_name?: string | null; priority: string; source?: string; last_message: string | null; created_at: string | null; last_message_at?: string | null };
 type ActiveLead = {
-  id: string; phone_number: string; status: string; priority: string;
+  id: string; phone_number: string; status: string; priority: string; source?: string;
   last_message: string | null; agent_name: string; message_count: number; accepted_at: string | null;
 };
-type Pool = { freshCount: number; agedCount: number; rejectedCount: number };
+type Pool = { freshCount: number; agedCount: number; rejectedCount: number; replyCount?: number; csvCount?: number };
 type LeaderRow = {
   agent_name: string; attempted: number; replied: number; reply_rate_pct: number;
   sold: number; appointments: number; conv_rate_pct: number; avg_response_ms: number | null;
@@ -357,8 +357,11 @@ export default function SmsManager() {
                         <div className="py-2 text-center text-xs text-ink-muted">No active conversation right now.</div>
                       ) : convos.map((l) => (
                         <div key={l.id} className="rounded-xl border border-hairline-soft bg-white/60 p-3">
-                          <div className="mb-1 text-sm font-semibold text-ink">{l.phone_number}</div>
-                          <div className="mb-2 line-clamp-3 text-xs text-ink-muted">{l.last_message}</div>
+                          <div className="mb-1 flex items-center gap-2 text-sm font-semibold text-ink">
+                            {l.phone_number}
+                            {l.source === "CSV_DIRECT" && <span className="rounded-full bg-accent/12 px-1.5 py-0.5 text-[10px] font-semibold text-accent" title="Uploaded to the pool — being called by phone">📋 list</span>}
+                          </div>
+                          <div className="mb-2 line-clamp-3 text-xs text-ink-muted">{l.source === "CSV_DIRECT" ? "Phone call — no text thread" : l.last_message}</div>
                           <div className="flex items-center justify-between text-[11px] text-ink-faint"><span>{ago(l.accepted_at)}</span><span>{l.message_count} msgs</span></div>
                           <select className="mt-2 w-full rounded-lg border border-hairline bg-white px-2 py-1 text-xs" defaultValue="" disabled={busy} onChange={(e) => e.target.value && reassign(l.id, e.target.value)}>
                             <option value="" disabled>Reassign to…</option>
@@ -396,13 +399,19 @@ export default function SmsManager() {
           <span className="rounded-full bg-success/15 px-2 py-1 font-semibold text-success">Fresh (&lt;15m): {pool.freshCount}</span>
           <span className="rounded-full bg-pending/15 px-2 py-1 font-semibold text-pending">Aged (15m+): {pool.agedCount}</span>
           <span className="rounded-full bg-danger/15 px-2 py-1 font-semibold text-danger">Rejected (2+ passes): {pool.rejectedCount}</span>
+          <span className="rounded-full bg-success/12 px-2 py-1 font-semibold text-success" title="Texted back to a campaign — served first">💬 Replied: {pool.replyCount ?? 0}</span>
+          <span className="rounded-full bg-accent/12 px-2 py-1 font-semibold text-accent" title="Uploaded straight to the pool (no SMS sent) — served after repliers">📋 From list: {pool.csvCount ?? 0}</span>
         </div>
         <div className="max-h-[360px] space-y-1 overflow-y-auto">
           {queued.length === 0 ? <div className="py-6 text-center text-sm text-ink-muted">No queued leads</div> : queued.map((l) => (
             <div key={l.id} className="flex items-center justify-between gap-3 rounded-lg border border-hairline-soft px-3 py-2">
               <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2"><span className="text-sm font-semibold text-ink">{l.phone_number}</span><span className="text-[10px] text-ink-faint">{ago(l.last_message_at ?? l.created_at)}</span></div>
-                <div className="truncate text-xs text-ink-muted">{(l.last_message || "").slice(0, 60)}</div>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-semibold text-ink">{l.phone_number}</span>
+                  {l.source === "CSV_DIRECT" && <span className="rounded-full bg-accent/12 px-1.5 py-0.5 text-[10px] font-semibold text-accent" title="Uploaded to the pool — no text sent">📋 list</span>}
+                  <span className="text-[10px] text-ink-faint">{ago(l.last_message_at ?? l.created_at)}</span>
+                </div>
+                <div className="truncate text-xs text-ink-muted">{l.source === "CSV_DIRECT" ? (l.customer_name || "—") : (l.last_message || "").slice(0, 60)}</div>
               </div>
               <select className="rounded-lg border border-hairline bg-white px-2 py-1 text-xs" defaultValue="" disabled={busy} onChange={(e) => e.target.value && reassign(l.id, e.target.value)}>
                 <option value="" disabled>Assign to…</option>

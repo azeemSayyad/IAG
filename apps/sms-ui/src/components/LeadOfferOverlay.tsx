@@ -3,6 +3,7 @@ import { api } from "../lib/api";
 import { isAdmin } from "../lib/auth";
 import { getSocket } from "../lib/socket";
 import { leadOfferedSound, unlockSound } from "../lib/sound";
+import { DetailGrid, SourceBadge, isPoolLead, type DetailField } from "./LeadDetails";
 
 /* Global blocking lead-offer modal for the SMS app.
 
@@ -24,6 +25,8 @@ type Lead = {
   last_message: string | null;
   priority: string;
   status: string;
+  source?: string;          // REPLY | CSV_DIRECT
+  details?: DetailField[];  // CSV_DIRECT: the uploaded row, in file order
 };
 
 const POLL_MS = 5000;
@@ -86,6 +89,7 @@ export default function LeadOfferOverlay() {
   }, [check, admin]);
 
   if (admin || !lead) return null;
+  const pool = isPoolLead(lead);
 
   const clear = () => {
     shownId.current = null;
@@ -140,7 +144,7 @@ export default function LeadOfferOverlay() {
     >
       <div
         className="overflow-hidden"
-        style={{ width: "min(420px, 94vw)", background: "#fff", color: "#1A1F2A", borderRadius: 16, boxShadow: "0 24px 60px rgba(0,0,0,.35)" }}
+        style={{ width: pool ? "min(500px, 94vw)" : "min(420px, 94vw)", background: "#fff", color: "#1A1F2A", borderRadius: 16, boxShadow: "0 24px 60px rgba(0,0,0,.35)", maxHeight: "92vh", overflowY: "auto" }}
       >
         {/* Light header bar — "New lead" with a person-add icon */}
         <div
@@ -153,6 +157,7 @@ export default function LeadOfferOverlay() {
             <path d="M17 9v6M14 12h6" />
           </svg>
           <h3 className="m-0 font-bold" style={{ fontSize: 15 }}>New lead</h3>
+          <SourceBadge source={lead.source} className="ml-auto" />
         </div>
         <div className="flex items-center gap-3" style={{ padding: "18px 20px 6px" }}>
           <div
@@ -166,8 +171,20 @@ export default function LeadOfferOverlay() {
               <div style={{ fontSize: 20, fontWeight: 700, lineHeight: 1.15 }}>{lead.customer_name}</div>
             )}
             <div style={{ fontSize: 15, fontWeight: 600, color: "#5A6473", marginTop: 2 }}>{lead.phone_number}</div>
+            {lead.address && (
+              <div style={{ fontSize: 13, color: "#5A6473", marginTop: 2 }}>
+                <span aria-hidden>📍 </span>{lead.address}
+              </div>
+            )}
           </div>
         </div>
+        {/* Pool (uploaded) lead: no conversation to preview — show the row instead
+            so the agent knows who they're about to call before accepting. */}
+        {pool && (
+          <div style={{ padding: "8px 20px 0" }}>
+            <DetailGrid fields={lead.details} limit={6} dense />
+          </div>
+        )}
 
         {!chooseReason ? (
           <div className="flex flex-col" style={{ padding: "14px 20px 18px", gap: 8 }}>

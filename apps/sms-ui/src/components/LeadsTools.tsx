@@ -31,10 +31,22 @@ async function uploadForm<T = unknown>(path: string, fd: FormData): Promise<T> {
   if (token) headers["Authorization"] = `Bearer ${token}`;
   const res = await fetch("/api/v1" + path, { method: "POST", headers, body: fd });
   if (res.status === 401) { window.location.href = "/login.html"; throw new Error("Unauthorized"); }
-  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+  if (!res.ok) {
+    let detail = "";
+    try { detail = (await res.json())?.detail || ""; } catch { /* non-JSON body */ }
+    throw new Error(detail || `${res.status} ${res.statusText}`);
+  }
   const ct = res.headers.get("content-type") || "";
   return (ct.includes("application/json") ? res.json() : res.text()) as Promise<T>;
 }
+
+// One admin CSV upload that went STRAIGHT into the agent pool (no SMS).
+type PoolBatch = {
+  id: string; name: string; total_rows: number; imported: number;
+  skipped_duplicates: number; skipped_dnc: number; failed: number; columns: string[];
+  in_pool: number; working: number; done: number; appointments: number; sales: number;
+  created_at: string | null;
+};
 
 type Campaign = {
   id: string; name: string; send_state: string;
@@ -224,11 +236,56 @@ export default function LeadsTools() {
     } catch { showToast("Could not set provider (admins only)", "danger"); }
   }, [loadCampaigns, showToast]);
 
+  // ---- Direct to agent pool: CSV -> sms_leads QUEUED, nothing texted ----
+  // Same /sms/pool endpoints as upload-leads.html. Chosen PER upload (a separate
+  // button from campaigns) so a file can never be routed the wrong way by a
+  // hidden global switch.
+  const [poolBatches, setPoolBatches] = useState<PoolBatch[]>([]);
+  const [poolBusy, setPoolBusy] = useState(false);
+  const [poolConfirm, setPoolConfirm] = useState<{ file: File; rows: number } | null>(null);
+  const loadPool = useCallback(async () => {
+    try { const r = await api<{ batches: PoolBatch[] }>("/sms/pool/batches?_=" + Date.now()); setPoolBatches(r?.batches || []); }
+    catch { /* hidden if not permitted */ }
+  }, []);
+  const pickPoolFile = useCallback(() => {
+    const inp = document.createElement("input"); inp.type = "file"; inp.accept = ".csv,text/csv";
+    inp.addEventListener("change", (e) => {
+      const f = (e.target as HTMLInputElement).files?.[0]; if (!f) return;
+      if (!/\.csv$/i.test(f.name)) { showToast("Please choose a .csv file", "danger"); return; }
+      const rd = new FileReader();
+      rd.onload = () => {
+        const lines = String(rd.result || "").split(/\r?\n/).filter(l => l.trim());
+        const rows = Math.max(0, lines.length - 1);
+        if (!rows) { showToast("That file has no rows under the header", "danger"); return; }
+        setPoolConfirm({ file: f, rows });
+      };
+      rd.readAsText(f.slice(0, 5 * 1024 * 1024)); // a count only needs the first few MB
+    });
+    inp.click();
+  }, [showToast]);
+  const uploadPool = useCallback(async () => {
+    const c = poolConfirm; if (!c) return;
+    setPoolConfirm(null); setPoolBusy(true);
+    const fd = new FormData(); fd.append("file", c.file); fd.append("name", c.file.name);
+    try {
+      const r = await uploadForm<{ summary?: { imported: number; skipped_duplicates: number; skipped_dnc: number; failed: number } }>("/sms/pool/upload", fd);
+      const sm = r?.summary; const skipped = sm ? sm.skipped_duplicates + sm.skipped_dnc + sm.failed : 0;
+      showToast(`${(sm?.imported || 0).toLocaleString()} leads added to the agent pool${skipped ? ` · ${skipped} skipped` : ""}`, "accent");
+    } catch (e) { showToast((e as Error)?.message || "Upload failed", "danger"); }
+    finally { setPoolBusy(false); await loadPool(); }
+  }, [poolConfirm, loadPool, showToast]);
+  const removePool = useCallback(async (id: string) => {
+    if (!window.confirm("Remove this list from the agent pool? Leads still waiting are pulled out; anything an agent already took stays.")) return;
+    try { const r = await api<{ removed?: number }>("/sms/pool/batches/" + id, { method: "DELETE" }); showToast(`Removed ${r?.removed || 0} waiting leads from the pool`, "accent"); }
+    catch (e) { showToast((e as Error)?.message || "Could not remove", "danger"); }
+    await loadPool();
+  }, [loadPool, showToast]);
+
   useEffect(() => {
-    loadSendState(); loadCampaigns(); loadEngine();
-    const id = window.setInterval(loadCampaigns, 15000); // keep campaign progress/state fresh
+    loadSendState(); loadCampaigns(); loadEngine(); loadPool();
+    const id = window.setInterval(() => { loadCampaigns(); loadPool(); }, 15000); // keep campaign progress/state fresh
     return () => window.clearInterval(id);
-  }, [loadSendState, loadCampaigns, loadEngine]);
+  }, [loadSendState, loadCampaigns, loadEngine, loadPool]);
 
   // ---- shared theme classes (match the SMS Manager glass/ink theme) ----
   const inputCls = "h-9 rounded-lg border border-hairline bg-white px-2 text-center text-sm text-ink";
@@ -420,6 +477,87 @@ export default function LeadsTools() {
           })}
         </div>
       </section>
+
+      {/* Direct to agent pool — no SMS is ever sent for these leads */}
+      <section className="glass rounded-2xl p-5">
+        <div className="mb-1 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2 text-base font-semibold text-ink">
+              Direct to agent pool
+              <span className="rounded-full bg-success/15 px-2.5 py-0.5 text-[0.68rem] font-bold tracking-wide text-success">NO SMS SENT</span>
+            </div>
+            <p className="mt-1 text-[0.8125rem] text-ink-muted">Upload a list and it goes straight to the agent queue. Nobody is texted — agents are handed each person one at a time and call them from the details on the card.</p>
+          </div>
+          <button type="button" onClick={pickPoolFile} disabled={poolBusy} className="inline-flex h-9 items-center rounded-lg border-[1.5px] border-accent bg-white px-4 text-sm font-semibold text-accent hover:bg-accent/5 disabled:opacity-65">
+            {poolBusy ? "Adding to pool…" : "+ Upload CSV to agent pool"}
+          </button>
+        </div>
+        {poolBatches.length === 0 ? (
+          <div className="py-2 text-[0.85rem] text-ink-faint">No lists in the pool yet — upload a CSV to hand leads straight to agents.</div>
+        ) : (
+          <div className="mt-2.5 space-y-2.5">
+            {poolBatches.map(b => {
+              const skipped = b.skipped_duplicates + b.skipped_dnc + b.failed;
+              const when = b.created_at ? new Date(b.created_at).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "";
+              const stat = (label: string, val: number, cls = "text-ink", title?: string) => (
+                <div className="flex min-w-[3.6rem] flex-col gap-0.5" title={title}>
+                  <span className="text-[0.64rem] font-bold uppercase tracking-wide text-ink-faint">{label}</span>
+                  <span className={`text-[1.05rem] font-bold tabular-nums ${cls}`}>{val || 0}</span>
+                </div>
+              );
+              return (
+                <div key={b.id} className="rounded-xl border border-hairline-soft bg-white/40 p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <div className="text-[0.95rem] font-bold text-ink">{b.name}</div>
+                      <div className="text-xs text-ink-faint">Uploaded {when}</div>
+                    </div>
+                    {b.in_pool > 0
+                      ? <span className="rounded-full bg-success/15 px-2.5 py-0.5 text-xs font-bold text-success">{b.in_pool} waiting</span>
+                      : <span className="rounded-full bg-black/5 px-2.5 py-0.5 text-xs font-bold text-ink-muted">All handed out</span>}
+                  </div>
+                  <div className="my-3 flex flex-wrap items-center gap-5 border-y border-hairline-soft py-2.5">
+                    {stat("Rows", b.total_rows)}
+                    {stat("Added", b.imported, "text-success")}
+                    {stat("In pool", b.in_pool)}
+                    {stat("Working", b.working, "text-pending")}
+                    {stat("Done", b.done)}
+                    {stat("Appts", b.appointments, "text-success")}
+                    {stat("Sales", b.sales, "text-success")}
+                    {stat("Skipped", skipped, skipped ? "text-danger" : "text-ink-faint", `${b.skipped_duplicates} already in pool / duplicate · ${b.skipped_dnc} Do-Not-Call · ${b.failed} no usable name/phone`)}
+                  </div>
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="min-w-0 flex-1 text-xs text-ink-muted">
+                      {b.columns?.length ? <>Agent card shows: {b.columns.map(c => <span key={c} className="mr-1 inline-block rounded-md bg-black/5 px-2 py-0.5 text-[0.7rem] font-semibold text-ink-muted">{c}</span>)}</> : "Name, phone and address only"}
+                    </div>
+                    <button type="button" onClick={() => removePool(b.id)} className="h-8 rounded-lg bg-black/40 px-3.5 text-[0.8rem] font-semibold text-white hover:bg-black/55" title="Pull the un-worked leads of this list back out of the pool">Remove from pool</button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </section>
+
+      {/* Confirm before a list goes to the pool — the one place the admin picks "no SMS" for THIS file. */}
+      {poolConfirm && (
+        <div className="fixed inset-0 z-[9600] flex items-center justify-center bg-black/45 p-4" onClick={() => setPoolConfirm(null)}>
+          <div className="glass w-full max-w-md rounded-2xl bg-white p-5" role="dialog" aria-modal="true" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-bold text-ink">Add {poolConfirm.rows.toLocaleString()} leads to the agent pool?</h3>
+            <div className="mb-3 break-all text-xs text-ink-muted">{poolConfirm.file.name} · {(poolConfirm.file.size / 1024).toFixed(poolConfirm.file.size < 10240 ? 1 : 0)} KB</div>
+            <ul className="mb-4 ml-4 list-disc space-y-1 text-sm text-ink-soft">
+              <li><b>No text messages will be sent.</b></li>
+              <li>Agents get these leads one at a time, after anyone who has replied to a campaign.</li>
+              <li>Numbers on the Do-Not-Call list and numbers already in the pool are skipped.</li>
+              <li>You can remove the whole list from the pool later in one click.</li>
+            </ul>
+            <div className="flex justify-end gap-2">
+              <button type="button" onClick={() => setPoolConfirm(null)} className="rounded-lg border border-hairline px-3 py-2 text-sm font-medium text-ink-muted hover:text-ink">Cancel</button>
+              <button type="button" onClick={uploadPool} className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white hover:bg-accent-hover">Yes, add to pool</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

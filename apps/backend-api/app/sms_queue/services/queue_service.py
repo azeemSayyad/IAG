@@ -60,6 +60,12 @@ def _lead_dict(l: SmsLead) -> dict:
         "message_count": l.message_count,
         "accepted_at": l.accepted_at.isoformat() if l.accepted_at else None,
         "created_at": l.created_at.isoformat() if l.created_at else None,
+        # REPLY (texted back) | CSV_DIRECT (uploaded straight to the pool, no SMS)
+        "source": l.source or "REPLY",
+        # CSV_DIRECT only: the rest of the uploaded row, in file order, plus a
+        # composed address — what the agent card shows so they can call.
+        "details": (l.details or {}).get("fields") or [],
+        "address": (l.details or {}).get("address"),
     }
 
 
@@ -86,7 +92,10 @@ def _lead_dicts_with_address(db: Session, leads: list) -> list[dict]:
 
         srcs = {str(s.id): s for s in db.query(Lead).filter(Lead.id.in_(lead_ids)).all()}
     for item, l in zip(items, leads):
-        item["address"] = _compose_address(srcs.get(str(l.lead_id))) if l.lead_id else None
+        # A CSV_DIRECT lead already carries its uploaded address; otherwise
+        # compose one from the linked Lead's city/state/zip.
+        if not item.get("address") and l.lead_id:
+            item["address"] = _compose_address(srcs.get(str(l.lead_id)))
     return items
 
 
@@ -178,9 +187,12 @@ def _next_queued_lead(
         rows = [l for l in rows if str(l.id) not in exclude_lead_ids]
     if not rows:
         return None
-    # Pure first-come-first-served: the OLDEST queued lead is served to the next
-    # agent. Time only — no HOT/WARM/NORMAL priority tiers.
-    rows.sort(key=lambda l: l.created_at)
+    # First-come-first-served WITHIN each source, but a lead who texted back
+    # (REPLY) is always served before a lead that was only uploaded to the pool
+    # (CSV_DIRECT): a live reply is worth more than a cold list row, and a bulk
+    # upload must never bury the repliers behind thousands of near-identical
+    # created_at timestamps. No HOT/WARM/NORMAL tiers.
+    rows.sort(key=lambda l: (0 if (l.source or "REPLY") == "REPLY" else 1, l.created_at))
     return rows[0]
 
 
@@ -1129,7 +1141,7 @@ def get_current(db: Session, tenant_id: str, user_id: str) -> dict:
     data = _lead_dict(lead) if lead else None
     # Enrich the offer popup with the contact's address (city/state/zip from the
     # linked source Lead). Looked up at read time so existing leads show it too.
-    if data and lead.lead_id:
+    if data and lead.lead_id and not data.get("address"):
         from app.models.lead import Lead
 
         src = db.query(Lead).filter(Lead.id == lead.lead_id).first()

@@ -197,7 +197,16 @@ def get_pool_counts(db: Session, tenant_id: str) -> dict:
         .scalar()
         or 0
     )
-    return {"freshCount": fresh, "agedCount": aged, "rejectedCount": rejected}
+    # Split by how the lead got here so a bulk CSV upload doesn't read as a
+    # flood of "fresh" repliers.
+    csv_count = sum(1 for l in queued if (l.source or "REPLY") == "CSV_DIRECT")
+    return {
+        "freshCount": fresh,
+        "agedCount": aged,
+        "rejectedCount": rejected,
+        "replyCount": len(queued) - csv_count,
+        "csvCount": csv_count,
+    }
 
 
 def get_queued(db: Session, tenant_id: str, limit: int = 100) -> dict:
@@ -219,6 +228,7 @@ def get_queued(db: Session, tenant_id: str, limit: int = 100) -> dict:
                 "phone_number": l.phone_number,
                 "customer_name": l.customer_name,
                 "priority": l.priority,
+                "source": l.source or "REPLY",
                 "last_message": l.last_message,
                 "message_count": l.message_count,
                 "created_at": l.created_at.isoformat() if l.created_at else None,
@@ -250,6 +260,7 @@ def get_active(db: Session, tenant_id: str, limit: int = 100) -> dict:
                 "customer_name": l.customer_name,
                 "status": l.status,
                 "priority": l.priority,
+                "source": l.source or "REPLY",
                 "last_message": l.last_message,
                 "agent_name": _name(u),
                 "assigned_agent_id": str(l.assigned_agent_id) if l.assigned_agent_id else None,

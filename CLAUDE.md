@@ -44,8 +44,20 @@ Do NOT use a plain `python -m http.server 5500` for the portal — it skips the
 shims, so the auth guard hits the (absent) backend and bounces you to login.
 
 Running the real backend locally needs a Python venv at `apps/backend-api/venv`
-(NOT checked in / not present by default). Most UI work is done against the
-preview server + demo-mock instead.
+(NOT checked in). On the dev Mac it exists (created with
+`uv venv venv --python 3.12 && uv pip install --python venv/bin/python -r requirements.txt`),
+with brew `postgresql@15` + `redis` and a git-ignored `apps/backend-api/.env`
+pointing at `postgresql://sayyadazeem@localhost:5432/launchpad`. The preview
+server has a proxy mode for this — **no mocks, no demo data, real login**:
+
+```bash
+.localpreview/run-local.sh      # migrates, starts uvicorn :8000 + serve.py --backend → http://127.0.0.1:5500/login.html
+# local accounts: admin@local.test / Admin123! · manager@local.test / Agent123! · agent@local.test / Agent123!
+```
+
+Use this (not the mock) to verify anything that writes to the database before
+pushing. Without `--backend`, serve.py is the mock/demo-data preview described
+above.
 
 ## Build / validate / test
 
@@ -172,6 +184,35 @@ self-service view + admin view that manages any agent). Backend under
 - **Dispositions** were merged into **`agent-performance.html`** (a
   Performance/Dispositions toggle at `#dispView`); `dispositions.html` is now a
   redirect stub to `agent-performance.html#dispView`.
+
+## SMS pool — two ways a lead gets to an agent
+
+The agent pool is `sms_leads WHERE status='QUEUED'`; everything downstream
+(assignment, offer/accept/pass, dispositions, appointments, DNC) only reads
+that table and is agnostic about how a row got there. Two producers:
+
+1. **REPLY** (original): CSV → Campaign (`upload_batch`) → held leads → drip →
+   first template via Sinch/Engage → customer replies → `lead_ingest` /
+   `inbound_sync` mirror the replier into `sms_leads`.
+2. **CSV_DIRECT** (`sms_leads.source`): admin uploads a CSV at
+   `POST /sms/pool/upload` (router `sms_queue/routers/pool.py`, service
+   `sms_queue/services/pool_ingest.py`) and rows land in `sms_leads` QUEUED
+   immediately — **no SMS is ever sent**. Agents work these by phone; the whole
+   CSV row is stored in `sms_leads.details` (`{fields:[[label,value],…], address}`)
+   and shown on the offer popup / accepted view (`components/LeadDetails.tsx`).
+   Each upload is an `sms_pool_batches` row so it can be removed as a unit.
+
+Rules that keep #2 safe — don't undo them:
+- The linked `leads` rows use `pacing_status='pooled'` (NOT `'held'`) so
+  neither the campaign drip nor `ranked_held` can ever text them, and
+  `on_lead_created` is never called.
+- `_next_queued_lead` serves REPLY leads before CSV_DIRECT (FIFO within each).
+- The choice is made **per upload** (a separate button beside Campaigns on
+  `upload-leads.html` and in the SMS Manager's `LeadsTools`), never a global
+  mode toggle.
+- `_dispatch_sms` (agent chat sends) still passes no `kind`, so the
+  first-template-only lockdown blocks them — CSV_DIRECT leads therefore have no
+  chat composer; that is intentional (phone-first) until an exemption is decided.
 
 ## Verifying UI changes (headless Chrome over CDP)
 

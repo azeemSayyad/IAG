@@ -34,6 +34,7 @@ from app.models.sms import (
     SmsLead,
     SmsMessage,
     SmsPollLog,
+    SmsPoolBatch,
     SmsQueueAgent,
     SmsSettings,
 )
@@ -73,6 +74,7 @@ __all__ = [
     "SmsQueueAgent",
     "SmsMessage",
     "SmsPollLog",
+    "SmsPoolBatch",
     "SmsSettings",
     "SmsAgentBreak",
     "SmsAgentAction",

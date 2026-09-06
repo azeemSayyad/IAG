@@ -18,7 +18,7 @@ if(role !== 'admin' && role !== 'tenant_admin' && role !== 'super_admin' && role
 }catch(e){}})();
 </script>
 <script src="i18n-dict.js?v=2"></script>
-<script src="prefs-extras.js?v=32"></script>
+<script src="prefs-extras.js?v=33"></script>
 <script src="coach.js" defer></script>
 <script src="tour.js" defer></script>
 <!-- SheetJS for XLSX parsing -->
@@ -299,6 +299,9 @@ html[data-mode="dark"] .sb-brand-logo{background:#FFFFFF;border-radius:8px;paddi
   html[data-mode="dark"] #tmplInput{background:rgba(255,255,255,0.04)!important;color:#F0F2F5!important;border-color:rgba(255,255,255,0.10)!important}
   html[data-mode="dark"] #tmplPrevBox{background:rgba(255,255,255,0.04)!important;border-color:rgba(255,255,255,0.10)!important}
   html[data-mode="dark"] #tmplPreview{color:#D5DAE2!important}
+  html[data-mode="dark"] #poolMgr,html[data-mode="dark"] .pool-card,html[data-mode="dark"] #poolConfirm .pool-dlg{background:rgba(24,28,36,0.92)!important;border-color:rgba(255,255,255,0.10)!important;color:#D5DAE2!important}
+  html[data-mode="dark"] #poolMgr [style*="0F172A"],html[data-mode="dark"] .pool-card [style*="0F172A"],html[data-mode="dark"] #poolConfirm [style*="0F172A"]{color:#F0F2F5!important}
+  html[data-mode="dark"] .pool-col{background:rgba(255,255,255,0.06)!important;color:#D5DAE2!important}
   </style>
 </head>
 <body>
@@ -634,7 +637,46 @@ html[data-mode="dark"] .sb-brand-logo{background:#FFFFFF;border-radius:8px;paddi
     <div id="campEmpty" style="font-size:.85rem;color:#94A3B8;padding:8px 0">No campaigns yet — upload a CSV to create one.</div>
   </section>
 
+  <!-- Direct to agent pool: the CSV goes STRAIGHT into the SMS agent queue.
+       No text message is ever sent — agents call each person from the details
+       on their lead card. Deliberately a separate door from Campaigns (above),
+       chosen per upload, so a file can never be routed the wrong way by a
+       hidden global switch. -->
+  <style>.pool-col{display:inline-block;padding:2px 8px;border-radius:6px;background:#EEF2F7;color:#475569;font-size:.7rem;font-weight:600;margin:2px 4px 2px 0}</style>
+  <section id="poolMgr" style="display:none;margin:0 0 18px;padding:16px 18px;border-radius:12px;background:#fff;border:1px solid #E2E8F0">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:6px">
+      <div>
+        <div style="display:flex;align-items:center;gap:8px;font-weight:700;font-size:1rem;color:#0F172A">Direct to agent pool
+          <span style="font-size:.68rem;font-weight:700;padding:3px 9px;border-radius:999px;color:#0F766E;background:#CCFBF1;letter-spacing:.02em">NO SMS SENT</span>
+        </div>
+        <div style="font-size:.82rem;color:#64748B">Upload a list and it goes straight to the SMS agent queue. Nobody is texted — agents are handed each person one at a time and call them from the details on the card.</div>
+      </div>
+      <button id="poolAddBtn" type="button" style="height:38px;padding:0 16px;border-radius:9px;border:1.5px solid var(--accent);background:#fff;color:var(--accent);font:600 .85rem inherit;cursor:pointer;white-space:nowrap">+ Upload CSV to agent pool</button>
+    </div>
+    <div id="poolList" style="display:flex;flex-direction:column;gap:10px;margin-top:10px"></div>
+    <div id="poolEmpty" style="font-size:.85rem;color:#94A3B8;padding:8px 0">No lists in the pool yet — upload a CSV to hand leads straight to agents.</div>
+  </section>
+
 </main>
+
+<!-- Confirm before a list goes to the pool: this is the one place the admin
+     picks "no SMS" for this specific file, so say exactly what will happen. -->
+<div id="poolConfirm" style="display:none;position:fixed;inset:0;background:rgba(26,31,42,0.45);z-index:70;align-items:center;justify-content:center;padding:16px">
+  <div class="pool-dlg" role="dialog" aria-modal="true" aria-labelledby="poolConfirmTitle" style="width:100%;max-width:440px;background:#fff;border:1px solid var(--border);border-radius:16px;box-shadow:0 12px 40px rgba(26,31,42,0.18);padding:22px">
+    <h3 id="poolConfirmTitle" style="font-size:1.125rem;font-weight:700;color:#0F172A;margin:0 0 6px">Add <span id="poolConfirmCount">0</span> leads to the agent pool?</h3>
+    <div id="poolConfirmFile" style="font-size:.8rem;color:#64748B;margin-bottom:12px;word-break:break-all"></div>
+    <ul style="margin:0 0 16px 18px;padding:0;font-size:.85rem;color:#475569;line-height:1.7">
+      <li><b>No text messages will be sent.</b></li>
+      <li>Agents get these leads one at a time, after anyone who has replied to a campaign.</li>
+      <li>Numbers on the Do-Not-Call list and numbers already in the pool are skipped.</li>
+      <li>You can remove the whole list from the pool later in one click.</li>
+    </ul>
+    <div style="display:flex;justify-content:flex-end;gap:8px">
+      <button id="poolConfirmCancel" class="btn-ghost" type="button">Cancel</button>
+      <button id="poolConfirmOk" class="btn-primary" type="button">Yes, add to pool</button>
+    </div>
+  </div>
+</div>
 
 <div class="toast" id="toast"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span id="toastMsg">Imported</span></div>
 
@@ -1194,6 +1236,113 @@ html[data-mode="dark"] .sb-brand-logo{background:#FFFFFF;border-radius:8px;paddi
       }
     }catch(err){ toast('Could not '+act+' — another campaign may be running','danger'); refreshLive(); }
   });
+  // ===== Direct to agent pool (CSV -> SMS agent queue, no SMS sent) =====
+  function poolStat(label, val, color, title){
+    return '<div style="display:flex;flex-direction:column;gap:2px;min-width:58px"'+(title?' title="'+title+'"':'')+'>'
+      + '<span style="font-size:.64rem;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#94A3B8">'+label+'</span>'
+      + '<span style="font-size:1.1rem;font-weight:700;font-variant-numeric:tabular-nums;color:'+(color||'#0F172A')+'">'+(val||0)+'</span></div>';
+  }
+  function poolCardHTML(b){
+    function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+    var skipped=(b.skipped_duplicates||0)+(b.skipped_dnc||0)+(b.failed||0);
+    var skipTitle=(b.skipped_duplicates||0)+' already in pool / duplicate · '+(b.skipped_dnc||0)+' Do-Not-Call · '+(b.failed||0)+' no usable name/phone';
+    var when=b.created_at?new Date(b.created_at).toLocaleString([], {month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}):'';
+    var cols=(b.columns||[]).map(function(c){ return '<span class="pool-col">'+esc(c)+'</span>'; }).join('');
+    var badge = b.in_pool>0
+      ? '<span style="font-size:.72rem;font-weight:700;padding:3px 10px;border-radius:999px;color:#0F766E;background:#CCFBF1">'+b.in_pool+' waiting</span>'
+      : '<span style="font-size:.72rem;font-weight:700;padding:3px 10px;border-radius:999px;color:#475569;background:#F1F5F9">All handed out</span>';
+    return '<div class="pool-card" data-id="'+b.id+'" style="display:flex;flex-direction:column;gap:12px;padding:16px 18px;border:1px solid #E2E8F0;border-radius:12px;background:#F8FAFC">'
+      + '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">'
+        + '<div><div style="font-weight:700;font-size:1rem;color:#0F172A;word-break:break-word">'+esc(b.name||'List')+'</div>'
+        + '<div style="font-size:.76rem;color:#94A3B8">Uploaded '+esc(when)+'</div></div>'
+        + badge
+      + '</div>'
+      + '<div style="display:flex;align-items:center;gap:22px;flex-wrap:wrap;padding:10px 0;border-top:1px solid #EEF2F7;border-bottom:1px solid #EEF2F7">'
+        + poolStat('Rows', b.total_rows)
+        + poolStat('Added', b.imported, '#0F766E')
+        + poolStat('In pool', b.in_pool)
+        + poolStat('Working', b.working, '#B45309')
+        + poolStat('Done', b.done)
+        + poolStat('Appts', b.appointments, '#16A34A')
+        + poolStat('Sales', b.sales, '#16A34A')
+        + poolStat('Skipped', skipped, skipped?'#B91C1C':'#94A3B8', skipTitle)
+      + '</div>'
+      + '<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;justify-content:space-between">'
+        + '<div style="font-size:.76rem;color:#64748B;min-width:0;flex:1">'+(cols?'Agent card shows: '+cols:'Name, phone and address only')+'</div>'
+        + '<button data-pool-act="remove" data-id="'+b.id+'" class="camp-btn" style="background:#64748B" title="Pull the un-worked leads of this list back out of the pool">Remove from pool</button>'
+      + '</div></div>';
+  }
+  async function loadPoolBatches(){
+    try{
+      var r=await window.__ebAPI.get('/sms/pool/batches?_='+Date.now());
+      var list=(r&&r.batches)||[];
+      var mgr=$('#poolMgr'); if(mgr) mgr.style.display='block';
+      var el=$('#poolList'); if(el) el.innerHTML=list.map(poolCardHTML).join('');
+      var empty=$('#poolEmpty'); if(empty) empty.style.display=list.length?'none':'block';
+    }catch(e){ /* hidden if not permitted */ }
+  }
+  // Pick a file -> count its rows locally -> confirm -> upload.
+  var poolPending=null;
+  function poolCloseConfirm(){ $('#poolConfirm').style.display='none'; poolPending=null; }
+  $('#poolConfirmCancel')?.addEventListener('click', poolCloseConfirm);
+  $('#poolConfirm')?.addEventListener('click', function(e){ if(e.target===e.currentTarget) poolCloseConfirm(); });
+  $('#poolAddBtn')?.addEventListener('click', function(){
+    var inp=document.createElement('input'); inp.type='file'; inp.accept='.csv,text/csv';
+    inp.addEventListener('change', function(e){
+      var f=e.target.files&&e.target.files[0]; if(!f) return;
+      if(!/\.csv$/i.test(f.name)){ toast('Please choose a .csv file','danger'); return; }
+      var rd=new FileReader();
+      rd.onload=function(){
+        var text=String(rd.result||''); var lines=text.split(/\r?\n/).filter(function(l){ return l.trim(); });
+        var rows=Math.max(0, lines.length-1);
+        if(!rows){ toast('That file has no rows under the header','danger'); return; }
+        poolPending=f;
+        $('#poolConfirmCount').textContent=rows.toLocaleString();
+        $('#poolConfirmFile').textContent=f.name+' · '+fmtSize(f.size);
+        $('#poolConfirm').style.display='flex';
+      };
+      rd.readAsText(f.slice(0, 5*1024*1024)); // a count only needs the first few MB
+    });
+    inp.click();
+  });
+  $('#poolConfirmOk')?.addEventListener('click', async function(){
+    var f=poolPending; if(!f) return;
+    poolCloseConfirm();
+    var fd=new FormData(); fd.append('file', f); fd.append('name', f.name);
+    var btn=$('#poolAddBtn'); var orig=btn?btn.innerHTML:'';
+    if(btn){ btn.disabled=true; btn.style.opacity='.65'; btn.style.cursor='default'; btn.innerHTML='<span class="camp-spin"></span> Adding to pool…'; }
+    var empty=$('#poolEmpty'); if(empty) empty.style.display='none';
+    var list=$('#poolList'); var lc=document.createElement('div');
+    lc.style.cssText='padding:14px 16px;border:1px solid #E2E8F0;border-radius:12px;background:#F8FAFC;color:#475569;font-size:.86rem';
+    lc.innerHTML='<div style="display:flex;align-items:center;gap:10px"><span class="camp-spin"></span><div><strong style="color:#0F172A">Adding <span class="camp-fn"></span> to the pool…</strong><div style="font-size:.78rem;color:#64748B;margin-top:2px">Checking Do-Not-Call and duplicates — nothing is being texted.</div></div></div><div class="camp-bar"></div>';
+    lc.querySelector('.camp-fn').textContent=f.name;
+    if(list) list.insertBefore(lc, list.firstChild);
+    try{
+      var r=await window.__ebAPI.upload('/sms/pool/upload', fd);
+      var sm=(r&&r.summary)||{};
+      var skipped=(sm.skipped_duplicates||0)+(sm.skipped_dnc||0)+(sm.failed||0);
+      toast((sm.imported||0).toLocaleString()+' leads added to the agent pool'+(skipped?' · '+skipped+' skipped':''),'accent');
+      loadPoolBatches();
+    }catch(err){
+      toast((err&&err.message)||'Upload failed','danger');
+      if(lc.parentNode) lc.parentNode.removeChild(lc);
+      loadPoolBatches();
+    }finally{
+      if(btn){ btn.disabled=false; btn.style.opacity=''; btn.style.cursor='pointer'; btn.innerHTML=orig; }
+    }
+  });
+  $('#poolList')?.addEventListener('click', async function(e){
+    var btn=e.target.closest('[data-pool-act]'); if(!btn) return;
+    var id=btn.getAttribute('data-id');
+    if(!confirm('Remove this list from the agent pool? Leads still waiting are pulled out; anything an agent already took stays.')) return;
+    btn.disabled=true;
+    try{
+      var r=await window.__ebAPI.del('/sms/pool/batches/'+id);
+      toast('Removed '+((r&&r.removed)||0)+' waiting leads from the pool','accent');
+    }catch(err){ toast((err&&err.message)||'Could not remove','danger'); }
+    loadPoolBatches();
+  });
+
   // Live page stats (today's activity + current campaign state). One overview
   // call feeds all six tiles; refreshed together with the campaign list so the
   // running/paused counts stay in sync with the cards.
@@ -1214,7 +1363,7 @@ html[data-mode="dark"] .sb-brand-logo{background:#FFFFFF;border-radius:8px;paddi
       set('psPaused', o.campaigns_paused);
     }catch(e){ /* hidden if not permitted */ }
   }
-  function refreshLive(){ loadCampaigns(); loadPageStats(); }
+  function refreshLive(){ loadCampaigns(); loadPoolBatches(); loadPageStats(); }
   refreshLive();
   setInterval(refreshLive, 15000);   // refresh campaign progress/state + live stats
 

@@ -1827,6 +1827,39 @@
       if(role !== 'agent' && role !== 'dev') location.replace('ask-the-brain.html');
     }
 
+    // ===== Inject "Training" link for AGENTS/dev =====
+    // The agent-only training program. training.html hardcodes its own copy
+    // (marked active) so it's correct even before this script runs; every
+    // other page gets it injected here. normalizeWorkspaceOrder() gives it
+    // its canonical slot regardless of insertion point.
+    function injectTrainingLink(){
+      var role = localStorage.getItem('ebRole') || 'agent';
+      if(role !== 'agent' && role !== 'dev') return;
+      var wsBody = document.querySelector('#sbWorkspaces .sb-group-body');
+      if(!wsBody) return;
+      if(wsBody.querySelector('a[href="training.html"]')) return;
+      var here = (location.pathname.split('/').pop() || '').toLowerCase();
+      var a = document.createElement('a');
+      a.className = 'sb-item' + (here === 'training.html' ? ' active' : '');
+      a.href = 'training.html';
+      a.id = 'navTraining';
+      a.setAttribute('aria-label', 'Training');
+      a.innerHTML =
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">' +
+          '<path d="M22 10 12 5 2 10l10 5 10-5Z"/><path d="M6 12v5c0 1.5 3 3 6 3s6-1.5 6-3v-5"/>' +
+        '</svg>' +
+        '<span class="sb-tip">Training</span>';
+      wsBody.appendChild(a);
+    }
+
+    // ===== Page-level guard: Training is agent/dev only =====
+    function gateTrainingPage(){
+      var here = (location.pathname.split('/').pop() || '').toLowerCase();
+      if(here !== 'training.html') return;
+      var role = localStorage.getItem('ebRole') || 'agent';
+      if(role !== 'agent' && role !== 'dev') location.replace('ask-the-brain.html');
+    }
+
     function normalizeWorkspaceOrder(){
       var wsBody = document.querySelector('#sbWorkspaces .sb-group-body');
       if(!wsBody) return;
@@ -1848,7 +1881,7 @@
         'applicant-inbox.html',
         'inbox.html', 'admin-inbox.html', 'my-team.html', 'team-performance.html',
         'dispositions.html', 'agent-performance.html', 'analytics.html',
-        'deals.html', 'compliance.html'
+        'deals.html', 'compliance.html', 'training.html'
       ];
       ORDER.forEach(function(href){
         var el = wsBody.querySelector('a[href="' + href + '"]');
@@ -2089,6 +2122,8 @@
       // NOTE: the agent "Admin Inbox" was retired — admin DMs are now pinned at
       // the top of the agent's regular Inbox (inbox.html). admin-inbox.html is a
       // redirect stub to inbox.html.
+      injectTrainingLink();        // agent/dev: the training program
+      gateTrainingPage();          // agent/dev only page guard
       injectCeoForDev();           // dev: ensure CEO Dashboard on every page
       injectUploadForDev();        // dev: ensure Upload Leads on every page
       injectLeaderboardLink();
