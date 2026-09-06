@@ -17,8 +17,9 @@
   <script src="services/error-boundary.js?v=22"></script>
 <style>
   .ch-prog{display:flex;gap:14px}
-  /* Required-field marker (Phone) */
+  /* Required-field marker — every field except Apt / Unit # and Social */
   .req{color:#A3525C;font-weight:800}
+  .opt{font-weight:600;color:#94a3b8;font-size:.7rem;margin-left:4px}
   /* Attached-file rows (call recordings + consent forms) are built with inline
      light styles, which prefs-extras' global dark block doesn't reach — recolour
      them here so both lists read correctly in dark mode. */
@@ -85,11 +86,11 @@
     <p class="wiz-sub">These apply to everyone on this enrollment.</p>
     <form class="form-grid" id="sharedForm" autocomplete="off" novalidate>
       <div class="field">
-        <label class="field-label" for="sState">State</label>
+        <label class="field-label" for="sState">State <span class="req" title="Required">*</span></label>
         <input class="ctl" id="sState" type="text" maxlength="2" autocomplete="address-level1" placeholder="FL"/>
       </div>
       <div class="field">
-        <label class="field-label" for="sNpn">Agent NPN</label>
+        <label class="field-label" for="sNpn">Agent NPN <span class="req" title="Required">*</span></label>
         <input class="ctl" id="sNpn" type="text" inputmode="numeric" maxlength="10" autocomplete="off" placeholder="12345678"/>
       </div>
     </form>
@@ -104,7 +105,7 @@
   <div class="wiz-card" id="recCard" style="border:1.5px solid rgba(var(--accent-rgb),.4)">
     <div class="wiz-eyebrow">Required first</div>
     <h2 class="wiz-title">Call recording</h2>
-    <p class="wiz-sub">Upload the recording(s) of this sales call — up to 4. You can fill the form now, but Log Sale stays disabled until at least one is attached.</p>
+    <p class="wiz-sub">Upload the recording(s) of this sales call — up to 4. You can fill the form now, but Log Sale stays disabled until at least one recording and one consent form are attached.</p>
     <div id="recList" style="display:flex;flex-direction:column;gap:8px;margin-bottom:10px"></div>
     <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
       <button id="recBtn" type="button" style="height:42px;padding:0 18px;border-radius:10px;border:none;background:var(--accent);color:#fff;font:700 .88rem inherit;cursor:pointer;white-space:nowrap">⬆ Upload call recording</button>
@@ -114,16 +115,16 @@
   </div>
 
   <!-- Consent forms — the signed consent / scope-of-appointment paperwork for this
-       enrollment. Optional at submit (the call recording is the hard gate), but it
-       is stored on every deal in the household so compliance can pull it later. -->
-  <div class="wiz-card" id="consentCard">
-    <div class="wiz-eyebrow">Documentation</div>
+       enrollment. Mandatory at submit (alongside the call recording); stored on
+       every deal in the household so compliance can pull it later. -->
+  <div class="wiz-card" id="consentCard" style="border:1.5px solid rgba(var(--accent-rgb),.4)">
+    <div class="wiz-eyebrow">Required</div>
     <h2 class="wiz-title">Consent forms</h2>
-    <p class="wiz-sub">Attach the signed consent form(s) for this enrollment — PDF, photo or document, up to 6. They’re saved against every person on this deal.</p>
+    <p class="wiz-sub">Attach the signed consent form(s) for this enrollment — PDF, photo or document, up to 6. Log Sale stays disabled until at least one is attached. They’re saved against every person on this deal.</p>
     <div id="conList" style="display:flex;flex-direction:column;gap:8px;margin-bottom:10px"></div>
     <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
       <button id="conBtn" type="button" style="height:42px;padding:0 18px;border-radius:10px;border:1.5px solid var(--accent);background:transparent;color:var(--accent);font:700 .88rem inherit;cursor:pointer;white-space:nowrap">⬆ Upload consent form</button>
-      <span id="conStatus" style="font-size:.85rem;color:#64748B;font-weight:600">No consent forms attached yet.</span>
+      <span id="conStatus" style="font-size:.85rem;color:#A3525C;font-weight:600">🔒 Log Sale disabled — upload at least one consent form to enable it.</span>
     </div>
     <input id="conInput" type="file" accept=".pdf,.doc,.docx,.txt,image/*,application/pdf" multiple style="display:none"/>
   </div>
@@ -153,16 +154,16 @@
       <button class="person-remove" type="button">Remove</button>
     </div>
     <form class="form-grid" autocomplete="off" novalidate>
-      <div class="field"><label class="field-label">First name</label><input class="ctl" data-f="first" type="text" placeholder="Maria"/></div>
-      <div class="field"><label class="field-label">Last name</label><input class="ctl" data-f="last" type="text" placeholder="Rodriguez"/></div>
-      <div class="field"><label class="field-label">Date of birth</label><input class="ctl" data-f="dob" type="date"/></div>
+      <div class="field"><label class="field-label">First name <span class="req" title="Required">*</span></label><input class="ctl" data-f="first" type="text" placeholder="Maria"/></div>
+      <div class="field"><label class="field-label">Last name <span class="req" title="Required">*</span></label><input class="ctl" data-f="last" type="text" placeholder="Rodriguez"/></div>
+      <div class="field"><label class="field-label">Date of birth <span class="req" title="Required">*</span></label><input class="ctl" data-f="dob" type="date"/></div>
       <div class="field"><label class="field-label">Phone <span class="req" title="Required">*</span></label><input class="ctl" data-f="phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="(555) 123-4567" required aria-required="true"/></div>
-      <div class="field" style="grid-column:1/-1"><label class="field-label">Address</label><input class="ctl" data-f="address" type="text" autocomplete="address-line1" placeholder="102 North Church Avenue"/></div>
-      <div class="field" style="grid-column:1/-1"><label class="field-label">Apt / Unit #</label><input class="ctl" data-f="apartment" type="text" autocomplete="address-line2" placeholder="Apt, suite, unit (optional)"/></div>
-      <div class="field"><label class="field-label">City</label><input class="ctl" data-f="city" type="text" autocomplete="address-level2" placeholder="Fort Meade"/></div>
-      <div class="field"><label class="field-label">ZIP</label><input class="ctl" data-f="zip" type="text" inputmode="numeric" maxlength="10" autocomplete="postal-code" placeholder="33841"/></div>
-      <div class="field"><label class="field-label">Gender</label><select class="ctl ctl-select" data-f="gender"><option value="">—</option><option>Male</option><option>Female</option><option>Other</option></select></div>
-      <div class="field"><label class="field-label">Social</label><input class="ctl" data-f="ssn" type="text" inputmode="numeric" maxlength="11" placeholder="123-45-6789"/></div>
+      <div class="field" style="grid-column:1/-1"><label class="field-label">Address <span class="req" title="Required">*</span></label><input class="ctl" data-f="address" type="text" autocomplete="address-line1" placeholder="102 North Church Avenue"/></div>
+      <div class="field" style="grid-column:1/-1"><label class="field-label">Apt / Unit # <span class="opt">optional</span></label><input class="ctl" data-f="apartment" type="text" autocomplete="address-line2" placeholder="Apt, suite, unit (optional)"/></div>
+      <div class="field"><label class="field-label">City <span class="req" title="Required">*</span></label><input class="ctl" data-f="city" type="text" autocomplete="address-level2" placeholder="Fort Meade"/></div>
+      <div class="field"><label class="field-label">ZIP <span class="req" title="Required">*</span></label><input class="ctl" data-f="zip" type="text" inputmode="numeric" maxlength="10" autocomplete="postal-code" placeholder="33841"/></div>
+      <div class="field"><label class="field-label">Gender <span class="req" title="Required">*</span></label><select class="ctl ctl-select" data-f="gender"><option value="">—</option><option>Male</option><option>Female</option><option>Other</option></select></div>
+      <div class="field"><label class="field-label">Social <span class="opt">optional</span></label><input class="ctl" data-f="ssn" type="text" inputmode="numeric" maxlength="11" placeholder="123-45-6789 (optional)"/></div>
     </form>
     <div class="prods">
       <div class="prods-eyebrow">Products this person is taking</div>
@@ -180,7 +181,7 @@
       <span class="prod-sub">Not included</span>
     </label>
     <div class="prod-body">
-      <div class="field"><label class="field-label">Carrier</label>
+      <div class="field"><label class="field-label">Carrier <span class="req" title="Required">*</span></label>
         <select class="ctl ctl-select" data-pf="carrier">
           <option value="" disabled selected>Select…</option>
           <option>Health First</option><option>Ambetter</option><option>Oscar</option>
@@ -188,7 +189,7 @@
           <option>Anthem</option><option>Christus</option><option>Select Health</option>
         </select>
       </div>
-      <div class="field"><label class="field-label">Plan type</label>
+      <div class="field"><label class="field-label">Plan type <span class="req" title="Required">*</span></label>
         <select class="ctl ctl-select" data-pf="tier">
           <option value="" disabled selected>Select…</option>
           <option>Bronze</option><option>Silver</option><option>Gold</option>
@@ -208,15 +209,17 @@
 
   let RECORDING_IDS = [];           // up to 4 attached recordings: {id, name}
   const REC_MAX = 4;
-  let CONSENT_IDS = [];             // attached consent forms: {id, name} — optional, not gated
+  let CONSENT_IDS = [];             // attached consent forms: {id, name} — mandatory, gates Log Sale
   const CON_MAX = 6;
-  function setLocked(locked){
-    // Recording gate: the agent CAN fill the whole form; only SUBMIT (Log Sale)
-    // is gated until a call recording is attached.
+  function setLocked(){
+    // Upload gate: the agent CAN fill the whole form; only SUBMIT (Log Sale)
+    // is gated until a call recording AND a consent form are attached.
+    const needRec = !RECORDING_IDS.length, needCon = !CONSENT_IDS.length;
+    const locked = needRec || needCon;
     const log = $('#btnLog');
     log.disabled = locked;
     log.style.opacity = locked ? '.5' : '';
-    log.title = locked ? 'Upload the call recording to enable Log Sale' : '';
+    log.title = locked ? ('Upload ' + [needRec && 'the call recording', needCon && 'a consent form'].filter(Boolean).join(' and ') + ' to enable Log Sale') : '';
   }
 
   function money(el){
@@ -255,7 +258,7 @@
     const firstCard = wrap.querySelector('.person-card');
     const rm = card.querySelector('.person-remove');
     if(firstCard){
-      // Social (SSN) is captured for the FIRST person only — drop it from added persons.
+      // Social (SSN, optional) is captured for the FIRST person only — drop it from added persons.
       const ssn = card.querySelector('[data-f="ssn"]');
       if(ssn) ssn.closest('.field').remove();
       // Date of birth is captured for the FIRST person only — drop it from added persons.
@@ -387,9 +390,9 @@
     }).join('');
     if(n>=REC_MAX){ btn.disabled=true; btn.style.opacity='.5'; btn.style.cursor='default'; btn.textContent='Maximum '+REC_MAX+' recordings'; }
     else { btn.disabled=false; btn.style.opacity=''; btn.style.cursor='pointer'; btn.textContent = n ? ('⬆ Add another recording ('+n+'/'+REC_MAX+')') : '⬆ Upload call recording'; }
-    if(n){ st.style.color='#2E5A45'; st.textContent='✓ '+n+' recording'+(n>1?'s':'')+' attached — you can Log Sale now.'; }
+    if(n){ st.style.color='#2E5A45'; st.textContent='✓ '+n+' recording'+(n>1?'s':'')+' attached.'; }
     else { st.style.color='#A3525C'; st.textContent='🔒 Log Sale disabled — upload at least one recording to enable it.'; }
-    setLocked(n===0);
+    setLocked();
   }
   $('#recBtn').addEventListener('click', ()=>{ if(RECORDING_IDS.length<REC_MAX) $('#recInput').click(); });
   $('#recInput').addEventListener('change', async function(e){
@@ -413,9 +416,9 @@
     if(i>=0 && i<RECORDING_IDS.length){ RECORDING_IDS.splice(i,1); renderRecList(); }
   });
 
-  // Consent forms: signed consent / scope-of-appointment paperwork. Unlike the call
-  // recording these do NOT gate Log Sale — they're attached to every deal created by
-  // this submission so compliance can pull them from All Deals later.
+  // Consent forms: signed consent / scope-of-appointment paperwork. Like the call
+  // recording, at least one is REQUIRED before Log Sale — they're attached to every
+  // deal created by this submission so compliance can pull them from All Deals later.
   function renderConList(){
     const list=$('#conList'), btn=$('#conBtn'), st=$('#conStatus'); const n=CONSENT_IDS.length;
     list.innerHTML = CONSENT_IDS.map(function(c,i){
@@ -428,7 +431,8 @@
     if(n>=CON_MAX){ btn.disabled=true; btn.style.opacity='.5'; btn.style.cursor='default'; btn.textContent='Maximum '+CON_MAX+' consent forms'; }
     else { btn.disabled=false; btn.style.opacity=''; btn.style.cursor='pointer'; btn.textContent = n ? ('\u2b06 Add another consent form ('+n+'/'+CON_MAX+')') : '\u2b06 Upload consent form'; }
     if(n){ st.style.color='#2E5A45'; st.textContent='\u2713 '+n+' consent form'+(n>1?'s':'')+' attached.'; }
-    else { st.style.color='#64748B'; st.textContent='No consent forms attached yet.'; }
+    else { st.style.color='#A3525C'; st.textContent='\ud83d\udd12 Log Sale disabled \u2014 upload at least one consent form to enable it.'; }
+    setLocked();
   }
   $('#conBtn').addEventListener('click', ()=>{ if(CONSENT_IDS.length<CON_MAX) $('#conInput').click(); });
   $('#conInput').addEventListener('change', async function(e){
@@ -469,10 +473,13 @@
   $('#btnLog').addEventListener('click', async function(){
     const btn=this; btn.disabled=true;
     if(!RECORDING_IDS.length){ flash('Cannot log the sale — upload at least one call recording first.'); btn.disabled=false; return; }
+    if(!CONSENT_IDS.length){ flash('Cannot log the sale — upload at least one consent form first.'); btn.disabled=false; return; }
     clearInvalidAll();
-    // Household State is mandatory.
+    // Household State and Agent NPN are mandatory.
     const stateEl = $('#sState'); const state = (stateEl.value||'').trim().toUpperCase();
     if(!state){ markInvalid(stateEl); stateEl.scrollIntoView({behavior:'smooth',block:'center'}); flash('Cannot log the sale — missing the household State (fill it at the top of the form).'); btn.disabled=false; return; }
+    const npnEl = $('#sNpn');
+    if(!(npnEl.value||'').trim()){ markInvalid(npnEl); npnEl.scrollIntoView({behavior:'smooth',block:'center'}); flash('Cannot log the sale — missing the Agent NPN (set it in Settings → Licenses & Appointments).'); btn.disabled=false; return; }
     const cards = $$('.person-card', wrap);
     const people = cards.map(collectPerson);
     // Validate each person: collect EVERY missing required field, NAME them all in one
@@ -483,19 +490,17 @@
       const fieldEl = f => card.querySelector('[data-f="'+f+'"]');
       const missing=[], badEls=[];
       const req = (bad, label, f) => { if(bad){ missing.push(label); const el = f && fieldEl(f); if(el) badEls.push(el); } };
+      // Everything is required EXCEPT Apt / Unit # and Social (SSN).
       req(!p.first,'First name','first');
       req(!p.last,'Last name','last');
-      // Date of birth & Social are rendered for Person 1 only — added persons drop
-      // those fields (see addPerson), so only require them on the first person.
-      // (Requiring them for everyone made 2+ person deals impossible to submit.)
+      // Date of birth is rendered for Person 1 only — added persons drop that
+      // field (see addPerson), so only require it on the first person.
       if(i===0) req(!p.dob,'Date of birth','dob');
       req(!p.phone,'Phone','phone');
       req(!p.address,'Address','address');
-      // Apt / Unit # is intentionally NOT required — most addresses have no unit.
       req(!p.city,'City','city');
       req(!p.zip,'ZIP','zip');
       req(!p.gender,'Gender','gender');
-      if(i===0) req(!p.ssn,'Social (SSN)','ssn');
       req(!p.products.length,'a product (tick at least one)',null);
       if(missing.length){
         badEls.forEach(markInvalid);
@@ -503,7 +508,12 @@
         flash('Cannot log the sale — Person '+(i+1)+' is missing: '+missing.join(', ')+'.');
         btn.disabled=false; return;
       }
-      for(const pr of p.products){ if(pr.product==='ACA' && !pr.carrier){ flash('Cannot log the sale — Person '+(i+1)+' (ACA): choose a carrier.'); btn.disabled=false; return; } }
+      for(const pr of p.products){
+        if(pr.product!=='ACA') continue;
+        const prodEl = $$('.prod', card).find(function(el){ const cb=el.querySelector('input[data-prod]'); return cb && cb.dataset.prod==='ACA'; });
+        if(!pr.carrier){ const el=prodEl&&prodEl.querySelector('[data-pf="carrier"]'); markInvalid(el); (el||card).scrollIntoView({behavior:'smooth',block:'center'}); flash('Cannot log the sale — Person '+(i+1)+' (ACA): choose a carrier.'); btn.disabled=false; return; }
+        if(!pr.tier){ const el=prodEl&&prodEl.querySelector('[data-pf="tier"]'); markInvalid(el); (el||card).scrollIntoView({behavior:'smooth',block:'center'}); flash('Cannot log the sale — Person '+(i+1)+' (ACA): choose a plan type.'); btn.disabled=false; return; }
+      }
     }
     // Validation passed — show a loading spinner on the button for the network phase.
     const _logHTML = btn.innerHTML;
@@ -648,8 +658,8 @@
   addPerson();
   // lock the Agent NPN to the signed-in agent's own NPN
   lockAgentNpn();
-  // lock everything until at least one call recording is uploaded
-  setLocked(true);
+  // lock Log Sale until a call recording AND a consent form are uploaded
+  setLocked();
   renderRecList();
   renderConList();
 })();

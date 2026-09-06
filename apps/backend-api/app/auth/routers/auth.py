@@ -23,6 +23,7 @@ from app.models.tenant import Tenant
 from app.core.audit import log_login, log_create
 from typing import Optional
 from pydantic import BaseModel
+from app.auth.avatar import store_avatar, clear_avatar, migrate_inline_avatar, user_response
 from app.schemas.auth import (
     LoginRequest,
     RegisterRequest,
@@ -39,7 +40,7 @@ class UpdateProfileRequest(BaseModel):
     first_name: Optional[str] = None
     last_name: Optional[str] = None
     preferences: Optional[dict] = None
-    avatar_url: Optional[str] = None  # small base64 data URL ("" clears it)
+    avatar_url: Optional[str] = None  # image data URL, uploaded to S3 ("" clears it)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -202,8 +203,13 @@ def change_password(
 
 
 @router.get("/me", response_model=UserResponse)
-def get_me(current_user: User = Depends(get_current_user)):
-    return current_user
+def get_me(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    # Photos saved before S3 storage existed live inline on the row; move them
+    # over the first time the user is seen (no-op once S3 is configured and done).
+    if migrate_inline_avatar(current_user):
+        db.commit()
+        db.refresh(current_user)
+    return user_response(current_user)
 
 
 @router.patch("/me", response_model=UserResponse)
@@ -219,21 +225,16 @@ def update_profile(
     if request.preferences is not None:
         current_user.preferences = request.preferences
     if request.avatar_url is not None:
-        av = request.avatar_url.strip()
-        if av == "":
-            current_user.avatar_url = None            # allow clearing the photo
+        if request.avatar_url.strip() == "":
+            clear_avatar(current_user)                # allow removing the photo
         else:
-            # Accept only small image data URLs. The frontend resizes to a tiny
-            # square before upload, so anything over ~1.5MB is rejected to keep
-            # the row (and every /auth/me response) lean.
-            if not av.startswith("data:image/"):
-                raise HTTPException(status_code=422, detail="avatar_url must be an image data URL")
-            if len(av) > 1_500_000:
-                raise HTTPException(status_code=413, detail="Image too large — please use a smaller photo")
-            current_user.avatar_url = av
+            # The frontend resizes to a small square and sends a data URL; the
+            # bytes go to S3 (same bucket as training videos / consent forms)
+            # and only the object key is kept on the row. See app/auth/avatar.py.
+            store_avatar(current_user, request.avatar_url)
     db.commit()
     db.refresh(current_user)
-    return current_user
+    return user_response(current_user)
 
 
 @router.post("/logout")

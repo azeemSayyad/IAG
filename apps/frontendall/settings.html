@@ -3859,8 +3859,10 @@ html[data-mode="dark"] .um-tag.mut{background:rgba(255,255,255,.08);color:#C9CFD
           if(f.size > 4*1024*1024){ toast('Image too large (max 4 MB)', 'danger'); return; }
           ebResizeImage(f, 256, dataUrl=>{
             if(!dataUrl){ toast('Could not read image','danger'); return; }
+            // The backend uploads the bytes to S3 and answers with a signed
+            // URL — cache that (not the data URL) so the topbar/SPA use it too.
             window.__ebAPI.patch('/auth/me', { avatar_url: dataUrl })
-              .then(()=>{ ebSetAvatarUI(dataUrl); toast('Photo updated','accent'); })
+              .then(u=>{ ebSetAvatarUI((u && u.avatar_url) || dataUrl); toast('Photo updated','accent'); })
               .catch(()=> toast('Could not save photo','danger'));
           });
         });

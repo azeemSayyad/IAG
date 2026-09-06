@@ -25,7 +25,12 @@ class User(Base):
     created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     preferences = Column(JSON, nullable=True, default=dict)
-    avatar_url = Column(Text, nullable=True)  # profile photo (small base64 data URL)
+    # Profile photo: S3 object (bucket/key) when S3 is configured — the same
+    # client as training videos and deal consent forms (app/auth/avatar.py).
+    # `avatar_url` is only the inline data-URL fallback when S3 isn't set up.
+    avatar_url = Column(Text, nullable=True)
+    avatar_s3_bucket = Column(String(255), nullable=True)
+    avatar_s3_key = Column(String(512), nullable=True)
     deleted_at = Column(DateTime(timezone=True), nullable=True)
 
     tenant = relationship("Tenant", back_populates="users")

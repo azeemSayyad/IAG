@@ -201,6 +201,12 @@ Backend domain `apps/backend-api/app/training/` (router + `defaults.py`), model
   `GET /training/steps/{id}/video` — redirects to a signed URL for S3, streams
   with Range support from DB — and accepts the JWT as `?token=` because
   `<video>` can't send headers. `/training/steps` is exempt from the 10 MB body cap.
+- **Profile photos** use the same S3 client: `settings.html` still PATCHes a
+  small data URL to `/auth/me`, but `app/auth/avatar.py` uploads the bytes to
+  `avatars/<tenant>/<user>/<uuid>.<ext>`, keeps only `users.avatar_s3_key`
+  (migration 053) and returns a 7-day signed URL as `avatar_url`. Without S3
+  the data URL stays inline on the row; legacy inline photos are moved to S3
+  on the next `GET /auth/me`.
 - A tenant with **no rows at all** is seeded with `DEFAULT_STEPS` on first read
   (7 steps; the master call script sits under "How to Sell"). Deleting every
   step does NOT re-seed.

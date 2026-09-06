@@ -29,6 +29,7 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.deps import get_tenant_id, get_current_active_user, require_role
 from app.models.user import User
+from app.auth.avatar import resolve_avatar_url
 from app.admin.services.campaigns import (
     create_campaign,
     update_campaign,
@@ -340,7 +341,7 @@ def list_users(
                 "last_name": u.last_name,
                 "role": u.role,
                 "status": u.status,
-                "avatar_url": u.avatar_url,
+                "avatar_url": resolve_avatar_url(u),
             }
             for u in users
         ],
