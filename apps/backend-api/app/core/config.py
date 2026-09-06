@@ -144,6 +144,10 @@ class Settings(BaseSettings):
     S3_BUCKET: str = ""
     AWS_S3_BUCKET: str = ""             # alias accepted from .env
     AWS_S3_REGION: str = ""             # alias accepted from .env
+    # Custom endpoint for an S3-COMPATIBLE provider (Railway Buckets, Cloudflare
+    # R2, MinIO, …) instead of real AWS S3. Leave unset for real AWS. e.g. Railway
+    # Buckets: https://t3.storageapi.dev — region is "auto" for these providers.
+    S3_ENDPOINT_URL: str = ""
     S3_RECORDINGS_PREFIX: str = "call-recordings"
 
     # Stripe

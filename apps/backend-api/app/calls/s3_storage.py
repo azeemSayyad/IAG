@@ -1,13 +1,18 @@
 """
-Permanent recording storage in OUR OWN S3 bucket.
+Permanent object storage — call recordings, hiree onboarding documents, and deal
+recordings/consent forms ALL go through this one client (see onboarding/router.py
+and compliance/router.py, which import this same `s3_storage` singleton).
 
-Flow: call ends -> Sinch produces a recording -> Launchpad downloads it ->
-Launchpad uploads it to S3 (permanent) -> we keep the S3 key as the system of
-record. Sinch is NEVER the permanent store.
+Flow (calls): call ends -> Sinch produces a recording -> Launchpad downloads it ->
+Launchpad uploads it here (permanent) -> we keep the key as the system of record.
+Sinch is NEVER the permanent store. Onboarding/compliance uploads go directly here
+from the request body — no external fetch involved.
 
-All settings are env-driven (AWS_S3_BUCKET / AWS_S3_REGION / AWS_ACCESS_KEY_ID /
-AWS_SECRET_ACCESS_KEY). When unconfigured the service reports configured == False
-and callers degrade gracefully (recording_status stays "pending").
+Works with real AWS S3 OR any S3-compatible provider (Railway Buckets, Cloudflare
+R2, MinIO, …) via S3_ENDPOINT_URL. All settings are env-driven (AWS_S3_BUCKET /
+AWS_S3_REGION / AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY / S3_ENDPOINT_URL). When
+unconfigured the service reports configured == False and callers degrade
+gracefully (recording_status stays "pending"; documents fall back to a DB BLOB).
 """
 from __future__ import annotations
 
@@ -32,6 +37,17 @@ class S3RecordingStorage:
     def prefix(self) -> str:
         return (settings.S3_RECORDINGS_PREFIX or "call-recordings").strip("/")
 
+    @property
+    def endpoint_url(self) -> str:
+        return (settings.S3_ENDPOINT_URL or "").strip() or None
+
+    # True for an S3-compatible provider (Railway Buckets, R2, MinIO, …) rather
+    # than real AWS S3 — these commonly reject/no-op params real S3 supports,
+    # e.g. Railway Buckets does not support ServerSideEncryption.
+    @property
+    def _is_alt_provider(self) -> bool:
+        return bool(self.endpoint_url)
+
     def configured(self) -> bool:
         return bool(self.bucket and settings.AWS_ACCESS_KEY_ID and settings.AWS_SECRET_ACCESS_KEY)
 
@@ -39,6 +55,7 @@ class S3RecordingStorage:
         import boto3
         return boto3.client(
             "s3",
+            endpoint_url=self.endpoint_url,
             region_name=self.region,
             aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
             aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
@@ -60,11 +77,11 @@ class S3RecordingStorage:
         Raises RuntimeError if S3 isn't configured.
         """
         if not self.configured():
-            raise RuntimeError("S3 is not configured (set AWS_S3_BUCKET / AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY)")
-        self._client().put_object(
-            Bucket=self.bucket, Key=key, Body=data,
-            ContentType=content_type, ServerSideEncryption="AES256",
-        )
+            raise RuntimeError("S3 is not configured (set AWS_S3_BUCKET / ACCESS_KEY_ID / SECRET_ACCESS_KEY)")
+        put_kwargs = dict(Bucket=self.bucket, Key=key, Body=data, ContentType=content_type)
+        if not self._is_alt_provider:
+            put_kwargs["ServerSideEncryption"] = "AES256"  # real AWS S3 only
+        self._client().put_object(**put_kwargs)
         logger.info("Stored recording s3://%s/%s (%d bytes)", self.bucket, key, len(data))
         return {"bucket": self.bucket, "key": key}
 
