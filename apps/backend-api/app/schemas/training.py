@@ -69,6 +69,8 @@ class TrainingStepResponse(BaseModel):
     video_filename: Optional[str] = None
     video_content_type: Optional[str] = None
     video_byte_size: int = 0
+    # 's3' | 'db' for uploads — tells an admin whether the file is in the bucket.
+    video_storage: Optional[str] = None
     # Playable URL for uploaded videos (the streaming endpoint); None otherwise.
     video_src: Optional[str] = None
     updated_at: Optional[datetime] = None

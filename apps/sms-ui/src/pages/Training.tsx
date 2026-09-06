@@ -25,8 +25,11 @@ type Step = {
   video_url: string | null;
   video_filename: string | null;
   video_byte_size: number;
+  video_storage: "s3" | "db" | null;
   video_src: string | null;
 };
+
+type StorageStatus = { configured: boolean; bucket: string | null; endpoint: string | null; prefix: string };
 
 const PROGRESS_KEY = "ebTrainingProgress";
 const btnCls = "rounded-lg bg-accent px-3 py-1.5 text-xs font-bold text-white hover:bg-accent-hover disabled:opacity-50";
@@ -76,7 +79,15 @@ export default function Training() {
   const [busy, setBusy] = useState<string | null>(null);
   const [dragId, setDragId] = useState<string | null>(null);
   const [overId, setOverId] = useState<string | null>(null);
+  const [storage, setStorage] = useState<StorageStatus | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
+
+  // Where uploads land on this server — shown in edit mode so an admin isn't
+  // left staring at an empty bucket wondering where the file went.
+  useEffect(() => {
+    if (!editMode || storage) return;
+    api<StorageStatus>("/training/storage").then(setStorage).catch(() => setStorage(null));
+  }, [editMode, storage]);
 
   const load = useCallback(() => {
     api<Step[]>("/training/steps")
@@ -245,6 +256,20 @@ export default function Training() {
       {err && (
         <div className="rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-xs font-semibold text-danger">{err}</div>
       )}
+      {editMode && storage && (
+        storage.configured ? (
+          <div className="rounded-lg border border-success/30 bg-success/10 px-3 py-2 text-xs text-success">
+            <b>Video uploads go to the bucket</b> <span className="font-mono">{storage.bucket}</span>
+            {storage.endpoint && <> via <span className="font-mono">{storage.endpoint}</span></>} under <span className="font-mono">{storage.prefix}/</span>.
+          </div>
+        ) : (
+          <div className="rounded-lg border border-pending/30 bg-pending/10 px-3 py-2 text-xs text-pending">
+            <b>S3 is not configured on this server</b> — video uploads are being stored in the database instead.
+            Set <span className="font-mono">AWS_ACCESS_KEY_ID</span>, <span className="font-mono">AWS_SECRET_ACCESS_KEY</span>,{" "}
+            <span className="font-mono">S3_BUCKET</span> and <span className="font-mono">S3_ENDPOINT_URL</span> on the backend, redeploy, then re-upload.
+          </div>
+        )
+      )}
 
       {steps === null ? (
         <div className="glass rounded-2xl p-10 text-center text-sm text-ink-muted">Loading the program…</div>
@@ -344,7 +369,12 @@ export default function Training() {
                 <div className="mt-5">
                   <VideoEmbed kind={current.video_kind} url={current.video_url} src={current.video_src} title={current.title} />
                   {current.video_kind === "upload" && current.video_filename && (
-                    <div className="mt-2 text-right text-[0.7rem] text-ink-faint">{current.video_filename} · {fmtBytes(current.video_byte_size)}</div>
+                    <div className="mt-2 text-right text-[0.7rem] text-ink-faint">
+                      {current.video_filename} · {fmtBytes(current.video_byte_size)}
+                      {editMode && current.video_storage && (
+                        <> · {current.video_storage === "s3" ? "in bucket" : <span className="text-pending">in database (not in bucket)</span>}</>
+                      )}
+                    </div>
                   )}
                 </div>
 

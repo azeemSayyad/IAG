@@ -7,6 +7,7 @@ degrade-gracefully rule as deal recordings. The first time a tenant with no
 steps at all opens the page, the default program is seeded.
 """
 
+import logging
 from datetime import datetime, timezone
 from typing import Optional
 from uuid import UUID, uuid4
@@ -28,6 +29,8 @@ from app.schemas.training import (
     TrainingStepUpdate,
 )
 from app.training.defaults import DEFAULT_STEPS
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/training", tags=["training"])
 
@@ -98,6 +101,20 @@ def list_steps(
 ):
     _ensure_defaults(db, tenant_id, user)
     return [_to_response(s) for s in _live(db, tenant_id).all()]
+
+
+@router.get("/storage")
+def storage_status(_user: User = Depends(_require_admin)):
+    """Where video uploads will land on THIS server — so an admin can see at a
+    glance whether the bucket is wired up instead of guessing from an empty
+    bucket listing."""
+    from app.calls.s3_storage import s3_storage
+    return {
+        "configured": s3_storage.configured(),
+        "bucket": s3_storage.bucket or None,
+        "endpoint": s3_storage.endpoint_url,
+        "prefix": "training-videos",
+    }
 
 
 # --- write (admin-class) ----------------------------------------------------
@@ -229,16 +246,21 @@ async def upload_step_video(
     s.video_byte_size = len(raw)
 
     stored_to_s3 = False
-    try:
-        from app.calls.s3_storage import s3_storage
-        if s3_storage.configured():
+    from app.calls.s3_storage import s3_storage
+    if s3_storage.configured():
+        try:
             ext = (fname.rsplit(".", 1)[-1] if "." in fname else "mp4").lower()[:8] or "mp4"
             key = f"training-videos/{tenant_id}/{uuid4()}.{ext}"
             out = s3_storage.upload_bytes(raw, key, content_type=s.video_content_type)
             s.video_storage, s.video_s3_bucket, s.video_s3_key = "s3", out["bucket"], out["key"]
             stored_to_s3 = True
-    except Exception:
-        stored_to_s3 = False
+        except Exception:
+            # Fall back to DB bytes so the admin's upload never fails, but say so
+            # loudly — a silent fallback looks like "the bucket is empty" later.
+            logger.exception("Training video S3 upload failed (bucket=%s endpoint=%s); storing in DB",
+                             s3_storage.bucket, s3_storage.endpoint_url)
+    else:
+        logger.warning("Training video stored in DB: S3 is not configured (S3_BUCKET/AWS creds missing)")
     if not stored_to_s3:
         s.video_storage, s.video_data = "db", raw
 
