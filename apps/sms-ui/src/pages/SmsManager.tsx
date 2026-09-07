@@ -56,13 +56,21 @@ type LeaderRow = {
   agent_name: string; attempted: number; replied: number; reply_rate_pct: number;
   sold: number; appointments: number; conv_rate_pct: number; avg_response_ms: number | null;
 };
-type Funnel = { from: string; to: string; attempted: number; replied: number; sold: number; replied_pct: number; sold_pct: number };
+type PoolTile = { key: string; label: string; count: number };
+type Funnel = { from: string; to: string; attempted: number; replied: number; sold: number; replied_pct: number; sold_pct: number; pool?: { total: number; items: PoolTile[] } };
 type ParkedItem = { id: string; phone_number: string; last_message: string | null; agent_name: string; dispositioned_at: string | null };
 type Activity = { agent_name: string; accepted: number; dispositioned: number };
 const REFRESH_MS = 6_000;
 const ACTIVITY_LABEL: Record<string, string> = { talking: "Talking", waiting: "Waiting to accept", idle: "Not talking", away: "On break", offline: "Offline", wrapping: "Wrapping" };
 const ACTIVITY_DOT: Record<string, string> = { talking: "bg-accent", waiting: "bg-blue-500", idle: "bg-success", away: "bg-pending", offline: "bg-ink-faint", wrapping: "bg-purple-500" };
 const PERIODS: Period[] = ["day", "week", "month"];
+const POOL_TILE_TONE: Record<string, string> = {
+  SALE: "text-success",
+  APPOINTMENT_SET: "text-accent",
+  WRONG_NUMBER: "text-danger",
+  UNQUALIFIED: "text-danger",
+  OPEN: "text-ink-faint",
+};
 
 function fmtDuration(secs: number): string {
   const m = Math.floor(secs / 60);
@@ -659,14 +667,37 @@ export default function SmsManager() {
       <div className="glass rounded-2xl p-4">
         <Collapsible title="Manage Leads" defaultOpen>
         <div className="space-y-5">
+          {/* The two lead flows are reported separately — an SMS funnel only makes
+              sense for leads we actually texted, and pool leads (uploaded straight
+              to the queue, never texted) are judged by how agents dispositioned
+              them after phoning. See get_funnel() in manager_service.py. */}
           {funnel && (
-            <div>
-              <h4 className="mb-3 text-sm font-semibold text-ink">Funnel · {funnel.from} → {funnel.to}</h4>
-              <div className="grid grid-cols-3 gap-3 text-center">
-                <div className="rounded-xl border border-hairline-soft p-4"><div className="text-xs uppercase text-ink-faint">Attempted</div><div className="mt-1 text-3xl font-semibold text-ink">{funnel.attempted}</div></div>
-                <div className="rounded-xl border border-hairline-soft p-4"><div className="text-xs uppercase text-ink-faint">Replied</div><div className="mt-1 text-3xl font-semibold text-ink">{funnel.replied}</div><div className="text-xs text-ink-muted">{funnel.replied_pct}% of attempted</div></div>
-                <div className="rounded-xl border border-hairline-soft p-4"><div className="text-xs uppercase text-ink-faint">Sold</div><div className="mt-1 text-3xl font-semibold text-success">{funnel.sold}</div><div className="text-xs text-ink-muted">{funnel.sold_pct}% of attempted</div></div>
+            <div className="space-y-5">
+              <div>
+                <h4 className="text-sm font-semibold text-ink">SMS Flow · {funnel.from} → {funnel.to}</h4>
+                <p className="mb-3 text-xs text-ink-faint">Campaign leads we texted, who replied.</p>
+                <div className="grid grid-cols-3 gap-3 text-center">
+                  <div className="rounded-xl border border-hairline-soft p-4"><div className="text-xs uppercase text-ink-faint">Attempted</div><div className="mt-1 text-3xl font-semibold text-ink">{funnel.attempted}</div></div>
+                  <div className="rounded-xl border border-hairline-soft p-4"><div className="text-xs uppercase text-ink-faint">Replied</div><div className="mt-1 text-3xl font-semibold text-ink">{funnel.replied}</div><div className="text-xs text-ink-muted">{funnel.replied_pct}% of attempted</div></div>
+                  <div className="rounded-xl border border-hairline-soft p-4"><div className="text-xs uppercase text-ink-faint">Sold</div><div className="mt-1 text-3xl font-semibold text-success">{funnel.sold}</div><div className="text-xs text-ink-muted">{funnel.sold_pct}% of attempted</div></div>
+                </div>
               </div>
+              {/* Absent when the API predates this block — render nothing rather
+                  than throwing, so the SPA can deploy ahead of the backend. */}
+              {funnel.pool && (
+              <div className="border-t border-hairline-soft pt-4">
+                <h4 className="text-sm font-semibold text-ink">Lead Pool · {funnel.pool.total} lead{funnel.pool.total === 1 ? "" : "s"}</h4>
+                <p className="mb-3 text-xs text-ink-faint">Uploaded straight to the queue (no SMS sent) — worked by phone, counted by disposition.</p>
+                <div className="grid grid-cols-2 gap-3 text-center md:grid-cols-4">
+                  {(funnel.pool.items ?? []).map((t) => (
+                    <div key={t.key} className="rounded-xl border border-hairline-soft p-3">
+                      <div className="text-[11px] uppercase text-ink-faint">{t.label}</div>
+                      <div className={`mt-1 text-2xl font-semibold ${POOL_TILE_TONE[t.key] ?? "text-ink"}`}>{t.count}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              )}
             </div>
           )}
           <div className={funnel ? "border-t border-hairline-soft pt-4" : ""}>

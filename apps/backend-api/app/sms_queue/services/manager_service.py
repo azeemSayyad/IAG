@@ -331,16 +331,64 @@ def get_leaderboard(db: Session, tenant_id: str, from_iso: str | None = None, to
     return {"items": board}
 
 
+# The disposition tiles shown for the CSV_DIRECT (phone-worked) pool block, in
+# display order. ELIGIBLE_FOR_MEDICARE is deliberately omitted — see
+# HIDDEN_DISPOSITIONS below; Medicare leads never surface in a manager view.
+POOL_DISPOSITIONS: tuple[tuple[str, str], ...] = (
+    ("ATTEMPTED", "Attempted"),
+    ("APPOINTMENT_SET", "Appointment Set"),
+    ("SALE", "Sold"),
+    ("COULDNT_SELL", "Couldn't Sell"),
+    ("NOT_INTERESTED", "Not Interested"),
+    ("WRONG_NUMBER", "Wrong Number"),
+    ("UNQUALIFIED", "Unqualified"),
+)
+
+
 def get_funnel(db: Session, tenant_id: str, from_iso: str | None = None, to_iso: str | None = None) -> dict:
+    """Two independent lead flows, reported as two separate blocks.
+
+    They are NOT comparable, so they are never summed into one funnel:
+
+    * ``sms``  — source=REPLY. CSV -> campaign -> SMS blast -> the customer
+      texted back. A reply/sale rate is meaningful here.
+    * ``pool`` — source=CSV_DIRECT. Uploaded straight to the agent pool, no SMS
+      was ever sent (see pool_ingest), so "replied" is meaningless. What matters
+      is how the agents dispositioned them after phoning, so this block is a
+      breakdown by disposition instead of a funnel.
+
+    Mixing the two is what made "Attempted" read as the whole lead-pool count.
+    """
     start, end = _range(from_iso, to_iso)
     base = db.query(SmsLead).filter(
         SmsLead.tenant_id == tenant_id,
         SmsLead.created_at >= start,
         SmsLead.created_at < end,
     )
-    attempted = base.count()
-    replied = base.filter(SmsLead.message_count > 1).count()
-    sold = base.filter(SmsLead.disposition == "SALE").count()
+
+    sms = base.filter(SmsLead.source == "REPLY")
+    attempted = sms.count()
+    replied = sms.filter(SmsLead.message_count > 1).count()
+    sold = sms.filter(SmsLead.disposition == "SALE").count()
+
+    # Disposition tallies for the phone-worked pool leads. Medicare is
+    # deliberately absent (HIDDEN_DISPOSITIONS), so the tiles do not sum to the
+    # block total.
+    counts = dict(
+        base.filter(SmsLead.source == "CSV_DIRECT")
+        .with_entities(SmsLead.disposition, func.count(SmsLead.id))
+        .group_by(SmsLead.disposition)
+        .all()
+    )
+    pool_items = [
+        {"key": key, "label": label, "count": int(counts.get(key, 0) or 0)}
+        for key, label in POOL_DISPOSITIONS
+    ]
+    # A NULL disposition means nobody has worked the lead yet.
+    pool_items.append(
+        {"key": "OPEN", "label": "Not Yet Worked", "count": int(counts.get(None, 0) or 0)}
+    )
+
     return {
         "from": start.date().isoformat(),
         "to": (end - timedelta(days=1)).date().isoformat(),
@@ -349,6 +397,7 @@ def get_funnel(db: Session, tenant_id: str, from_iso: str | None = None, to_iso:
         "sold": sold,
         "replied_pct": round(replied / attempted * 100) if attempted else 0,
         "sold_pct": round(sold / attempted * 100) if attempted else 0,
+        "pool": {"total": sum(int(v or 0) for v in counts.values()), "items": pool_items},
     }
 
 
