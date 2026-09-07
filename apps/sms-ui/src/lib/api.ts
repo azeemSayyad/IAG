@@ -1,4 +1,4 @@
-import { getAccessToken } from "./auth";
+import { clearSession, getAccessToken, goToLogin, refreshAccessToken } from "./auth";
 
 // All calls go through the same /api proxy the portal already uses
 // (nginx proxies /api -> backend-api:8000). The backend mounts every router
@@ -6,26 +6,69 @@ import { getAccessToken } from "./auth";
 // added server-side; existing ones are never modified.
 const BASE = "/api/v1";
 
+// A 401 here means the access token aged out mid-session, NOT that the user is
+// signed out: the refresh token is good for 7 days. So mirror the portal's
+// services/api.js — refresh once, replay the request with the new token, and
+// only fall back to the login page if the refresh itself fails. Before this,
+// any 401 redirected immediately, which is why sessions appeared to end on
+// their own after the access-token lifetime (~30 min) on SMS/Training pages.
+//
+// `authedFetch` is the shared primitive: it also serves the multipart uploaders,
+// which can't use api() because they must let the browser set the FormData
+// content-type (and its boundary) itself.
+export async function authedFetch(
+  path: string,
+  init: RequestInit = {},
+  opts: { json?: boolean } = {},
+): Promise<Response> {
+  const send = (token: string | null) => {
+    const headers: Record<string, string> = {
+      ...(opts.json ? { "Content-Type": "application/json" } : {}),
+      ...(init.headers as Record<string, string> | undefined),
+    };
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+    return fetch(BASE + path, { ...init, headers });
+  };
+
+  const res = await send(getAccessToken());
+  if (res.status !== 401) return res;
+
+  // Never try to refresh a failed refresh/login — that 401 means bad
+  // credentials or a genuinely expired session, not a stale access token.
+  if (/^\/auth\/(login|refresh|password-reset)/.test(path)) return res;
+
+  const fresh = await refreshAccessToken();
+  if (fresh) {
+    const retry = await send(fresh);
+    if (retry.status !== 401) return retry;
+  }
+  clearSession();
+  goToLogin();
+  throw new Error("Unauthorized");
+}
+
 export async function api<T = unknown>(
   path: string,
   init: RequestInit = {},
 ): Promise<T> {
-  const token = getAccessToken();
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-    ...(init.headers as Record<string, string> | undefined),
-  };
-  if (token) headers["Authorization"] = `Bearer ${token}`;
+  const res = await authedFetch(path, init, { json: true });
 
-  const res = await fetch(BASE + path, { ...init, headers });
-
-  if (res.status === 401) {
-    window.location.href = "/login.html";
-    throw new Error("Unauthorized");
-  }
   if (!res.ok) {
     const text = await res.text().catch(() => "");
     throw new Error(`${res.status} ${res.statusText}: ${text}`);
+  }
+  const ct = res.headers.get("content-type") || "";
+  return (ct.includes("application/json") ? res.json() : res.text()) as Promise<T>;
+}
+
+/** Multipart POST (CSV / media uploads). Same session handling as api(), but no
+ *  JSON content-type so the browser can set the FormData boundary. */
+export async function apiUpload<T = unknown>(path: string, fd: FormData): Promise<T> {
+  const res = await authedFetch(path, { method: "POST", body: fd });
+  if (!res.ok) {
+    let detail = "";
+    try { detail = (await res.json())?.detail || ""; } catch { /* non-JSON body */ }
+    throw new Error(detail || `${res.status} ${res.statusText}`);
   }
   const ct = res.headers.get("content-type") || "";
   return (ct.includes("application/json") ? res.json() : res.text()) as Promise<T>;

@@ -1,19 +1,22 @@
 /* Training — the agent training program.
  *
- * Agents work through an ordered list of steps (a video plus, where it applies,
- * the call script under it) and tick them off; progress is per browser. Admins
- * flip on "Edit program" to add, remove, rename and drag-reorder steps, paste a
- * Vimeo/YouTube link or upload a video file, and edit the script text.
+ * Agents work through an ordered list of steps (a video or other material plus,
+ * where it applies, the call script under it) and tick them off; progress is
+ * per browser. Admins flip on "Edit program" to add, remove, rename and
+ * drag-reorder steps, paste a Vimeo/YouTube link or upload a file (video,
+ * audio, image, PDF, Word, PowerPoint, Excel), and edit the script text.
  *
- * Data lives in /training/steps (backend/app/training). Uploaded videos go to
- * S3 when it's configured, DB bytes otherwise — the page doesn't care which.
+ * Data lives in /training/steps (backend/app/training). Uploads go to S3 when
+ * it's configured, DB bytes otherwise — the page doesn't care which. The API
+ * fields are still named video_* from the video-only first version; the
+ * `media_kind` it returns is what decides how an upload is shown.
  */
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from "react";
-import { api } from "../lib/api";
-import { getAccessToken, isAdmin } from "../lib/auth";
+import { api, apiUpload } from "../lib/api";
+import { isAdmin } from "../lib/auth";
 import { Drawer, DrawerSection, Field, drawerCtl } from "../components/Drawer";
 import ScriptBlocks from "../components/training/ScriptBlocks";
-import VideoEmbed, { embedFor, type VideoKind } from "../components/training/VideoEmbed";
+import MediaEmbed, { embedFor, fmtBytes, mediaLabel, type MediaKind, type VideoKind } from "../components/training/MediaEmbed";
 
 type Step = {
   id: string;
@@ -27,7 +30,13 @@ type Step = {
   video_byte_size: number;
   video_storage: "s3" | "db" | null;
   video_src: string | null;
+  media_kind: MediaKind | null;
 };
+
+const ACCEPT = [
+  "video/*", "audio/*", "image/*", ".pdf",
+  ".doc", ".docx", ".rtf", ".txt", ".md", ".ppt", ".pptx", ".key", ".xls", ".xlsx", ".csv",
+].join(",");
 
 const PROGRESS_KEY = "ebTrainingProgress";
 const btnCls = "rounded-lg bg-accent px-3 py-1.5 text-xs font-bold text-white hover:bg-accent-hover disabled:opacity-50";
@@ -43,23 +52,9 @@ function saveDone(ids: string[]) {
 async function uploadVideo(stepId: string, file: File): Promise<Step> {
   const fd = new FormData();
   fd.append("file", file, file.name);
-  const headers: Record<string, string> = {};
-  const token = getAccessToken();
-  if (token) headers["Authorization"] = `Bearer ${token}`;
-  const res = await fetch(`/api/v1/training/steps/${stepId}/video`, { method: "POST", headers, body: fd });
-  if (res.status === 401) { window.location.href = "/login.html"; throw new Error("Unauthorized"); }
-  if (!res.ok) {
-    let detail = "";
-    try { detail = (await res.json())?.detail || ""; } catch { /* non-JSON */ }
-    throw new Error(detail || `${res.status} ${res.statusText}`);
-  }
-  return res.json();
-}
-
-function fmtBytes(n: number): string {
-  if (n >= 1e9) return `${(n / 1e9).toFixed(1)} GB`;
-  if (n >= 1e6) return `${(n / 1e6).toFixed(1)} MB`;
-  return `${Math.max(1, Math.round(n / 1e3))} KB`;
+  // apiUpload refreshes an expired access token and replays the upload, so a
+  // long file transfer started near the end of a token's life still lands.
+  return apiUpload<Step>(`/training/steps/${stepId}/video`, fd);
 }
 
 type Form = { title: string; description: string; content: string; videoMode: VideoKind; videoUrl: string; file: File | null };
@@ -294,7 +289,7 @@ export default function Training() {
                       <span className="min-w-0">
                         <span className={`block truncate text-[0.82rem] font-semibold leading-tight ${isActive ? "text-accent" : "text-ink"}`}>{s.title}</span>
                         <span className="mt-0.5 block text-[0.68rem] text-ink-faint">
-                          {s.video_kind === "none" ? "Video coming soon" : s.video_kind === "upload" ? "Video" : (embedFor(s.video_url || "")?.kind === "youtube" ? "YouTube" : embedFor(s.video_url || "") ? "Vimeo" : "Video link")}
+                          {s.video_kind === "none" ? "Coming soon" : s.video_kind === "upload" ? mediaLabel(s.media_kind) : (embedFor(s.video_url || "")?.kind === "youtube" ? "YouTube" : embedFor(s.video_url || "") ? "Vimeo" : "Video link")}
                           {s.content ? " · Script" : ""}
                         </span>
                       </span>
@@ -343,13 +338,11 @@ export default function Training() {
                 </div>
 
                 <div className="mt-5">
-                  <VideoEmbed kind={current.video_kind} url={current.video_url} src={current.video_src} title={current.title} />
-                  {current.video_kind === "upload" && current.video_filename && (
+                  <MediaEmbed kind={current.video_kind} mediaKind={current.media_kind} url={current.video_url} src={current.video_src}
+                              title={current.title} filename={current.video_filename} byteSize={current.video_byte_size} />
+                  {editMode && current.video_kind === "upload" && current.video_storage && (
                     <div className="mt-2 text-right text-[0.7rem] text-ink-faint">
-                      {current.video_filename} · {fmtBytes(current.video_byte_size)}
-                      {editMode && current.video_storage && (
-                        <> · {current.video_storage === "s3" ? "in bucket" : <span className="text-pending">in database (not in bucket)</span>}</>
-                      )}
+                      {current.video_storage === "s3" ? "Stored in bucket" : <span className="text-pending">Stored in database (not in bucket)</span>}
                     </div>
                   )}
                 </div>
@@ -395,7 +388,7 @@ export default function Training() {
             <button className={btnGhost} onClick={closeDrawer} disabled={!!busy}>Cancel</button>
             <button className="btn-glow inline-flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-bold text-white disabled:opacity-50" disabled={!!busy || !valid} onClick={save}>
               {(busy === "save" || busy === "upload") && <Spinner />}
-              {busy === "upload" ? "Uploading video…" : busy === "save" ? "Saving…" : drawer?.step ? "Save changes" : "Add step"}
+              {busy === "upload" ? "Uploading file…" : busy === "save" ? "Saving…" : drawer?.step ? "Save changes" : "Add step"}
             </button>
           </>
         }
@@ -403,7 +396,7 @@ export default function Training() {
         {(busy === "save" || busy === "upload") && (
           <div className="drawer-busy absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 rounded-none" aria-live="polite">
             <Spinner large />
-            <span className="text-sm font-bold text-ink">{busy === "upload" ? "Uploading video…" : "Saving…"}</span>
+            <span className="text-sm font-bold text-ink">{busy === "upload" ? "Uploading file…" : "Saving…"}</span>
             {busy === "upload" && f.file && (
               <span className="text-xs text-ink-muted">{f.file.name} · {fmtBytes(f.file.size)} — please keep this window open.</span>
             )}
@@ -421,7 +414,7 @@ export default function Training() {
           </Field>
         </DrawerSection>
 
-        <DrawerSection tone="accent2" title="Video" sub="Paste a link or upload a file. Agents watch it at the top of the step."
+        <DrawerSection tone="accent2" title="Video or material" sub="Paste a video link, or upload a video, audio, image, PDF, Word, PowerPoint or Excel file. It sits at the top of the step."
                        icon={<svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="6" width="13" height="12" rx="2" /><path d="m16 10 5-3v10l-5-3Z" /></svg>}>
         <Field label="Source" plain>
           <div className="dseg flex rounded-xl p-1 text-xs font-semibold">
@@ -431,7 +424,7 @@ export default function Training() {
                 {m === "none" && <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><circle cx="12" cy="12" r="9" /><path d="m5.5 5.5 13 13" /></svg>}
                 {m === "link" && <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1" /><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1" /></svg>}
                 {m === "upload" && <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v12" /><path d="m7 8 5-5 5 5" /><path d="M5 17v2a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-2" /></svg>}
-                {m === "none" ? "None yet" : m === "link" ? "Link" : "Upload file"}
+                {m === "none" ? "None yet" : m === "link" ? "Video link" : "Upload file"}
               </button>
             ))}
           </div>
@@ -449,7 +442,7 @@ export default function Training() {
               {drawer?.step?.video_kind === "upload" && !f.file && (
                 <div className="flex items-center justify-between gap-2 rounded-lg border border-hairline px-3 py-2 text-xs">
                   <span className="truncate text-ink">
-                    <b>{drawer.step.video_filename}</b> <span className="text-ink-faint">· {fmtBytes(drawer.step.video_byte_size)}</span>
+                    <b>{drawer.step.video_filename}</b> <span className="text-ink-faint">· {mediaLabel(drawer.step.media_kind)} · {fmtBytes(drawer.step.video_byte_size)}</span>
                   </span>
                   <button type="button" className="shrink-0 font-semibold text-danger hover:underline" disabled={!!busy} onClick={removeVideo}>Remove</button>
                 </div>
@@ -460,12 +453,14 @@ export default function Training() {
                 </span>
                 {f.file
                   ? <span className="max-w-full truncate text-ink"><b>{f.file.name}</b> · {fmtBytes(f.file.size)}</span>
-                  : <span className="font-semibold text-ink">{drawer?.step?.video_kind === "upload" ? "Choose a replacement video…" : "Choose a video file"}</span>}
-                {!f.file && <span className="text-[0.68rem] text-ink-faint">mp4, webm, mov, m4v</span>}
-                <input type="file" accept="video/*,.mp4,.webm,.mov,.m4v" className="hidden"
+                  : <span className="font-semibold text-ink">{drawer?.step?.video_kind === "upload" ? "Choose a replacement file…" : "Choose a file"}</span>}
+                {!f.file && <span className="text-[0.68rem] text-ink-faint">Video · audio · image · PDF · Word · PowerPoint · Excel</span>}
+                <input type="file" accept={ACCEPT} className="hidden"
                        onChange={(e) => setF({ ...f, file: e.target.files?.[0] || null })} />
               </label>
-              <span className="block text-[0.7rem] text-ink-faint">Stored in the company bucket. Large files can take a minute to upload.</span>
+              <span className="block text-[0.7rem] text-ink-faint">
+                Videos, audio, images and PDFs open right on the page; Word, PowerPoint and Excel files are offered as a download. Large files can take a minute to upload.
+              </span>
             </div>
           )}
         </Field>

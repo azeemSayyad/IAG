@@ -1,11 +1,72 @@
 // Auth bridge to the EXISTING portal.
-// login.html writes access_token / refresh_token / ebRole into localStorage;
-// here we only READ them, so the new app shares the same session with zero
-// changes to the existing login flow.
+// login.html writes access_token / refresh_token / ebRole into localStorage and
+// this app shares that same session — same origin, same keys, no separate login.
+//
+// Access tokens are short-lived (JWT_ACCESS_TOKEN_EXPIRE_MINUTES / JWT_EXPIRES_IN,
+// 30 minutes by default). The portal's services/api.js has always swapped an
+// expired one for a fresh token via POST /auth/refresh before retrying; this app
+// did NOT, so the first request after expiry threw the user out to the login page
+// mid-session. refreshAccessToken() below is that missing half — lib/api.ts calls
+// it on any 401 and only gives up (clearing the session) if the refresh itself
+// fails, i.e. the 7-day refresh token has really run out.
 const PORTAL_LOGIN = "/login.html";
 
 export function getAccessToken(): string | null {
   return localStorage.getItem("access_token");
+}
+
+export function getRefreshToken(): string | null {
+  return localStorage.getItem("refresh_token");
+}
+
+function setTokens(access: string, refresh?: string | null): void {
+  localStorage.setItem("access_token", access);
+  if (refresh) localStorage.setItem("refresh_token", refresh);
+}
+
+/** Drop the session. Also clears the cached role so stale admin/agent state
+ *  can't drive role-gated UI after the session is gone (mirrors api.js). */
+export function clearSession(): void {
+  localStorage.removeItem("access_token");
+  localStorage.removeItem("refresh_token");
+  try { localStorage.removeItem("ebRole"); } catch { /* private mode */ }
+}
+
+/** Send the user to the portal login — never when already there, or a failed
+ *  auth call on the login page would reload it forever. */
+export function goToLogin(): void {
+  if ((window.location.pathname || "").toLowerCase().includes("/login")) return;
+  window.location.href = PORTAL_LOGIN;
+}
+
+// A page typically has several requests in flight (queue polling, counters, the
+// socket handshake), so an expired token produces a BURST of 401s. Without this
+// guard each one would fire its own refresh; they all share the single in-flight
+// call instead, and the rest simply await its result.
+let inflightRefresh: Promise<string | null> | null = null;
+
+/** Swap the refresh token for a new access token. Resolves to the new token, or
+ *  null when there's nothing to refresh with / the refresh was rejected. */
+export function refreshAccessToken(): Promise<string | null> {
+  if (inflightRefresh) return inflightRefresh;
+  const refresh = getRefreshToken();
+  if (!refresh) return Promise.resolve(null);
+
+  inflightRefresh = fetch("/api/v1/auth/refresh", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ refresh_token: refresh }),
+  })
+    .then((res) => (res.ok ? res.json() : null))
+    .then((data: { access_token?: string; refresh_token?: string } | null) => {
+      if (!data?.access_token) return null;
+      setTokens(data.access_token, data.refresh_token);
+      return data.access_token;
+    })
+    .catch(() => null)               // offline / network blip — treat as "no new token"
+    .finally(() => { inflightRefresh = null; });
+
+  return inflightRefresh;
 }
 
 export function getRole(): string | null {
@@ -85,7 +146,6 @@ export function ensureAuth(): void {
 }
 
 export function logout(): void {
-  localStorage.removeItem("access_token");
-  localStorage.removeItem("refresh_token");
+  clearSession();
   window.location.href = PORTAL_LOGIN;
 }

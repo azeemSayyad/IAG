@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { api } from "../lib/api";
-import { getAccessToken } from "../lib/auth";
+import { api, apiUpload } from "../lib/api";
 
 /*
  * LeadsTools — a native-React copy of the three Upload-Leads admin sections
@@ -22,23 +21,10 @@ import { getAccessToken } from "../lib/auth";
  * mode — no hardcoded colours.
  */
 
-// Multipart upload — the JSON api() wrapper forces Content-Type: application/json,
-// which breaks FormData. Mirror __ebAPI.upload: same /api/v1 base + Bearer token,
-// no JSON content-type (the browser sets the multipart boundary).
-async function uploadForm<T = unknown>(path: string, fd: FormData): Promise<T> {
-  const token = getAccessToken();
-  const headers: Record<string, string> = {};
-  if (token) headers["Authorization"] = `Bearer ${token}`;
-  const res = await fetch("/api/v1" + path, { method: "POST", headers, body: fd });
-  if (res.status === 401) { window.location.href = "/login.html"; throw new Error("Unauthorized"); }
-  if (!res.ok) {
-    let detail = "";
-    try { detail = (await res.json())?.detail || ""; } catch { /* non-JSON body */ }
-    throw new Error(detail || `${res.status} ${res.statusText}`);
-  }
-  const ct = res.headers.get("content-type") || "";
-  return (ct.includes("application/json") ? res.json() : res.text()) as Promise<T>;
-}
+// Per-upload limits for the direct-to-pool CSV (mirrors the backend:
+// pool_ingest.MAX_ROWS and routers/pool.MAX_UPLOAD_BYTES).
+const POOL_MAX_ROWS = 20000;
+const POOL_MAX_BYTES = 30 * 1024 * 1024;
 
 // One admin CSV upload that went STRAIGHT into the agent pool (no SMS).
 type PoolBatch = {
@@ -184,7 +170,7 @@ export default function LeadsTools() {
     fd.append("provider", draft.provider);
     setUploading(true);
     try {
-      const resp = await uploadForm<{ campaign?: { id?: string } }>("/ingestion/campaigns/upload", fd);
+      const resp = await apiUpload<{ campaign?: { id?: string } }>("/ingestion/campaigns/upload", fd);
       const id = resp?.campaign?.id;
       if (id) setMeta(m => ({ ...m, [id]: { message: cleanMsg, provider: draft.provider } }));
       showToast("Campaign created: " + draft.file.name, "accent");
@@ -252,14 +238,16 @@ export default function LeadsTools() {
     inp.addEventListener("change", (e) => {
       const f = (e.target as HTMLInputElement).files?.[0]; if (!f) return;
       if (!/\.csv$/i.test(f.name)) { showToast("Please choose a .csv file", "danger"); return; }
+      if (f.size > POOL_MAX_BYTES) { showToast(`That file is ${(f.size / 1048576).toFixed(1)} MB — the limit is 30 MB per upload. Split it into smaller files.`, "danger"); return; }
       const rd = new FileReader();
       rd.onload = () => {
         const lines = String(rd.result || "").split(/\r?\n/).filter(l => l.trim());
         const rows = Math.max(0, lines.length - 1);
         if (!rows) { showToast("That file has no rows under the header", "danger"); return; }
+        if (rows > POOL_MAX_ROWS) { showToast(`That file has ${rows.toLocaleString()} rows — the limit is 20,000 per upload. Split it into smaller files.`, "danger"); return; }
         setPoolConfirm({ file: f, rows });
       };
-      rd.readAsText(f.slice(0, 5 * 1024 * 1024)); // a count only needs the first few MB
+      rd.readAsText(f); // whole file: the row-limit check needs the real count
     });
     inp.click();
   }, [showToast]);
@@ -268,7 +256,7 @@ export default function LeadsTools() {
     setPoolConfirm(null); setPoolBusy(true);
     const fd = new FormData(); fd.append("file", c.file); fd.append("name", c.file.name);
     try {
-      const r = await uploadForm<{ summary?: { imported: number; skipped_duplicates: number; skipped_dnc: number; failed: number } }>("/sms/pool/upload", fd);
+      const r = await apiUpload<{ summary?: { imported: number; skipped_duplicates: number; skipped_dnc: number; failed: number } }>("/sms/pool/upload", fd);
       const sm = r?.summary; const skipped = sm ? sm.skipped_duplicates + sm.skipped_dnc + sm.failed : 0;
       showToast(`${(sm?.imported || 0).toLocaleString()} leads added to the agent pool${skipped ? ` · ${skipped} skipped` : ""}`, "accent");
     } catch (e) { showToast((e as Error)?.message || "Upload failed", "danger"); }
@@ -487,6 +475,7 @@ export default function LeadsTools() {
               <span className="rounded-full bg-success/15 px-2.5 py-0.5 text-[0.68rem] font-bold tracking-wide text-success">NO SMS SENT</span>
             </div>
             <p className="mt-1 text-[0.8125rem] text-ink-muted">Upload a list and it goes straight to the agent queue. Nobody is texted — agents are handed each person one at a time and call them from the details on the card.</p>
+            <p className="mt-0.5 text-xs text-ink-faint">Limits: up to <b>20,000 rows</b> and <b>30 MB</b> per CSV. Needs a name and a phone column — every other column is shown to the agent.</p>
           </div>
           <button type="button" onClick={pickPoolFile} disabled={poolBusy} className="inline-flex h-9 items-center rounded-lg border-[1.5px] border-accent bg-white px-4 text-sm font-semibold text-accent hover:bg-accent/5 disabled:opacity-65">
             {poolBusy ? "Adding to pool…" : "+ Upload CSV to agent pool"}
