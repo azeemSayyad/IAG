@@ -70,6 +70,14 @@ html[data-mode="dark"] .recharts-tooltip-label {
     repeating-linear-gradient(135deg, var(--n96) 0 10px, var(--n98) 10px 20px);
 }
 .tr-video { box-shadow: 0 18px 40px -12px rgba(26, 31, 42, 0.35); }
+.tr-audio {
+  background:
+    radial-gradient(70% 140% at 0% 50%, rgba(var(--accent-rgb), 0.14), transparent 60%),
+    var(--n98);
+}
+html[data-mode="dark"] .tr-audio { background: radial-gradient(70% 140% at 0% 50%, rgba(var(--accent-rgb), 0.2), transparent 60%), rgba(255,255,255,0.04); }
+html[data-mode="dark"] .tr-video figcaption,
+html[data-mode="dark"] .tr-video > div.border-t { background: rgba(255,255,255,0.04); }
 /* Saving/uploading veil over the Training editor drawer (the drawer body is
    position:relative-free, so this sits on the scrolling content wrapper). */
 .drawer-busy { background: rgba(255, 255, 255, 0.82); backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); }

@@ -201,16 +201,17 @@ def evaluate_deal(
     if not agent:
         return Decision(NOT_APPROVED, "Agent does not exist for this tenant")
 
+    # Licensing does NOT gate the sale. A brand-new agent with nothing on file can
+    # still log and submit a deal and have it come back APPROVED — the state license
+    # and the carrier appointment are looked up only so that what was (or wasn't) on
+    # file is recorded on the decision and its approval log for compliance to chase.
     license_row = _active_license_query(db, tenant_id, agent_id, state, as_of).first()
-    if not license_row:
-        return Decision(NOT_APPROVED, f"Agent does not have an active state license for {state}")
-
-    # Approval is based on the agent's active STATE LICENSE only: licensed in the
-    # deal's state -> APPROVED, not licensed -> NOT_APPROVED (handled above). The
-    # carrier appointment is still looked up and recorded on the decision for
-    # reference, but it no longer blocks the deal.
     appointment = _active_appointment_query(db, tenant_id, agent_id, carrier, state, as_of).first()
-    note = f"Active {state} license found" + ("" if appointment else f" (no {carrier} appointment on file)")
+    note = f"Active {state} license found" if license_row else f"No active {state} license on file"
+    if not appointment:
+        note += f" (no {carrier} appointment on file)"
+    if not license_row:
+        note += " - approved anyway; licensing is not enforced at submission"
     return Decision(APPROVED, note, appointment, license_row)
 
 

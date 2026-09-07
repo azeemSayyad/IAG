@@ -86,7 +86,9 @@ def test_evaluate_deal_approves_exact_active_carrier_state():
     assert "Active NV license found" in decision.reason
 
 
-def test_evaluate_deal_blocks_missing_state_license():
+def test_evaluate_deal_approves_without_any_state_license():
+    # Licensing does not gate the sale: a brand-new agent with no license on file
+    # still gets an APPROVED deal, with the gap recorded in the reason.
     tenant_id, agent_id, agent, _, appointment = make_rows()
     db = FakeDB({
         Agent: agent,
@@ -96,8 +98,38 @@ def test_evaluate_deal_blocks_missing_state_license():
 
     decision = services.evaluate_deal(db, tenant_id, agent_id, "Cigna", "NV")
 
+    assert decision.decision == services.APPROVED
+    assert "No active NV license on file" in decision.reason
+    assert decision.license is None
+
+
+def test_evaluate_deal_approves_agent_with_nothing_on_file():
+    # The new-agent case from the portal: no license AND no appointment.
+    tenant_id, agent_id, agent, _, _ = make_rows()
+    db = FakeDB({
+        Agent: agent,
+        AgentStateLicense: None,
+        AgentCarrierAppointment: None,
+    })
+
+    decision = services.evaluate_deal(db, tenant_id, agent_id, "Cigna", "NV")
+
+    assert decision.decision == services.APPROVED
+    assert "no Cigna appointment on file" in decision.reason
+
+
+def test_evaluate_deal_still_rejects_an_unknown_agent():
+    tenant_id, agent_id, _, license_row, appointment = make_rows()
+    db = FakeDB({
+        Agent: None,
+        AgentStateLicense: license_row,
+        AgentCarrierAppointment: appointment,
+    })
+
+    decision = services.evaluate_deal(db, tenant_id, agent_id, "Cigna", "NV")
+
     assert decision.decision == services.NOT_APPROVED
-    assert "active state license" in decision.reason
+    assert "Agent does not exist" in decision.reason
 
 
 def test_evaluate_deal_approves_with_license_even_without_appointment():

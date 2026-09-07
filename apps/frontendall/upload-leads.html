@@ -650,6 +650,7 @@ html[data-mode="dark"] .sb-brand-logo{background:#FFFFFF;border-radius:8px;paddi
           <span style="font-size:.68rem;font-weight:700;padding:3px 9px;border-radius:999px;color:#0F766E;background:#CCFBF1;letter-spacing:.02em">NO SMS SENT</span>
         </div>
         <div style="font-size:.82rem;color:#64748B">Upload a list and it goes straight to the SMS agent queue. Nobody is texted — agents are handed each person one at a time and call them from the details on the card.</div>
+        <div style="font-size:.78rem;color:#94A3B8;margin-top:3px">Limits: up to <b>20,000 rows</b> and <b>30 MB</b> per CSV. Needs a name and a phone column — every other column is shown to the agent.</div>
       </div>
       <button id="poolAddBtn" type="button" style="height:38px;padding:0 16px;border-radius:9px;border:1.5px solid var(--accent);background:#fff;color:var(--accent);font:600 .85rem inherit;cursor:pointer;white-space:nowrap">+ Upload CSV to agent pool</button>
     </div>
@@ -1291,17 +1292,19 @@ html[data-mode="dark"] .sb-brand-logo{background:#FFFFFF;border-radius:8px;paddi
     inp.addEventListener('change', function(e){
       var f=e.target.files&&e.target.files[0]; if(!f) return;
       if(!/\.csv$/i.test(f.name)){ toast('Please choose a .csv file','danger'); return; }
+      if(f.size>30*1024*1024){ toast('That file is '+fmtSize(f.size)+' — the limit is 30 MB per upload. Split it into smaller files.','danger'); return; }
       var rd=new FileReader();
       rd.onload=function(){
         var text=String(rd.result||''); var lines=text.split(/\r?\n/).filter(function(l){ return l.trim(); });
         var rows=Math.max(0, lines.length-1);
         if(!rows){ toast('That file has no rows under the header','danger'); return; }
+        if(rows>20000){ toast('That file has '+rows.toLocaleString()+' rows — the limit is 20,000 per upload. Split it into smaller files.','danger'); return; }
         poolPending=f;
         $('#poolConfirmCount').textContent=rows.toLocaleString();
         $('#poolConfirmFile').textContent=f.name+' · '+fmtSize(f.size);
         $('#poolConfirm').style.display='flex';
       };
-      rd.readAsText(f.slice(0, 5*1024*1024)); // a count only needs the first few MB
+      rd.readAsText(f); // whole file: the row-limit check needs the real count
     });
     inp.click();
   });

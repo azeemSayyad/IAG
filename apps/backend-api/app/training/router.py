@@ -36,8 +36,82 @@ router = APIRouter(prefix="/training", tags=["training"])
 
 _require_admin = require_role("tenant_admin", "super_admin", "admin")
 
-_VIDEO_EXTS = (".mp4", ".webm", ".mov", ".m4v", ".ogv", ".mkv")
 _VIDEO_MAX_BYTES = 2 * 1024 * 1024 * 1024  # 2 GB — a long screen recording
+
+# What a step's uploaded file can be, and how the page should show it. The DB
+# columns are still named video_* (the first version was video-only); the
+# `media_kind` in the response is what the UI branches on.
+_MEDIA_EXTS = {
+    "video": (".mp4", ".webm", ".mov", ".m4v", ".ogv", ".mkv"),
+    "audio": (".mp3", ".m4a", ".wav", ".ogg", ".oga", ".aac", ".flac"),
+    "image": (".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".heic"),
+    "pdf": (".pdf",),
+    "doc": (".doc", ".docx", ".rtf", ".txt", ".md"),
+    "slides": (".ppt", ".pptx", ".key"),
+    "sheet": (".xls", ".xlsx", ".csv"),
+}
+_MEDIA_MIME_PREFIX = {"video/": "video", "audio/": "audio", "image/": "image"}
+_MEDIA_MIME_EXACT = {
+    "application/pdf": "pdf",
+    "application/msword": "doc",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "doc",
+    "application/vnd.ms-powerpoint": "slides",
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation": "slides",
+    "application/vnd.ms-excel": "sheet",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "sheet",
+    "text/csv": "sheet",
+    "text/plain": "doc",
+}
+
+
+def media_kind_for(filename: Optional[str], content_type: Optional[str]) -> Optional[str]:
+    name = (filename or "").lower()
+    for kind, exts in _MEDIA_EXTS.items():
+        if name.endswith(exts):
+            return kind
+    ctype = (content_type or "").lower().split(";")[0].strip()
+    if ctype in _MEDIA_MIME_EXACT:
+        return _MEDIA_MIME_EXACT[ctype]
+    for prefix, kind in _MEDIA_MIME_PREFIX.items():
+        if ctype.startswith(prefix):
+            return kind
+    return None
+
+
+# Browsers routinely hand us nothing, or a bare application/octet-stream, for
+# office files (and Safari for .mov). We answer uploads with X-Content-Type-Options:
+# nosniff, so an octet-stream reply makes Chrome refuse to show a PDF in the
+# iframe or an image in <img> — the file downloads or the frame sits blank.
+# Hence: the extension decides the type whenever the upload's own is unhelpful.
+_EXT_MIME = {
+    ".mp4": "video/mp4", ".webm": "video/webm", ".mov": "video/quicktime",
+    ".m4v": "video/x-m4v", ".ogv": "video/ogg", ".mkv": "video/x-matroska",
+    ".mp3": "audio/mpeg", ".m4a": "audio/mp4", ".wav": "audio/wav",
+    ".ogg": "audio/ogg", ".oga": "audio/ogg", ".aac": "audio/aac", ".flac": "audio/flac",
+    ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif",
+    ".webp": "image/webp", ".svg": "image/svg+xml", ".heic": "image/heic",
+    ".pdf": "application/pdf",
+    ".doc": "application/msword",
+    ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ".rtf": "application/rtf", ".txt": "text/plain", ".md": "text/markdown",
+    ".ppt": "application/vnd.ms-powerpoint",
+    ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    ".xls": "application/vnd.ms-excel",
+    ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    ".csv": "text/csv",
+}
+
+
+def content_type_for(filename: Optional[str], content_type: Optional[str]) -> str:
+    """The MIME type to store and serve a step's file as."""
+    ctype = (content_type or "").lower().split(";")[0].strip()
+    if ctype and ctype != "application/octet-stream":
+        return ctype
+    name = (filename or "").lower()
+    for ext, mime in _EXT_MIME.items():
+        if name.endswith(ext):
+            return mime
+    return "application/octet-stream"
 
 
 def _audit(db: Session, tenant_id: str, user: User, action: str, step_id, details: dict) -> None:
@@ -75,6 +149,7 @@ def _to_response(s: TrainingStep) -> TrainingStepResponse:
     out = TrainingStepResponse.model_validate(s)
     if s.video_kind == "upload":
         out.video_src = f"/api/v1/training/steps/{s.id}/video"
+        out.media_kind = media_kind_for(s.video_filename, s.video_content_type) or "file"
     return out
 
 
@@ -214,28 +289,32 @@ async def upload_step_video(
     user: User = Depends(_require_admin),
 ):
     s = _own(db, tenant_id, step_id)
-    fname = (file.filename or "video.mp4").strip()
+    fname = (file.filename or "file").strip()
     ctype = (file.content_type or "").lower()
-    if not (ctype.startswith("video/") or fname.lower().endswith(_VIDEO_EXTS)):
-        raise HTTPException(status_code=415, detail="Please upload a video file (mp4, webm, mov…).")
+    kind = media_kind_for(fname, ctype)
+    if not kind:
+        raise HTTPException(
+            status_code=415,
+            detail="Please upload a video, audio, image, PDF, Word, PowerPoint or Excel file.",
+        )
     raw = await file.read()
     if not raw:
         raise HTTPException(status_code=400, detail="The file is empty.")
     if len(raw) > _VIDEO_MAX_BYTES:
-        raise HTTPException(status_code=413, detail="Video is too large (max 2 GB).")
+        raise HTTPException(status_code=413, detail="File is too large (max 2 GB).")
 
     _clear_upload(s)
     s.video_kind = "upload"
     s.video_url = None
     s.video_filename = fname[:255]
-    s.video_content_type = (ctype or "video/mp4")[:100]
+    s.video_content_type = content_type_for(fname, ctype)[:100]
     s.video_byte_size = len(raw)
 
     stored_to_s3 = False
     from app.calls.s3_storage import s3_storage
     if s3_storage.configured():
         try:
-            ext = (fname.rsplit(".", 1)[-1] if "." in fname else "mp4").lower()[:8] or "mp4"
+            ext = (fname.rsplit(".", 1)[-1] if "." in fname else "bin").lower()[:8] or "bin"
             key = f"training-videos/{tenant_id}/{uuid4()}.{ext}"
             out = s3_storage.upload_bytes(raw, key, content_type=s.video_content_type)
             s.video_storage, s.video_s3_bucket, s.video_s3_key = "s3", out["bucket"], out["key"]
@@ -297,23 +376,36 @@ def _user_from_header_or_query(
 def stream_step_video(
     step_id: UUID,
     request: Request,
+    download: bool = Query(False, description="Force a download instead of inline display"),
     db: Session = Depends(get_db),
     user: User = Depends(_user_from_header_or_query),
 ):
+    """Serve a step's uploaded file (video, audio, image, PDF, document…)."""
     s = _own(db, str(user.tenant_id), step_id)
     if s.video_kind != "upload":
-        raise HTTPException(status_code=404, detail="This step has no uploaded video")
+        raise HTTPException(status_code=404, detail="This step has no uploaded file")
     if s.video_storage == "s3" and s.video_s3_key:
         from app.calls.s3_storage import s3_storage
         url = s3_storage.signed_url(s.video_s3_key)
         if not url:
-            raise HTTPException(status_code=404, detail="Video is unavailable")
+            raise HTTPException(status_code=404, detail="File is unavailable")
         return RedirectResponse(url)
 
     data = bytes(s.video_data or b"")
     total = len(data)
-    ctype = s.video_content_type or "video/mp4"
-    base_headers = {"Accept-Ranges": "bytes", "Cache-Control": "private, max-age=3600"}
+    ctype = content_type_for(s.video_filename, s.video_content_type)
+    safe_name = (s.video_filename or "file").replace('"', "")
+    base_headers = {
+        "Accept-Ranges": "bytes",
+        "Cache-Control": "private, max-age=3600",
+        "Content-Disposition": f'{"attachment" if download else "inline"}; filename="{safe_name}"',
+    }
+    # An SVG is a document, not just a picture: served inline from our own origin,
+    # a script inside one would run as us. Sandbox it (bare directive = unique
+    # origin, scripts off). Only DB-served files need this — S3 files come back
+    # from the bucket's own origin.
+    if "svg" in ctype:
+        base_headers["Content-Security-Policy"] = "sandbox"
 
     # Byte ranges so the player can seek (and Safari, which insists on 206).
     rng = request.headers.get("range")

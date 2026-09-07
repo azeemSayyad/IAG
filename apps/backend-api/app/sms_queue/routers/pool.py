@@ -20,7 +20,10 @@ router = APIRouter(prefix="/sms/pool", tags=["sms-pool"])
 _require_admin = require_role("tenant_admin", "super_admin")
 _require_manager = require_role("manager", "head", "tenant_admin", "admin", "super_admin")
 
-MAX_UPLOAD_BYTES = 15 * 1024 * 1024
+# Per-upload limits. Rows are capped in pool_ingest.MAX_ROWS (20,000); the file
+# size here. /sms/pool/upload is exempt from the global 10 MB request cap in
+# app/core/security_middleware.py so this limit is the one that applies.
+MAX_UPLOAD_BYTES = 30 * 1024 * 1024
 
 
 async def _flush(events: list[dict]) -> None:
@@ -45,7 +48,7 @@ async def upload(
         raise HTTPException(status_code=400, detail="File must be a CSV")
     raw = await file.read()
     if len(raw) > MAX_UPLOAD_BYTES:
-        raise HTTPException(status_code=413, detail="File is too large (15 MB max)")
+        raise HTTPException(status_code=413, detail="File is too large — up to 30 MB per upload.")
     try:
         content = raw.decode("utf-8-sig")  # strips a leading BOM (Excel / Sheets exports)
     except UnicodeDecodeError:

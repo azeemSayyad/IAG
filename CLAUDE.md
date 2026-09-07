@@ -232,6 +232,10 @@ that table and is agnostic about how a row got there. Two producers:
    CSV row is stored in `sms_leads.details` (`{fields:[[label,value],…], address}`)
    and shown on the offer popup / accepted view (`components/LeadDetails.tsx`).
    Each upload is an `sms_pool_batches` row so it can be removed as a unit.
+   Limits: **20,000 rows** (`pool_ingest.MAX_ROWS`) and **30 MB**
+   (`routers/pool.MAX_UPLOAD_BYTES`); the route is on the security middleware's
+   `large_upload_paths` so the global 10 MB body cap doesn't apply. The UI checks
+   both client-side and shows the limits under the section title.
 
 Rules that keep #2 safe — don't undo them:
 - The linked `leads` rows use `pacing_status='pooled'` (NOT `'held'`) so

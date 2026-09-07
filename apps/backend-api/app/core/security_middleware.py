@@ -66,6 +66,7 @@ class SecurityMiddleware(BaseHTTPMiddleware):
             "/compliance/deals/recording",
             "/ingestion/campaigns/upload",
             "/training/steps",  # training video uploads (admin-only, can be hundreds of MB)
+            "/sms/pool/upload",  # direct-to-pool CSV (admin-only; its own 30 MB cap in routers/pool.py)
         ),
     ):
         super().__init__(app)
