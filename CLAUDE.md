@@ -146,6 +146,23 @@ must be added to the prefs-extras dark block or they keep their light styling in
 dark mode. The **sms-ui SPA has its own** dark mode (Tailwind / its index.css) —
 audit BOTH codebases for any theme change.
 
+### Sessions — BOTH API layers must refresh the token
+Access tokens are short-lived (`JWT_EXPIRES_IN` / `JWT_ACCESS_TOKEN_EXPIRE_MINUTES`,
+30 min by default); refresh tokens last 7 days. There are **two** API layers and
+each needs its own refresh-on-401, or users get silently thrown back to the login
+page mid-session once the access token ages out:
+1. `apps/frontendall/services/api.js` — `handleRefresh()` (always had it).
+2. `apps/sms-ui/src/lib/api.ts` — `authedFetch()`, added later; it POSTs
+   `/auth/refresh` via `refreshAccessToken()` in `lib/auth.ts`, replays the
+   request, and only clears the session + redirects if the refresh itself fails.
+   `refreshAccessToken()` keeps ONE in-flight call, because a page load fires
+   ~8 requests at once and each would otherwise trigger its own refresh.
+Anything doing a raw `fetch` must go through `authedFetch`/`apiUpload`, not
+`fetch` + `getAccessToken()` — that was how the multipart uploaders each grew
+their own "401 → /login.html" line. `lib/socket.ts` passes `auth` as a callback
+so reconnects re-read the current token rather than the one from page load.
+Regression test: `.localpreview/verify-session-refresh.mjs` (git-ignored).
+
 ### The sidebar has THREE sources — check all three for any nav change
 1. Static `<a class="sb-item" href="…">` blocks hardcoded in each `.html` page.
 2. **`prefs-extras.js`** rewrites the nav at runtime: `inject*Link()` adds items
