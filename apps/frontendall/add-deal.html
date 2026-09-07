@@ -20,6 +20,17 @@
   /* Required-field marker — every field except Apt / Unit # and Social */
   .req{color:#A3525C;font-weight:800}
   .opt{font-weight:600;color:#94a3b8;font-size:.7rem;margin-left:4px}
+  /* Date of birth — typed as MM/DD/YYYY, with a calendar button that opens the
+     native picker (the 1px transparent date input it is anchored to). */
+  .dob-wrap{position:relative}
+  .dob-wrap .ctl{padding-right:44px}
+  .dob-picker{position:absolute;right:14px;bottom:2px;width:1px;height:1px;padding:0;margin:0;border:0;opacity:0;pointer-events:none}
+  .dob-cal{position:absolute;right:5px;top:50%;transform:translateY(-50%);display:grid;place-items:center;width:34px;height:34px;padding:0;border:none;border-radius:8px;background:transparent;color:var(--text-faint);cursor:pointer;transition:color 140ms var(--ease),background 140ms var(--ease)}
+  .dob-cal:hover{color:var(--c);background:var(--c-soft)}
+  .dob-cal:focus-visible{outline:2px solid var(--c);outline-offset:1px}
+  .dob-cal svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+  .dob-hint{margin:0;font-size:.75rem;font-weight:600;color:#A3525C}
+  html[data-mode="dark"] .dob-hint{color:#F2A0A9}
   /* Attached-file rows (call recordings + consent forms) are built with inline
      light styles, which prefs-extras' global dark block doesn't reach — recolour
      them here so both lists read correctly in dark mode. */
@@ -156,7 +167,7 @@
     <form class="form-grid" autocomplete="off" novalidate>
       <div class="field"><label class="field-label">First name <span class="req" title="Required">*</span></label><input class="ctl" data-f="first" type="text" placeholder="Maria"/></div>
       <div class="field"><label class="field-label">Last name <span class="req" title="Required">*</span></label><input class="ctl" data-f="last" type="text" placeholder="Rodriguez"/></div>
-      <div class="field"><label class="field-label">Date of birth <span class="req" title="Required">*</span></label><input class="ctl" data-f="dob" type="date"/></div>
+      <div class="field"><label class="field-label">Date of birth <span class="req" title="Required">*</span></label><div class="dob-wrap"><input class="ctl" data-f="dob" type="text" inputmode="numeric" autocomplete="bday" maxlength="10" placeholder="MM/DD/YYYY"/><input class="dob-picker" type="date" tabindex="-1" aria-hidden="true"/><button class="dob-cal" type="button" title="Pick from a calendar" aria-label="Pick the date of birth from a calendar"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg></button></div><p class="dob-hint" hidden></p></div>
       <div class="field"><label class="field-label">Phone <span class="req" title="Required">*</span></label><input class="ctl" data-f="phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="(555) 123-4567" required aria-required="true"/></div>
       <div class="field" style="grid-column:1/-1"><label class="field-label">Address <span class="req" title="Required">*</span></label><input class="ctl" data-f="address" type="text" autocomplete="address-line1" placeholder="102 North Church Avenue"/></div>
       <div class="field" style="grid-column:1/-1"><label class="field-label">Apt / Unit # <span class="opt">optional</span></label><input class="ctl" data-f="apartment" type="text" autocomplete="address-line2" placeholder="Apt, suite, unit (optional)"/></div>
@@ -328,6 +339,127 @@
     }catch(_){ /* leave the field editable if the profile can't be fetched */ }
   }
 
+  // ---- Date of birth -------------------------------------------------------
+  // A plain text field (not <input type="date">) so the agent can just type the
+  // digits — "01151990" — instead of tabbing through the native picker's locked
+  // month/day/year segments. The calendar button beside it still opens the native
+  // picker for anyone who prefers to click. dobToISO() converts what was typed to
+  // the yyyy-mm-dd the API expects.
+  const DOB_MIN_YEAR = 1900;
+  const DOB_INCOMPLETE = 'Enter the full date as MM/DD/YYYY.';
+  const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  function todayISO(){ const t=new Date(); return t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0'); }
+
+  // Digits only, MMDDYYYY, with the month and day clamped AS THEY ARE TYPED so an
+  // impossible month (34) or day (2323) can never be entered in the first place.
+  function dobMask(v){
+    let raw = String(v||'').replace(/[^\d\/.\-]/g,'').replace(/[.\-]/g,'/');
+    let d = '';
+    const parts = raw.split('/');
+    if(parts.length>1){
+      // A separator typed after a single digit closes that segment: "1/5/1990" -> 01/05/1990.
+      // Segments are only padded, never truncated — extra digits overflow into the
+      // next segment the same way they do when the whole date is typed unpunctuated.
+      for(let i=0;i<Math.min(parts.length,3);i++){
+        let seg = parts[i].replace(/\D/g,'');
+        if(i<2 && seg.length===1 && i<parts.length-1) seg='0'+seg;
+        d += seg;
+      }
+    } else d = raw.replace(/\D/g,'');
+    d = d.slice(0,8);
+    if(!d) return '';
+    // Month: a leading digit above 1 can only be a padded month (3 -> 03); two
+    // digits are clamped into 01-12.
+    let mo = d.slice(0,2), rest = d.slice(2);
+    if(mo.length===1){ if(+mo>1) mo='0'+mo; }
+    else if(+mo>12) mo='12';
+    else if(+mo===0) mo='01';
+    // Day: same idea, clamped into 01-31 (the real length of the month is checked
+    // by dobError once the year is known).
+    let da = rest.slice(0,2), yr = rest.slice(2,6);
+    if(da.length===1){ if(+da>3) da='0'+da; }
+    else if(da.length===2){ if(+da>31) da='31'; else if(+da===0) da='01'; }
+    const out = (mo+da+yr).slice(0,8);
+    if(out.length<=2) return out;
+    if(out.length<=4) return out.slice(0,2)+'/'+out.slice(2);
+    return out.slice(0,2)+'/'+out.slice(2,4)+'/'+out.slice(4);
+  }
+
+  // '' when the value is a usable date of birth, otherwise the reason why not.
+  function dobError(v){
+    const raw = String(v||'').trim();
+    if(!raw) return '';                                   // empty is the required-check's job
+    const d = raw.replace(/\D/g,'');
+    if(d.length<8) return DOB_INCOMPLETE;
+    const mm=+d.slice(0,2), dd=+d.slice(2,4), yy=+d.slice(4);
+    if(mm<1 || mm>12) return 'Month must be between 01 and 12.';
+    if(dd<1 || dd>31) return 'Day must be between 01 and 31.';
+    if(yy<DOB_MIN_YEAR) return 'Year must be '+DOB_MIN_YEAR+' or later.';
+    const iso = d.slice(4)+'-'+d.slice(0,2)+'-'+d.slice(2,4);
+    const t = new Date(iso+'T00:00:00');
+    // Rejects days the month does not have (02/31/1990 rolls over to March in JS).
+    if(t.getMonth()+1!==mm || t.getDate()!==dd) return MONTHS[mm-1]+' '+yy+' has no day '+dd+'.';
+    if(iso > todayISO()) return 'Date of birth cannot be in the future.';
+    return '';
+  }
+  function dobToISO(v){
+    const d = String(v||'').replace(/\D/g,'');
+    if(dobError(v) || d.length!==8) return '';
+    return d.slice(4)+'-'+d.slice(0,2)+'-'+d.slice(2,4);
+  }
+  function setDobHint(el, msg){
+    const field = el.closest('.field');
+    const hint = field && field.querySelector('.dob-hint');
+    if(hint){ hint.textContent = msg||''; hint.hidden = !msg; }
+    if(msg) markInvalid(el);
+    else { el.classList.remove('eb-invalid'); el.style.outline=''; }
+  }
+
+  wrap.addEventListener('input', function(e){
+    const el = e.target;
+    if(!el || !el.matches || !el.matches('[data-f="dob"]')) return;
+    const atEnd = el.selectionStart === el.value.length;
+    const pos = el.selectionStart;
+    const masked = dobMask(el.value);
+    if(masked !== el.value){
+      el.value = masked;
+      try{ const c = atEnd ? masked.length : Math.min(pos, masked.length); el.setSelectionRange(c, c); }catch(_){}
+    }
+    // Keep an already-shown error honest as the agent retypes — but never nag
+    // about a half-typed date; that one only appears once they leave the field.
+    const field = el.closest('.field'), hint = field && field.querySelector('.dob-hint');
+    if(hint && !hint.hidden){
+      const err = dobError(el.value);
+      setDobHint(el, err===DOB_INCOMPLETE ? '' : err);
+    }
+  });
+  // Validate once the agent leaves the field.
+  wrap.addEventListener('focusout', function(e){
+    const el = e.target;
+    if(!el || !el.matches || !el.matches('[data-f="dob"]')) return;
+    setDobHint(el, dobError(el.value));
+  });
+  // Calendar button -> native date picker, seeded with whatever is typed.
+  wrap.addEventListener('click', function(e){
+    const btn = e.target.closest && e.target.closest('.dob-cal');
+    if(!btn) return;
+    const field = btn.closest('.field');
+    const txt = field.querySelector('[data-f="dob"]'), pk = field.querySelector('.dob-picker');
+    if(!pk) return;
+    pk.min = DOB_MIN_YEAR+'-01-01';
+    pk.max = todayISO();
+    pk.value = dobToISO(txt.value) || '';
+    try{ pk.showPicker(); }catch(_){ pk.focus(); pk.click(); }
+  });
+  wrap.addEventListener('change', function(e){
+    const pk = e.target;
+    if(!pk || !pk.classList || !pk.classList.contains('dob-picker') || !pk.value) return;
+    const [y,m,d] = pk.value.split('-');
+    const txt = pk.closest('.field').querySelector('[data-f="dob"]');
+    txt.value = m+'/'+d+'/'+y;
+    setDobHint(txt, dobError(txt.value));
+  });
+
   function collectPerson(card){
     const get = f => (card.querySelector('[data-f="'+f+'"]')||{}).value || '';
     const products = [];
@@ -337,7 +469,7 @@
       const pf = f => (p.querySelector('[data-pf="'+f+'"]')||{}).value || '';
       products.push({ product: cb.dataset.prod, carrier: pf('carrier'), tier: pf('tier') });
     });
-    return { first: get('first').trim(), last: get('last').trim(), dob: get('dob'), phone: get('phone').trim(),
+    return { first: get('first').trim(), last: get('last').trim(), dob: dobToISO(get('dob')), dobRaw: get('dob').trim(), phone: get('phone').trim(),
              address: get('address').trim(), apartment: get('apartment').trim(), city: get('city').trim(),
              zip: get('zip').trim(), gender: get('gender'),
              marital: get('marital'), tobacco: get('tobacco'), income: get('income').trim(),
@@ -495,7 +627,9 @@
       req(!p.last,'Last name','last');
       // Date of birth is rendered for Person 1 only — added persons drop that
       // field (see addPerson), so only require it on the first person.
-      if(i===0) req(!p.dob,'Date of birth','dob');
+      // A typed-but-unparseable date (e.g. "13/45/1990") is called out as invalid
+      // rather than "missing", so the agent knows to fix it, not fill it.
+      if(i===0) req(!p.dob, p.dobRaw ? 'a valid Date of birth (MM/DD/YYYY)' : 'Date of birth', 'dob');
       req(!p.phone,'Phone','phone');
       req(!p.address,'Address','address');
       req(!p.city,'City','city');
