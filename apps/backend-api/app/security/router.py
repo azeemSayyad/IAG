@@ -23,7 +23,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.core.deps import get_tenant_id, get_current_active_user, require_role
+from app.core.deps import get_tenant_id, get_current_active_user, require_role, ADMIN_OR_HEAD
 from app.models.user import User
 from app.security.enhanced_audit import (
     get_audit_summary,
@@ -45,7 +45,7 @@ def audit_summary(
     days: int = Query(30, ge=1, le=365),
     db: Session = Depends(get_db),
     tenant_id: str = Depends(get_tenant_id),
-    current_user: User = Depends(require_role("tenant_admin", "super_admin")),
+    current_user: User = Depends(require_role(*ADMIN_OR_HEAD)),
 ):
     """Get audit summary."""
     return get_audit_summary(db, tenant_id, days)
@@ -56,7 +56,7 @@ def security_events(
     days: int = Query(7, ge=1, le=30),
     db: Session = Depends(get_db),
     tenant_id: str = Depends(get_tenant_id),
-    current_user: User = Depends(require_role("tenant_admin", "super_admin")),
+    current_user: User = Depends(require_role(*ADMIN_OR_HEAD)),
 ):
     """Get security events."""
     events = get_security_events(db, tenant_id, days)
@@ -68,7 +68,7 @@ def compliance_report(
     request: ComplianceReportRequest,
     db: Session = Depends(get_db),
     tenant_id: str = Depends(get_tenant_id),
-    current_user: User = Depends(require_role("tenant_admin", "super_admin")),
+    current_user: User = Depends(require_role(*ADMIN_OR_HEAD)),
 ):
     """Generate compliance report."""
     return get_compliance_report(db, tenant_id, request.start_date, request.end_date)

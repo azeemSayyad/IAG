@@ -209,14 +209,24 @@
       if (!nav || document.getElementById('sbSms')) return;
 
       // Role gating mirrors the backend + the React SMS shell (lib/auth):
-      //   Lead Manager   → agents + dev only  (the /sms/#/queue page)
+      //   Lead Manager   → agents + head + dev  (the /sms/#/queue page)
       //   SMS Manager    → manager-class + admin + dev
       //   SMS Monitoring → dev only
+      // This block MUST stay in step with sms-ui/src/lib/auth.ts, or the sidebar
+      // changes shape as you move between a static page and an SPA page.
       var role = (localStorage.getItem('ebRole') || '').toLowerCase();
       var isDev = role === 'dev';
+      var isHead = role === 'head';
       var canManager = ['manager', 'head', 'tenant_admin', 'admin', 'super_admin', 'dev'].indexOf(role) !== -1;
-      var canQueue = role === 'agent' || isDev;
+      // A Head Manager works leads alongside the agents, so it belongs here and
+      // NOT in the admin list below (the backend agrees — "head" is absent from
+      // queue_service.ADMIN_ROLES, the roles refused a queue session).
+      var canQueue = role === 'agent' || isHead || isDev;
+      // STRICT admin — Contacts only. A Head Manager is deliberately excluded.
       var isAdmin = ['tenant_admin', 'super_admin', 'admin', 'dev'].indexOf(role) !== -1;
+      // Admin-class INCLUDING a Head Manager: ordinary admin pages it shares.
+      // Mirrors isAdminClass() in the SPA and ADMIN_OR_HEAD on the backend.
+      var isAdminClass = isAdmin || isHead;
       // Owner/CEO only — deliberately TIGHTER than isAdmin (payroll is not
       // admin-visible). Mirrors isOwner() in sms-ui/src/lib/auth.ts and the
       // backend's require_role("super_admin") on /expenses.
@@ -229,15 +239,16 @@
       if (canManager) {
         items.push({ href: '/sms/#/manager', label: 'SMS Manager', svg: '<circle cx="9" cy="7" r="4"/><path d="M3 21c0-3.5 3-6 6-6s6 2.5 6 6"/><path d="M16 3.5a4 4 0 0 1 0 7.5"/><path d="M22 21c0-3-2-5-5-5.5"/>' });
       }
-      // Sales Dashboard (admin-only) is bundled into the SMS section, right under SMS Manager.
-      if (isAdmin) {
+      // Sales Dashboard (admin-class, Head Manager included) is bundled into the
+      // SMS section, right under SMS Manager.
+      if (isAdminClass) {
         items.push({ href: '/sms/#/sales-dashboard', label: 'Sales Dashboard', svg: '<path d="M3 3v18h18"/><path d="M7 15l4-6 4 4 5-7"/>' });
       }
       // DID Fleet capacity dashboard (admin-only) — bundled in the SMS section under
       // Sales Dashboard, mirroring its placement/gating. Unlike the SPA links above this
       // is a static portal page, so its href is did-fleet.html (it gets the active class
       // on that page via the `here` check below).
-      if (isAdmin) {
+      if (isAdminClass) {
         items.push({ href: 'did-fleet.html', label: 'DID Fleet', svg: '<path d="M4.9 16.1a9 9 0 0 1 0-8.2"/><path d="M19.1 7.9a9 9 0 0 1 0 8.2"/><path d="M7.8 13.4a5 5 0 0 1 0-2.8"/><path d="M16.2 10.6a5 5 0 0 1 0 2.8"/><circle cx="12" cy="12" r="1.6"/><path d="M12 13.6V21"/>' });
       }
       if (isDev) {

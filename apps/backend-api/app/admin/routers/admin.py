@@ -27,7 +27,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.core.deps import get_tenant_id, get_current_active_user, require_role
+from app.core.deps import get_tenant_id, get_current_active_user, require_role, ADMIN_OR_HEAD
 from app.models.user import User
 from app.auth.avatar import resolve_avatar_url
 from app.admin.services.campaigns import (
@@ -97,7 +97,7 @@ def create_campaign_endpoint(
     request: CampaignCreate,
     db: Session = Depends(get_db),
     tenant_id: str = Depends(get_tenant_id),
-    current_user: User = Depends(require_role("tenant_admin", "super_admin")),
+    current_user: User = Depends(require_role(*ADMIN_OR_HEAD)),
 ):
     """Create a new campaign."""
     campaign = create_campaign(db, tenant_id, request.model_dump())
@@ -151,7 +151,7 @@ def update_campaign_endpoint(
     request: CampaignUpdate,
     db: Session = Depends(get_db),
     tenant_id: str = Depends(get_tenant_id),
-    current_user: User = Depends(require_role("tenant_admin", "super_admin")),
+    current_user: User = Depends(require_role(*ADMIN_OR_HEAD)),
 ):
     """Update a campaign."""
     campaign = update_campaign(db, campaign_id, tenant_id, request.model_dump(exclude_unset=True))
@@ -165,7 +165,7 @@ def delete_campaign_endpoint(
     campaign_id: UUID,
     db: Session = Depends(get_db),
     tenant_id: str = Depends(get_tenant_id),
-    current_user: User = Depends(require_role("tenant_admin", "super_admin")),
+    current_user: User = Depends(require_role(*ADMIN_OR_HEAD)),
 ):
     """Delete a campaign."""
     if not delete_campaign(db, campaign_id, tenant_id):
@@ -283,10 +283,13 @@ def ai_objections(
 from app.core.security import hash_password
 from app.models.agent import Agent
 
-# IAG runs with exactly two roles: "agent" and "super_admin". The legacy
-# lead/manager/head/tenant_admin roles are still understood by the gates (so an
-# old row keeps working until it is reassigned) but can no longer be assigned.
-_ALLOWED_NEW_ROLES = {"agent", "super_admin"}
+# IAG runs with three roles: "agent", "head" (Head Manager) and "super_admin".
+# A Head Manager is an admin everywhere except company Expenses, Contacts and
+# editing the Training program, and unlike an admin it also works the SMS queue.
+# The legacy lead/manager/tenant_admin roles are still understood by the gates
+# (so an old row keeps working until it is reassigned) but can no longer be
+# assigned.
+_ALLOWED_NEW_ROLES = {"agent", "head", "super_admin"}
 
 
 def _assignable_roles(current_user: User) -> set[str]:
@@ -323,7 +326,7 @@ class UpdateUserRequest(BaseModel):
 def list_users(
     db: Session = Depends(get_db),
     tenant_id: str = Depends(get_tenant_id),
-    current_user: User = Depends(require_role("tenant_admin", "super_admin")),
+    current_user: User = Depends(require_role(*ADMIN_OR_HEAD)),
 ):
     """List all users in the tenant (admin only)."""
     q = db.query(User).filter(User.tenant_id == tenant_id, User.deleted_at.is_(None))
@@ -354,7 +357,7 @@ def create_user(
     request: CreateUserRequest,
     db: Session = Depends(get_db),
     tenant_id: str = Depends(get_tenant_id),
-    current_user: User = Depends(require_role("tenant_admin", "super_admin")),
+    current_user: User = Depends(require_role(*ADMIN_OR_HEAD)),
 ):
     """Create a system user (admin only) with a unique password."""
     role = (request.role or "agent").strip()
@@ -425,7 +428,7 @@ def set_user_password(
     request: SetPasswordRequest,
     db: Session = Depends(get_db),
     tenant_id: str = Depends(get_tenant_id),
-    current_user: User = Depends(require_role("tenant_admin", "super_admin")),
+    current_user: User = Depends(require_role(*ADMIN_OR_HEAD)),
 ):
     """Reset a user's password (admin only)."""
     if len(request.password or "") < 8:
@@ -446,7 +449,7 @@ def update_user(
     request: UpdateUserRequest,
     db: Session = Depends(get_db),
     tenant_id: str = Depends(get_tenant_id),
-    current_user: User = Depends(require_role("tenant_admin", "super_admin")),
+    current_user: User = Depends(require_role(*ADMIN_OR_HEAD)),
 ):
     """Update a user's role and/or status (admin only)."""
     user = db.query(User).filter(
@@ -489,7 +492,7 @@ def delete_user(
     user_id: UUID,
     db: Session = Depends(get_db),
     tenant_id: str = Depends(get_tenant_id),
-    current_user: User = Depends(require_role("tenant_admin", "super_admin")),
+    current_user: User = Depends(require_role(*ADMIN_OR_HEAD)),
 ):
     """Soft-delete a user (admin only). Also deactivates their Agent record so
     they stop receiving leads/booking."""
@@ -514,7 +517,7 @@ def delete_user(
 def list_agent_numbers(
     db: Session = Depends(get_db),
     tenant_id: str = Depends(get_tenant_id),
-    current_user: User = Depends(require_role("tenant_admin", "super_admin")),
+    current_user: User = Depends(require_role(*ADMIN_OR_HEAD)),
 ):
     """List agents with their assigned caller ID numbers (admin view)."""
     from app.models.agent import Agent
@@ -538,7 +541,7 @@ def set_caller_number(
     request: dict,
     db: Session = Depends(get_db),
     tenant_id: str = Depends(get_tenant_id),
-    current_user: User = Depends(require_role("tenant_admin", "super_admin")),
+    current_user: User = Depends(require_role(*ADMIN_OR_HEAD)),
 ):
     """Assign or change an agent's caller ID number (admin only).
 

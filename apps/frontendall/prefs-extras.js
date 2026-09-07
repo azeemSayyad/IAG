@@ -754,8 +754,7 @@
         // operator roles. admin/tenant_admin/super_admin + dev keep it.
         'html[data-role="agent"] a[href="applicant-inbox.html"],' +
         'html[data-role="lead"] a[href="applicant-inbox.html"],' +
-        'html[data-role="manager"] a[href="applicant-inbox.html"],' +
-        'html[data-role="head"] a[href="applicant-inbox.html"]{display:none !important}' +
+        'html[data-role="manager"] a[href="applicant-inbox.html"]{display:none !important}' +
         // Admin Inbox (agent↔admin in-app chat) is AGENT/dev only: hide it for
         // everyone else (the admin side reaches agents from their own Inbox).
         'html[data-role="lead"] a[href="admin-inbox.html"],' +
@@ -1207,7 +1206,7 @@
     // with org-wide totals. Inserted right after Dashboard in Workspaces.
     function injectAllDealsLink(){
       var role = localStorage.getItem('ebRole') || 'agent';
-      if(role !== 'admin' && role !== 'tenant_admin' && role !== 'super_admin' && role !== 'dev') return;
+      if(['admin','tenant_admin','super_admin','head','dev'].indexOf(role) === -1) return;
       var wsBody = document.querySelector('#sbWorkspaces .sb-group-body');
       if(!wsBody) return;
       if(wsBody.querySelector('a[href="all-deals.html"]')) return;
@@ -1237,7 +1236,7 @@
       var here = (location.pathname.split('/').pop() || '').toLowerCase();
       if(here !== 'all-deals.html') return;
       var role = localStorage.getItem('ebRole') || 'agent';
-      if(role !== 'admin' && role !== 'tenant_admin' && role !== 'super_admin' && role !== 'dev') location.replace('ask-the-brain.html');
+      if(['admin','tenant_admin','super_admin','head','dev'].indexOf(role) === -1) location.replace('ask-the-brain.html');
     }
 
     // ===== Page-level guard: DID Fleet is admin/dev only =====
@@ -1248,7 +1247,7 @@
       var here = (location.pathname.split('/').pop() || '').toLowerCase();
       if(here !== 'did-fleet.html') return;
       var role = localStorage.getItem('ebRole') || 'agent';
-      if(role !== 'admin' && role !== 'tenant_admin' && role !== 'super_admin' && role !== 'dev') location.replace('ask-the-brain.html');
+      if(['admin','tenant_admin','super_admin','head','dev'].indexOf(role) === -1) location.replace('ask-the-brain.html');
     }
 
     // ===== dev-only: ensure CEO Dashboard + Upload Leads appear on EVERY page =====
@@ -1738,7 +1737,7 @@
     // it's always present and in the same spot. Mirrors injectAllDealsLink.
     function injectHireesLink(){
       var role = localStorage.getItem('ebRole') || 'agent';
-      if(role !== 'admin' && role !== 'tenant_admin' && role !== 'super_admin' && role !== 'dev') return;
+      if(['admin','tenant_admin','super_admin','head','dev'].indexOf(role) === -1) return;
       var wsBody = document.querySelector('#sbWorkspaces .sb-group-body');
       if(!wsBody) return;
       if(wsBody.querySelector('a[href="hirees.html"]')) return;
@@ -1766,7 +1765,7 @@
     // it its canonical slot (right after Hirees) regardless.
     function injectApplicantInboxLink(){
       var role = localStorage.getItem('ebRole') || 'agent';
-      if(role !== 'admin' && role !== 'tenant_admin' && role !== 'super_admin' && role !== 'dev') return;
+      if(['admin','tenant_admin','super_admin','head','dev'].indexOf(role) === -1) return;
       var wsBody = document.querySelector('#sbWorkspaces .sb-group-body');
       if(!wsBody) return;
       if(wsBody.querySelector('a[href="applicant-inbox.html"]')) return;
@@ -1775,12 +1774,12 @@
       a.className = 'sb-item' + (here === 'applicant-inbox.html' ? ' active' : '');
       a.href = 'applicant-inbox.html';
       a.id = 'navApplicantInbox';
-      a.setAttribute('aria-label', 'Inbox');
+      a.setAttribute('aria-label', 'Applicant Inbox');
       a.innerHTML =
         '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">' +
           '<path d="M3 12h6l2 3h2l2-3h6"/><path d="M3 7l2 12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2l2-12"/><path d="M5 7l2-3h10l2 3"/>' +
         '</svg>' +
-        '<span class="sb-tip">Inbox</span>';
+        '<span class="sb-tip">Applicant Inbox</span>';
       var anchor = wsBody.querySelector('a[href="hirees.html"]');
       if(anchor && anchor.nextSibling) wsBody.insertBefore(a, anchor.nextSibling);
       else wsBody.appendChild(a);
@@ -1791,7 +1790,7 @@
       var here = (location.pathname.split('/').pop() || '').toLowerCase();
       if(here !== 'applicant-inbox.html') return;
       var role = localStorage.getItem('ebRole') || 'agent';
-      if(role !== 'admin' && role !== 'tenant_admin' && role !== 'super_admin' && role !== 'dev') location.replace('ask-the-brain.html');
+      if(['admin','tenant_admin','super_admin','head','dev'].indexOf(role) === -1) location.replace('ask-the-brain.html');
     }
 
     // ===== Inject "Admin Inbox" (agent↔admin in-app chat) for AGENTS/dev =====
@@ -1833,7 +1832,7 @@
     // page; normalizeWorkspaceOrder() gives it its canonical slot.
     function injectTrainingLink(){
       var role = localStorage.getItem('ebRole') || 'agent';
-      if(['agent','dev','admin','tenant_admin','super_admin'].indexOf(role) === -1) return;
+      if(['agent','dev','admin','tenant_admin','super_admin','head'].indexOf(role) === -1) return;
       var wsBody = document.querySelector('#sbWorkspaces .sb-group-body');
       if(!wsBody) return;
       if(wsBody.querySelector('a[href="/sms/#/training"]')) return;

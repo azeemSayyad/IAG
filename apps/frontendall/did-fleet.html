@@ -14,13 +14,13 @@
 // second layer (mirrors the admin-only guard used on all-deals.html).
 (function(){try{
   var role = localStorage.getItem('ebRole') || 'agent';
-  if(['admin','tenant_admin','super_admin','dev'].indexOf(role) === -1){
+  if(['admin','tenant_admin','super_admin','head','dev'].indexOf(role) === -1){
     location.replace('ask-the-brain.html');
   }
 }catch(e){}})();
 </script>
 <script src="i18n-dict.js?v=2"></script>
-<script src="prefs-extras.js?v=34"></script>
+<script src="prefs-extras.js?v=37"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
@@ -301,7 +301,7 @@ html[data-mode="dark"] .held-v{color:#E6989F}
 }
 </style>
 <script src="services/api.js?v=10"></script>
-<script src="services/error-boundary.js?v=22"></script>
+<script src="services/error-boundary.js?v=23"></script>
 </head>
 <body>
 

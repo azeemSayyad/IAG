@@ -10,9 +10,9 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
 <script src="brand.js?v=2"></script>
-<script src="prefs-extras.js?v=34"></script>
+<script src="prefs-extras.js?v=37"></script>
 <script src="services/api.js?v=10"></script>
-<script src="services/error-boundary.js?v=22"></script>
+<script src="services/error-boundary.js?v=23"></script>
 <style>
 :root{--bg:var(--n84);--card:#fff;--border:rgba(26,31,42,.08);--border-hover:rgba(26,31,42,.18);--border-soft:rgba(26,31,42,.06);
   --text:#2D3340;--strong:#1A1F2A;--muted:rgba(26,31,42,.62);--faint:rgba(26,31,42,.42);
@@ -386,7 +386,7 @@ html[data-mode="dark"] .hr-av{background:rgba(224,169,94,0.16);color:#E6B87E}
   var token = localStorage.getItem('access_token');
   if(!token){ location.replace('login.html'); return; }
   var role = localStorage.getItem('ebRole') || '';
-  var ADMIN = ['admin','tenant_admin','super_admin','dev'];
+  var ADMIN = ['admin','tenant_admin','super_admin','head','dev'];
   if(ADMIN.indexOf(role) === -1){ location.replace('dashboard.html'); return; }
 
   var api = window.__ebAPI;

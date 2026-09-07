@@ -100,8 +100,23 @@ export function isManager(): boolean {
 // require_role on /sales-dashboard). dev is included (sees everything).
 const ADMIN_ROLES = new Set(["tenant_admin", "admin", "super_admin", "dev"]);
 
+// STRICT admin. Deliberately does NOT include "head", because this is the check
+// behind the three things a Head Manager must not inherit:
+//   · the Contacts page
+//   · the edit controls on the Training program (it may read it, not change it)
+//   · "admins never work the queue" — a Head Manager DOES work the queue
+// For plain page/nav access parity with an admin, use isAdminClass() instead.
 export function isAdmin(): boolean {
   return ADMIN_ROLES.has(roleName());
+}
+
+// Admin-class INCLUDING "head" (Head Manager) — a Head Manager ranks with the
+// admins everywhere except the three carve-outs listed on isAdmin() above and
+// company Expenses (see isOwner). Mirrors ADMIN_OR_HEAD on the backend.
+const ADMIN_CLASS_ROLES = new Set([...ADMIN_ROLES, "head"]);
+
+export function isAdminClass(): boolean {
+  return ADMIN_CLASS_ROLES.has(roleName());
 }
 
 // Owner/CEO gate — the Expenses page and nothing else. Deliberately TIGHTER than
@@ -115,12 +130,15 @@ export function isOwner(): boolean {
 }
 
 // Per-page SMS visibility rules:
-//   - SMS Queue:      agents + dev only        (admin/manager-class do NOT see it)
+//   - SMS Queue:      agents + head + dev      (other admin-class do NOT see it)
 //   - SMS Manager:    manager-class + admin + dev
 //   - SMS Monitoring: dev only
 export function canSeeQueue(): boolean {
   const r = roleName();
-  return r === "agent" || r === "dev";
+  // "head" is here on purpose: a Head Manager works leads alongside the agents.
+  // The backend agrees — it is absent from queue_service.ADMIN_ROLES, the list
+  // of roles that are refused a queue session.
+  return r === "agent" || r === "dev" || r === "head";
 }
 export function canSeeManager(): boolean {
   return isManager();
@@ -128,9 +146,10 @@ export function canSeeManager(): boolean {
 export function canSeeMonitoring(): boolean {
   return isDev();
 }
-// Training: the agents it's for, plus admin-class (who edit it) and dev.
+// Training: the agents it's for, plus admin-class (who edit it), a Head Manager
+// (read-only — the edit controls key off the strict isAdmin) and dev.
 export function canSeeTraining(): boolean {
-  return roleName() === "agent" || isAdmin();
+  return roleName() === "agent" || isAdminClass();
 }
 
 // Where to send a user who lands on the SMS app root or a page they can't see.

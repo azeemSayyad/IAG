@@ -20,7 +20,7 @@ from sqlalchemy.orm import Session
 
 from app.calls.s3_storage import s3_storage
 from app.core.database import get_db
-from app.core.deps import get_current_active_user, require_role
+from app.core.deps import get_current_active_user, require_role, ADMIN_OR_HEAD
 from app.core.security import hash_password
 from app.models.agent import Agent
 from app.models.compliance import AgentStateLicense
@@ -34,7 +34,7 @@ from app.onboarding.signwell import AGREEMENT, W9, SignWellError, signwell
 router = APIRouter(prefix="/onboarding", tags=["onboarding"])
 
 # Admins who may review hirees. "dev" bypasses require_role automatically.
-_admin = require_role("tenant_admin", "super_admin", "admin")
+_admin = require_role(*ADMIN_OR_HEAD)
 
 def _applicant_label(h: "HireeOnboarding") -> str:
     return (h.full_legal_name or "").strip() or h.email or "An applicant"

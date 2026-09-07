@@ -8,7 +8,7 @@
 <link rel="apple-touch-icon" href="assets/apple-touch-icon.png"/>
 <script src="brand.js?v=2"></script>
 <script src="i18n-dict.js?v=2"></script>
-<script src="prefs-extras.js?v=34"></script>
+<script src="prefs-extras.js?v=37"></script>
 <script src="coach.js" defer></script>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
@@ -680,7 +680,7 @@ html[data-mode="dark"] .um-tbl tbody tr:hover td{background:rgba(255,255,255,.03
 html[data-mode="dark"] .um-tag.mut{background:rgba(255,255,255,.08);color:#C9CFD8}
 </style>
   <script src="services/api.js?v=10"></script>
-  <script src="services/error-boundary.js?v=22"></script>
+  <script src="services/error-boundary.js?v=23"></script>
 </head>
 <body>
 
@@ -1539,7 +1539,7 @@ html[data-mode="dark"] .um-tag.mut{background:rgba(255,255,255,.08);color:#C9CFD
         <div class="field"><label class="field-label" for="nuFirst">First name</label><input id="nuFirst" type="text"/></div>
         <div class="field"><label class="field-label" for="nuLast">Last name</label><input id="nuLast" type="text"/></div>
         <div class="field"><label class="field-label" for="nuEmail">Email</label><input id="nuEmail" type="email"/></div>
-        <div class="field"><label class="field-label" for="nuRole">Role</label><select id="nuRole"><option value="agent">Agent</option><option value="super_admin">Super Admin</option></select></div>
+        <div class="field"><label class="field-label" for="nuRole">Role</label><select id="nuRole"><option value="agent">Agent</option><option value="head">Head Manager</option><option value="super_admin">Super Admin</option></select></div>
         <div class="field"><label class="field-label" for="nuPhone">Personal phone <span class="opt">agents</span></label><input id="nuPhone" type="tel" placeholder="+1..."/></div>
         <div class="field"><label class="field-label" for="nuPass">Password</label><input id="nuPass" type="text" placeholder="min 8 characters"/></div>
       </div>
@@ -2775,10 +2775,10 @@ html[data-mode="dark"] .um-tag.mut{background:rgba(255,255,255,.08);color:#C9CFD
     if(!createBtn) return;
     var msg=document.getElementById('nuMsg'), list=document.getElementById('userList');
     function val(id){ var e=document.getElementById(id); return e?e.value.trim():''; }
-    // IAG has exactly two assignable roles. A user still on a legacy role
-    // (lead/manager/head/tenant_admin) shows that role as the selected option
-    // so the dropdown never lies — the admin can move them to Agent/Super Admin.
-    var ROLES=['agent','super_admin'];
+    // IAG has three assignable roles. A user still on a legacy role
+    // (lead/manager/tenant_admin) shows that role as the selected option so the
+    // dropdown never lies — the admin can move them onto one of these three.
+    var ROLES=['agent','head','super_admin'];
     // Only a dev can create/assign the "dev" role — add it to the dropdowns
     // (create + per-user edit) for dev logins only. Admins never see this option.
     if(role==='dev'){
@@ -2797,7 +2797,7 @@ html[data-mode="dark"] .um-tag.mut{background:rgba(255,255,255,.08);color:#C9CFD
     function avatarInner(name,url){ return url ? '<img src="'+esc(url)+'" alt=""/>' : esc(initials(name).toUpperCase()); }
     function fmtDate(iso){ if(!iso) return '—'; var d=new Date(iso); if(isNaN(d)) return '—'; return ('0'+(d.getMonth()+1)).slice(-2)+'/'+('0'+d.getDate()).slice(-2)+'/'+d.getFullYear(); }
     function money(v){ if(v==null||v==='') return '—'; var n=Number(v); if(isNaN(n)) return '—'; return '$'+n.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}); }
-    function roleLabel(r){ return ({agent:'Agent',super_admin:'Super Admin',dev:'Dev',lead:'Team Leader (legacy)',manager:'Manager (legacy)',head:'Head Manager (legacy)',tenant_admin:'Admin (legacy)'}[r])||r||'—'; }
+    function roleLabel(r){ return ({agent:'Agent',head:'Head Manager',super_admin:'Super Admin',dev:'Dev',lead:'Team Leader (legacy)',manager:'Manager (legacy)',tenant_admin:'Admin (legacy)'}[r])||r||'—'; }
     function expTag(iso){
       if(!iso) return '<span class="um-tag mut">No expiry</span>';
       var d=new Date(iso), now=new Date(), days=Math.round((d-now)/86400000);

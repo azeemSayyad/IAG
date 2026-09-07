@@ -19,7 +19,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.database import get_db
-from app.core.deps import require_role
+from app.core.deps import require_role, ADMIN_OR_HEAD
 from app.models.applicant_message import ApplicantMessage
 from app.models.hiree import HireeOnboarding
 from app.models.user import User
@@ -27,7 +27,7 @@ from app.models.user import User
 router = APIRouter(prefix="/applicant-inbox", tags=["applicant-inbox"])
 
 # Admins (and dev, which bypasses require_role) may use the inbox.
-_admin = require_role("tenant_admin", "super_admin", "admin")
+_admin = require_role(*ADMIN_OR_HEAD)
 
 _ROLE_LABELS = {
     "agent": "Agent",

@@ -1,7 +1,7 @@
 import { NavLink, Outlet } from "react-router-dom";
 import { useEffect, useRef, useState } from "react";
 import { api } from "../lib/api";
-import { getRole, isAdmin, isOwner, canSeeQueue, canSeeManager, canSeeMonitoring, canSeeTraining, logout } from "../lib/auth";
+import { getRole, isAdmin, isAdminClass, isOwner, canSeeQueue, canSeeManager, canSeeMonitoring, canSeeTraining, logout } from "../lib/auth";
 import { getSocket } from "../lib/socket";
 import { leadOfferedSound } from "../lib/sound";
 import LeadOfferOverlay from "./LeadOfferOverlay";
@@ -39,15 +39,16 @@ const WORKSPACE_LINKS: PortalLink[] = [
   { href: "/upload-leads.html", label: "Upload Leads", icon: "upload", hideRoles: ["agent", "lead", "manager", "head", "tenant_admin", "super_admin", "admin"] },
   // All Deals (admins) / My Deals (agents) — only one shows per role.
   { href: "/my-deals.html", label: "My Deals", icon: "deals", hideRoles: ["lead", "manager", "head", "tenant_admin", "super_admin", "admin"] },
-  { href: "/all-deals.html", label: "All Deals", icon: "deals", hideRoles: ["agent", "lead", "manager", "head"] },
+  { href: "/all-deals.html", label: "All Deals", icon: "deals", hideRoles: ["agent", "lead", "manager"] },
   { href: "/leaderboard.html", label: "Leaderboard", icon: "trophy" },
   // Hirees (agent onboarding review) — admin-class only, mirrors the static
   // portal's injectHireesLink gating (admin/tenant_admin/super_admin/dev).
-  { href: "/hirees.html", label: "Hirees", icon: "user-plus", hideRoles: ["agent", "lead", "manager", "head"] },
-  // Applicant Inbox (admin↔hiree SMS) — admin/dev ONLY (mirrors prefs-extras
-  // gating: shown to admin/tenant_admin/super_admin/dev). Distinct from the
-  // agent-facing inbox.html below, which is hidden from admins.
-  { href: "/applicant-inbox.html", label: "Inbox", icon: "inbox", hideRoles: ["agent", "lead", "manager", "head"] },
+  { href: "/hirees.html", label: "Hirees", icon: "user-plus", hideRoles: ["agent", "lead", "manager"] },
+  // Applicant Inbox (admin↔hiree SMS) — admin-class, Head Manager included
+  // (mirrors prefs-extras' injectApplicantInboxLink). Distinct from the
+  // agent-facing inbox.html below, which is hidden from admins but NOT from a
+  // Head Manager, who keeps the manager tools on top of the admin surface.
+  { href: "/applicant-inbox.html", label: "Applicant Inbox", icon: "inbox", hideRoles: ["agent", "lead", "manager"] },
   { href: "/inbox.html", label: "Inbox", icon: "inbox", hideRoles: ["tenant_admin", "super_admin", "admin"] },
   { href: "/my-team.html", label: "My Team", icon: "users", hideRoles: ["agent", "tenant_admin", "super_admin", "admin"] },
   // Agent performance is reached via the switch on the Sales Dashboard (opens the
@@ -280,7 +281,8 @@ export default function PortalShell() {
   // bell, which prefs-extras.js renders elsewhere but doesn't run in this shell).
   const [unread, setUnread] = useState(0);
   const menuRef = useRef<HTMLDivElement>(null);
-  const admin = isAdmin();
+  const admin = isAdmin();          // strict — the Contacts link only
+  const adminClass = isAdminClass(); // includes Head Manager
   const owner = isOwner();
   const roleKey = (role || "agent").toLowerCase();
   const roleLabel = ROLE_LABEL[roleKey] || "Admin";
@@ -424,8 +426,9 @@ export default function PortalShell() {
                   <span className="sb-tip">{l.label}</span>
                 </NavLink>
               ))}
-              {/* Sales Dashboard (admin-only) is bundled into the SMS section, under SMS Manager. */}
-              {admin && (
+              {/* Sales Dashboard (admin-class, Head Manager included) is bundled into
+                  the SMS section, under SMS Manager. */}
+              {adminClass && (
                 <NavLink
                   to="/sales-dashboard"
                   className={({ isActive }) => `sb-item${isActive ? " active" : ""}`}
@@ -438,7 +441,7 @@ export default function PortalShell() {
               {/* DID Fleet (admin-only) — static portal page (did-fleet.html), in the SMS
                   section under Sales Dashboard, mirroring its placement + admin gating so the
                   SPA sidebar stays consistent with the static one (error-boundary.js #sbSms). */}
-              {admin && (
+              {adminClass && (
                 <a className="sb-item" href="/did-fleet.html" aria-label="DID Fleet">
                   <Icon name="broadcast" />
                   <span className="sb-tip">DID Fleet</span>
@@ -514,6 +517,7 @@ export default function PortalShell() {
                   <span className="sb-tip">Expenses</span>
                 </NavLink>
               )}
+              {/* Contacts: strict admin — a Head Manager is deliberately excluded. */}
               {admin && (
                 <NavLink
                   to="/contacts"

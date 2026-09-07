@@ -19,6 +19,17 @@ def get_current_active_user(current_user: User = Depends(get_current_user)) -> U
     return current_user
 
 
+# Roles that share the full run of the admin surfaces. "head" (Head Manager) is
+# an admin everywhere EXCEPT three places it is deliberately kept out of, which
+# keep their own narrower gates and must NOT use this tuple:
+#   · company Expenses  -> require_role("super_admin")           (owner/CEO only)
+#   · Contacts          -> require_role("tenant_admin", "super_admin", "admin")
+#   · editing Training  -> require_role("tenant_admin", "super_admin", "admin")
+# A Head Manager also works the SMS queue like an agent, which is why it is
+# absent from sms_queue.services.queue_service.ADMIN_ROLES.
+ADMIN_OR_HEAD = ("tenant_admin", "super_admin", "admin", "head")
+
+
 def require_role(*roles: str):
     def role_checker(current_user: User = Depends(get_current_active_user)) -> User:
         # "dev" is the highest role (developer/super-user): it passes every role

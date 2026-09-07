@@ -9,6 +9,7 @@ import Contacts from "./pages/Contacts";
 import Training from "./pages/Training";
 import {
   isAdmin,
+  isAdminClass,
   isOwner,
   canSeeQueue,
   canSeeManager,
@@ -20,7 +21,8 @@ import { useI18n } from "./lib/useI18n";
 
 export default function App() {
   useI18n();
-  const admin = isAdmin();
+  const admin = isAdmin();          // strict — gates Contacts only
+  const adminClass = isAdminClass(); // includes Head Manager
   const owner = isOwner();
   const home = smsDefaultRoute();
   return (
@@ -32,17 +34,17 @@ export default function App() {
           path="/queue"
           element={canSeeQueue() ? <SmsQueue /> : <Navigate to={home} replace />}
         />
-        {/* Sales Dashboard is admin-only; everyone else goes to their home page. */}
+        {/* Sales Dashboard: admin-class, Head Manager included. */}
         <Route
           path="/sales-dashboard"
-          element={admin ? <SalesDashboard /> : <Navigate to={home} replace />}
+          element={adminClass ? <SalesDashboard /> : <Navigate to={home} replace />}
         />
         {/* Expenses: OWNER only (super_admin/dev) — payroll is not admin-visible. */}
         <Route
           path="/expenses"
           element={owner ? <Expenses /> : <Navigate to={home} replace />}
         />
-        {/* Contacts: the company phone book — admin-class (not owner-only). */}
+        {/* Contacts: strict admin — a Head Manager is deliberately excluded. */}
         <Route
           path="/contacts"
           element={admin ? <Contacts /> : <Navigate to={home} replace />}

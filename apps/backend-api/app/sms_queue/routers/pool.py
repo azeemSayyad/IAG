@@ -10,14 +10,15 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Upload
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.core.deps import get_tenant_id, require_role
+from app.core.deps import get_tenant_id, require_role, ADMIN_OR_HEAD
 from app.models.user import User
 from app.realtime.websocket import emit_to_agent, emit_to_tenant
 from app.sms_queue.services import pool_ingest
 
 router = APIRouter(prefix="/sms/pool", tags=["sms-pool"])
 
-_require_admin = require_role("tenant_admin", "super_admin")
+# CSV straight to the agent pool is an admin action a Head Manager shares.
+_require_admin = require_role(*ADMIN_OR_HEAD)
 _require_manager = require_role("manager", "head", "tenant_admin", "admin", "super_admin")
 
 # Per-upload limits. Rows are capped in pool_ingest.MAX_ROWS (20,000); the file

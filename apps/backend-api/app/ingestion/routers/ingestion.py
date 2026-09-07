@@ -13,7 +13,7 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Q
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.core.deps import get_tenant_id, get_current_active_user, require_role
+from app.core.deps import get_tenant_id, get_current_active_user, require_role, ADMIN_OR_HEAD
 from app.core.sending import (
     is_sending_paused,
     set_sending_paused,
@@ -188,7 +188,7 @@ def sending_status(
 @router.post("/sending/stop")
 def sending_stop(
     tenant_id: str = Depends(get_tenant_id),
-    current_user: User = Depends(require_role("tenant_admin", "super_admin")),
+    current_user: User = Depends(require_role(*ADMIN_OR_HEAD)),
 ):
     """STOP all outbound sending (outreach, AI replies, follow-ups, reminders) and
     halt the capacity engine's lead releases. Admin only."""
@@ -199,7 +199,7 @@ def sending_stop(
 @router.post("/sending/resume")
 def sending_resume(
     tenant_id: str = Depends(get_tenant_id),
-    current_user: User = Depends(require_role("tenant_admin", "super_admin")),
+    current_user: User = Depends(require_role(*ADMIN_OR_HEAD)),
 ):
     """Resume outbound sending. Admin only."""
     set_sending_paused(tenant_id, False, actor=str(current_user.id))
@@ -225,7 +225,7 @@ def autopilot_status(
 @router.post("/sending/autopilot/pause")
 def autopilot_pause(
     tenant_id: str = Depends(get_tenant_id),
-    current_user: User = Depends(require_role("tenant_admin", "super_admin")),
+    current_user: User = Depends(require_role(*ADMIN_OR_HEAD)),
 ):
     """Enter Queue-Only Mode: first template still sends, but no AI booking
     replies and no follow-ups/reminders — humans in the SMS queue handle the
@@ -245,7 +245,7 @@ def autopilot_pause(
 @router.post("/sending/autopilot/resume")
 def autopilot_resume(
     tenant_id: str = Depends(get_tenant_id),
-    current_user: User = Depends(require_role("tenant_admin", "super_admin")),
+    current_user: User = Depends(require_role(*ADMIN_OR_HEAD)),
 ):
     """DISABLED. Queue-Only Mode (first-template-only lockdown) is permanently ON
     and cannot be turned off — the platform may only ever send the first template.
@@ -272,7 +272,7 @@ def autopilot_drip_get(
 def autopilot_drip_set(
     body: dict,
     tenant_id: str = Depends(get_tenant_id),
-    current_user: User = Depends(require_role("tenant_admin", "super_admin")),
+    current_user: User = Depends(require_role(*ADMIN_OR_HEAD)),
 ):
     """Set the Queue-Only drip rate (leads per interval). Admin only."""
     try:
@@ -312,7 +312,7 @@ def outreach_template_get(
 def outreach_template_set(
     body: dict,
     tenant_id: str = Depends(get_tenant_id),
-    current_user: User = Depends(require_role("tenant_admin", "super_admin")),
+    current_user: User = Depends(require_role(*ADMIN_OR_HEAD)),
 ):
     """Save a new first-outreach template for this tenant. Admin only."""
     from app.ai.services.prompts import set_outreach_template
@@ -329,7 +329,7 @@ def outreach_template_set(
 @router.post("/outreach-template/reset")
 def outreach_template_reset(
     tenant_id: str = Depends(get_tenant_id),
-    current_user: User = Depends(require_role("tenant_admin", "super_admin")),
+    current_user: User = Depends(require_role(*ADMIN_OR_HEAD)),
 ):
     """Clear the override so the built-in default first message is used. Admin only."""
     from app.ai.services.prompts import reset_outreach_template, PRIMARY_OUTREACH_TEMPLATE
@@ -422,7 +422,7 @@ async def campaign_upload(
     provider: str = Form("sinch"),        # "sinch" (default) | "engage2" (Engage Cloud)
     db: Session = Depends(get_db),
     tenant_id: str = Depends(get_tenant_id),
-    current_user: User = Depends(require_role("tenant_admin", "super_admin")),
+    current_user: User = Depends(require_role(*ADMIN_OR_HEAD)),
 ):
     """Upload one CSV as a campaign. Leads are HELD (sent only when the campaign
     is run). Returns the created campaign."""
@@ -488,7 +488,7 @@ def campaign_run(
     campaign_id: str,
     db: Session = Depends(get_db),
     tenant_id: str = Depends(get_tenant_id),
-    current_user: User = Depends(require_role("tenant_admin", "super_admin")),
+    current_user: User = Depends(require_role(*ADMIN_OR_HEAD)),
 ):
     """Start (or resume) sending this campaign. Only one campaign may run at a
     time — blocks if another is already running."""
@@ -521,7 +521,7 @@ def campaign_pause(
     campaign_id: str,
     db: Session = Depends(get_db),
     tenant_id: str = Depends(get_tenant_id),
-    current_user: User = Depends(require_role("tenant_admin", "super_admin")),
+    current_user: User = Depends(require_role(*ADMIN_OR_HEAD)),
 ):
     """Temporarily halt this campaign (resumable)."""
     camp = _get_upload_campaign(db, tenant_id, campaign_id)
@@ -534,7 +534,7 @@ def campaign_resume(
     campaign_id: str,
     db: Session = Depends(get_db),
     tenant_id: str = Depends(get_tenant_id),
-    current_user: User = Depends(require_role("tenant_admin", "super_admin")),
+    current_user: User = Depends(require_role(*ADMIN_OR_HEAD)),
 ):
     """Resume a paused campaign (blocks if another is running)."""
     return campaign_run(campaign_id, db, tenant_id, current_user)
@@ -545,7 +545,7 @@ def campaign_stop(
     campaign_id: str,
     db: Session = Depends(get_db),
     tenant_id: str = Depends(get_tenant_id),
-    current_user: User = Depends(require_role("tenant_admin", "super_admin")),
+    current_user: User = Depends(require_role(*ADMIN_OR_HEAD)),
 ):
     """End this campaign's sending (re-runnable later)."""
     camp = _get_upload_campaign(db, tenant_id, campaign_id)
@@ -559,7 +559,7 @@ def campaign_drip(
     body: dict,
     db: Session = Depends(get_db),
     tenant_id: str = Depends(get_tenant_id),
-    current_user: User = Depends(require_role("tenant_admin", "super_admin")),
+    current_user: User = Depends(require_role(*ADMIN_OR_HEAD)),
 ):
     """Set this campaign's own drip rate (N leads every M minutes)."""
     camp = _get_upload_campaign(db, tenant_id, campaign_id)
@@ -579,7 +579,7 @@ def campaign_rename(
     body: dict,
     db: Session = Depends(get_db),
     tenant_id: str = Depends(get_tenant_id),
-    current_user: User = Depends(require_role("tenant_admin", "super_admin")),
+    current_user: User = Depends(require_role(*ADMIN_OR_HEAD)),
 ):
     """Rename a campaign (admin). Display name only — leads, drip rate and sending
     are untouched, so the send path / first-template lockdown are unaffected."""
@@ -598,7 +598,7 @@ def campaign_set_provider(
     body: dict,
     db: Session = Depends(get_db),
     tenant_id: str = Depends(get_tenant_id),
-    current_user: User = Depends(require_role("tenant_admin", "super_admin")),
+    current_user: User = Depends(require_role(*ADMIN_OR_HEAD)),
 ):
     """Set which lead-SMS provider this campaign sends through ("sinch" | "engage2").
     Only changes WHICH account/numbers this campaign's first-templates use — the send
@@ -615,7 +615,7 @@ def campaign_delete(
     campaign_id: str,
     db: Session = Depends(get_db),
     tenant_id: str = Depends(get_tenant_id),
-    current_user: User = Depends(require_role("tenant_admin", "super_admin")),
+    current_user: User = Depends(require_role(*ADMIN_OR_HEAD)),
 ):
     """Remove a campaign and soft-delete its leads (clears the card)."""
     from datetime import datetime, timezone
