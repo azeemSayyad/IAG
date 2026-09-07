@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../lib/api";
 import { getSocket } from "../lib/socket";
 import LeadsTools from "../components/LeadsTools";
@@ -159,6 +159,14 @@ export default function SmsManager() {
   const [busy, setBusy] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // `stale` = the last refresh partly (or wholly) failed but we still have good
+  // numbers on screen. Shown as a quiet banner instead of blanking the page.
+  const [stale, setStale] = useState(false);
+  // One refresh in flight at a time. This page polls every 6s AND refreshes on
+  // every socket nudge and every tab focus; with no guard a busy hour stacked
+  // overlapping fan-outs of 14 requests each on top of one another.
+  const inFlight = useRef(false);
+  const loadedOnce = useRef(false);
   const [kickNotice, setKickNotice] = useState<string | null>(null);
   const [confirmKick, setConfirmKick] = useState(false);
   const [sendOpen, setSendOpen] = useState(false);
@@ -173,9 +181,15 @@ export default function SmsManager() {
   const [listView, setListView] = useState<{ title: string; kind: "parkedA" | "parkedU" | "yes" } | null>(null);
 
   const refresh = useCallback(async () => {
+    if (inFlight.current) return;
+    inFlight.current = true;
     try {
       const rng = `from=${from}&to=${to}`;
-      const [o, q, a, p, b, f, pa, pu, ac, pk, ad, yl, bt, ds] = await Promise.all([
+      // allSettled, NOT all: these 14 calls are independent panels. With
+      // Promise.all a single failure — one slow query, an upstream blip, a
+      // backend restart mid-deploy — threw away the other thirteen results and
+      // replaced the entire dashboard with "Failed to load", every 6 seconds.
+      const r = await Promise.allSettled([
         api<Overview>("/sms/manager/overview"),
         api<{ items: QueuedLead[] }>("/sms/manager/queued?limit=100"),
         api<{ items: ActiveLead[] }>("/sms/manager/active?limit=100"),
@@ -191,22 +205,54 @@ export default function SmsManager() {
         api<{ items: BreakRow[]; totals: BreakTotal[] }>("/sms/manager/breaks-today"),
         api<{ items: DailyRow[] }>("/sms/manager/daily-summary"),
       ]);
-      setOv(o); setQueued(q.items); setActive(a.items); setPool(p); setBoard(b.items);
-      setFunnel(f); setParkedA(pa); setParkedU(pu);
-      setActivity(ac.items);
-      setPassKeep(pk.items); setAgentDisp(ad.items); setYesLeads(yl);
-      setBreaksToday(bt); setDaily(ds.items);
-      setError(null);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load");
+      const ok = <T,>(i: number): T | undefined =>
+        r[i].status === "fulfilled" ? (r[i] as PromiseFulfilledResult<T>).value : undefined;
+
+      const o = ok<Overview>(0); if (o) setOv(o);
+      const q = ok<{ items: QueuedLead[] }>(1); if (q) setQueued(q.items);
+      const a = ok<{ items: ActiveLead[] }>(2); if (a) setActive(a.items);
+      const p = ok<Pool>(3); if (p) setPool(p);
+      const b = ok<{ items: LeaderRow[] }>(4); if (b) setBoard(b.items);
+      const f = ok<Funnel>(5); if (f) setFunnel(f);
+      const pa = ok<{ total: number; items: ParkedItem[] }>(6); if (pa) setParkedA(pa);
+      const pu = ok<{ total: number; items: ParkedItem[] }>(7); if (pu) setParkedU(pu);
+      const ac = ok<{ items: Activity[] }>(8); if (ac) setActivity(ac.items);
+      const pk = ok<{ items: PassKeepRow[] }>(9); if (pk) setPassKeep(pk.items);
+      const ad = ok<{ items: AgentDisp[] }>(10); if (ad) setAgentDisp(ad.items);
+      const yl = ok<{ total: number; items: YesLead[] }>(11); if (yl) setYesLeads(yl);
+      const bt = ok<{ items: BreakRow[]; totals: BreakTotal[] }>(12); if (bt) setBreaksToday(bt);
+      const ds = ok<{ items: DailyRow[] }>(13); if (ds) setDaily(ds.items);
+
+      const failed = r.filter((x) => x.status === "rejected") as PromiseRejectedResult[];
+      if (failed.length === r.length) {
+        // Nothing came back at all — the backend really is unreachable. Block
+        // the page only if we have never had data; otherwise keep what's shown.
+        const msg = failed[0]?.reason instanceof Error ? failed[0].reason.message : "Failed to load";
+        if (loadedOnce.current) setStale(true); else setError(msg);
+      } else {
+        loadedOnce.current = true;
+        setError(null);
+        setStale(failed.length > 0);
+      }
+    } finally {
+      inFlight.current = false;
     }
   }, [from, to, pkPeriod, dispPeriod]);
 
   useEffect(() => {
     refresh();
-    const id = setInterval(refresh, REFRESH_MS);
+    // Poll only while the tab is actually on screen. A backgrounded manager tab
+    // used to keep firing 14 requests every 6 seconds for the whole shift.
+    const id = setInterval(() => { if (!document.hidden) refresh(); }, REFRESH_MS);
     const s = getSocket();
-    const nudge = () => refresh();
+    // Coalesce socket nudges. In a busy hour inbound messages arrive faster than
+    // a 14-request fan-out completes, and un-debounced each one kicked off
+    // another; the page hammered the backend exactly when it was busiest.
+    let nudgeTimer: number | undefined;
+    const nudge = () => {
+      window.clearTimeout(nudgeTimer);
+      nudgeTimer = window.setTimeout(() => { if (!document.hidden) refresh(); }, 1_000);
+    };
     s.on("sms:queue_updated", nudge);
     s.on("sms:new_message", nudge);   // also refresh on a reply to an existing lead
     // Refresh the instant the tab is focused again (on top of the 6s poll + the
@@ -217,6 +263,7 @@ export default function SmsManager() {
     window.addEventListener("focus", onVisible);
     return () => {
       clearInterval(id);
+      window.clearTimeout(nudgeTimer);
       s.off("sms:queue_updated", nudge); s.off("sms:new_message", nudge);
       document.removeEventListener("visibilitychange", onVisible);
       window.removeEventListener("focus", onVisible);
@@ -279,12 +326,19 @@ export default function SmsManager() {
       setSendOpen(false); setSendTo(""); setSendMsg("");
     });
 
-  if (error) return <div className="glass mx-auto max-w-2xl rounded-2xl p-6 text-danger">Failed to load: {error}</div>;
+  // Only a total failure BEFORE anything ever loaded blocks the page. Once there
+  // are numbers on screen a blip leaves them up under a quiet banner instead.
+  if (error && !ov) return <div className="glass mx-auto max-w-2xl rounded-2xl p-6 text-danger">Failed to load: {error}</div>;
   if (!ov) return <div className="p-6 text-ink-muted">Loading…</div>;
   const agents = ov.agents;
 
   return (
     <div className="space-y-4">
+      {stale && (
+        <div className="rounded-xl border border-pending/30 bg-pending/10 px-4 py-2 text-xs font-semibold text-pending">
+          Some panels didn't refresh just now — showing the last figures. Retrying automatically.
+        </div>
+      )}
       {kickNotice && (
         <div className="fixed bottom-6 right-6 z-50 rounded-lg bg-ink px-4 py-2 text-sm font-semibold text-white shadow-lg">{kickNotice}</div>
       )}

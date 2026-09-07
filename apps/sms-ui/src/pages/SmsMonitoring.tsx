@@ -112,14 +112,17 @@ export default function SmsMonitoring() {
       }
     }
     load();
-    const id = setInterval(load, REFRESH_MS);
+    // Poll only while the tab is on screen (see SmsManager for the same rule).
+    const id = setInterval(() => { if (!document.hidden) load(); }, REFRESH_MS);
     return () => {
       alive = false;
       clearInterval(id);
     };
   }, []);
 
-  if (error) {
+  // Block only before anything has ever loaded; after that a blip leaves the
+  // last figures up rather than replacing the page with an error box.
+  if (error && !stats) {
     return <div className="glass mx-auto max-w-2xl rounded-2xl p-6 text-danger">Failed to load: {error}</div>;
   }
   if (!stats) return <div className="p-6 text-ink-muted">Loading…</div>;
