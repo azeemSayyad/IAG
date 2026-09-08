@@ -1,4 +1,4 @@
-import { clearSession, getAccessToken, goToLogin, refreshAccessToken } from "./auth";
+import { clearSession, getAccessToken, goToLogin, refreshAccessToken, TransientRefreshError } from "./auth";
 
 // All calls go through the same /api proxy the portal already uses
 // (nginx proxies /api -> backend-api:8000). The backend mounts every router
@@ -37,14 +37,25 @@ export async function authedFetch(
   // credentials or a genuinely expired session, not a stale access token.
   if (/^\/auth\/(login|refresh|password-reset)/.test(path)) return res;
 
-  const fresh = await refreshAccessToken();
-  if (fresh) {
-    const retry = await send(fresh);
-    if (retry.status !== 401) return retry;
+  let fresh: string | null;
+  try {
+    fresh = await refreshAccessToken();
+  } catch (e) {
+    // Transient (API restarting, network blip): the session is still good.
+    // Keep the tokens and let the caller see an ordinary failed request.
+    const why = e instanceof TransientRefreshError ? e.message : String(e);
+    throw new Error(`401 Unauthorized: session refresh unavailable (${why})`);
   }
-  clearSession();
-  goToLogin();
-  throw new Error("Unauthorized");
+  if (fresh === null) {
+    // The server refused the refresh token — the 7-day session really is over.
+    clearSession();
+    goToLogin();
+    throw new Error("Unauthorized");
+  }
+  // Replay once with the token the server just minted. If THAT still 401s it
+  // is the endpoint's own verdict, not a dead session — return it as-is rather
+  // than logging the user out.
+  return send(fresh);
 }
 
 export async function api<T = unknown>(

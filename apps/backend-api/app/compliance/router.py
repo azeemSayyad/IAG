@@ -10,6 +10,7 @@ from app.compliance import services
 from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.date_ranges import resolve_range, APPROVED_STATUSES
+from app.core.agent_profile import ensure_agent_profile
 from app.core.deps import get_current_active_user, get_tenant_id, require_compliance_manage, require_compliance_read
 from app.models.agent import Agent
 from app.models.compliance import (
@@ -63,7 +64,15 @@ def _ensure_agent(db: Session, tenant_id: str, agent_id: UUID) -> Agent:
 
 
 def _current_agent(db: Session, current_user: User) -> Optional[Agent]:
-    return db.query(Agent).filter(Agent.tenant_id == current_user.tenant_id, Agent.user_id == current_user.id).first()
+    """The signed-in user's own agent profile, created on first use.
+
+    Every role can log deals, and a deal is filed against an agent profile, so
+    everyone needs one. Users created before that rule (admins, head managers)
+    have theirs backfilled by migration 054; this is the safety net for anyone
+    the migration missed. Non-operator roles get an INACTIVE profile, so no lead
+    or appointment is ever routed to them — see app/core/agent_profile.py.
+    """
+    return ensure_agent_profile(db, current_user)
 
 
 def _agent_scope_filter(query, model, db: Session, current_user: User):
@@ -653,11 +662,18 @@ async def submit_deal(
     tenant_id: str = Depends(get_tenant_id),
     current_user: User = Depends(get_current_active_user),
 ):
-    _ensure_agent_scope(db, current_user, request.agent_id)
+    # Default to the caller's own profile, and refuse an id that does not resolve
+    # in this tenant. Without this the deal was still written, with status
+    # "blocked", because an unresolvable agent is the one thing the eligibility
+    # check rejects — a confusing dead record the user could do nothing about.
+    agent_id = request.agent_id or _current_agent(db, current_user).id
+    if not db.query(Agent).filter(Agent.tenant_id == tenant_id, Agent.id == agent_id).first():
+        raise HTTPException(status_code=422, detail="That agent profile does not exist in this tenant")
+    _ensure_agent_scope(db, current_user, agent_id)
     deal, approval_log = await services.submit_deal_with_approval(
         db=db,
         tenant_id=tenant_id,
-        agent_id=request.agent_id,
+        agent_id=agent_id,
         carrier=request.carrier,
         state=request.state,
         user_id=str(current_user.id),
@@ -964,7 +980,7 @@ def update_deal_status(
     current_user: User = Depends(get_current_active_user),
 ):
     """Admin-only: change a deal's status (All Deals page)."""
-    if current_user.role not in ("admin", "tenant_admin", "super_admin"):
+    if current_user.role not in ("admin", "tenant_admin", "super_admin", "head", "dev"):
         raise HTTPException(status_code=403, detail="Admins only")
     new_status = str(body.get("status", "")).strip().lower()
     if new_status not in ALLOWED_DEAL_STATUSES:

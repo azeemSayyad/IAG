@@ -38,18 +38,21 @@ const WORKSPACE_LINKS: PortalLink[] = [
   // the SMS Manager page. Reversible: restore hideRoles to ["agent", "manager"].
   { href: "/upload-leads.html", label: "Upload Leads", icon: "upload", hideRoles: ["agent", "lead", "manager", "head", "tenant_admin", "super_admin", "admin"] },
   // All Deals (admins) / My Deals (agents) — only one shows per role.
-  { href: "/my-deals.html", label: "My Deals", icon: "deals", hideRoles: ["lead", "manager", "head", "tenant_admin", "super_admin", "admin"] },
+  // My Deals is every user's own deal book — every role logs its own deals,
+  // so this is shown to everyone (All Deals below stays the admin-wide view).
+  { href: "/my-deals.html", label: "My Deals", icon: "deals", hideRoles: [] },
   { href: "/all-deals.html", label: "All Deals", icon: "deals", hideRoles: ["agent", "lead", "manager"] },
   { href: "/leaderboard.html", label: "Leaderboard", icon: "trophy" },
-  // Hirees (agent onboarding review) — admin-class only, mirrors the static
-  // portal's injectHireesLink gating (admin/tenant_admin/super_admin/dev).
-  { href: "/hirees.html", label: "Hirees", icon: "user-plus", hideRoles: ["agent", "lead", "manager"] },
-  // Applicant Inbox (admin↔hiree SMS) — admin-class, Head Manager included
-  // (mirrors prefs-extras' injectApplicantInboxLink). Distinct from the
-  // agent-facing inbox.html below, which is hidden from admins but NOT from a
-  // Head Manager, who keeps the manager tools on top of the admin surface.
-  { href: "/applicant-inbox.html", label: "Applicant Inbox", icon: "inbox", hideRoles: ["agent", "lead", "manager"] },
-  { href: "/inbox.html", label: "Inbox", icon: "inbox", hideRoles: ["tenant_admin", "super_admin", "admin"] },
+  // Hirees (agent onboarding review) — HIDDEN for every role until the flow is
+  // in use (page kept). Restore hideRoles to ["agent", "lead", "manager"].
+  { href: "/hirees.html", label: "Hirees", icon: "user-plus", hideRoles: ["agent", "lead", "manager", "head", "tenant_admin", "super_admin", "admin", "dev"] },
+  // Applicant Inbox (admin↔hiree SMS) — HIDDEN for every role until the Hirees
+  // flow exists (page kept). Restore hideRoles to ["agent", "lead", "manager"].
+  { href: "/applicant-inbox.html", label: "Applicant Inbox", icon: "inbox", hideRoles: ["agent", "lead", "manager", "head", "tenant_admin", "super_admin", "admin", "dev"] },
+  // Inbox — the ONE in-app messaging page, open to every role (admin ↔ agent,
+  // agent ↔ agent, admin ↔ admin) plus the customer SMS threads. Carries the
+  // unread badge (see dmUnread in the shell).
+  { href: "/inbox.html", label: "Inbox", icon: "inbox", hideRoles: [] },
   { href: "/my-team.html", label: "My Team", icon: "users", hideRoles: ["agent", "tenant_admin", "super_admin", "admin"] },
   // Agent performance is reached via the switch on the Sales Dashboard (opens the
   // full page), so it's intentionally not a sidebar item.
@@ -280,6 +283,9 @@ export default function PortalShell() {
   // Unread notification count for the topbar bell (matches the static portal's
   // bell, which prefs-extras.js renders elsewhere but doesn't run in this shell).
   const [unread, setUnread] = useState(0);
+  // Unread in-app DMs → badge on the sidebar Inbox link (the static pages get
+  // the same number from prefs-extras.js updateInboxBadge).
+  const [dmUnread, setDmUnread] = useState(0);
   const menuRef = useRef<HTMLDivElement>(null);
   const admin = isAdmin();          // strict — the Contacts link only
   const adminClass = isAdminClass(); // includes Head Manager
@@ -318,6 +324,38 @@ export default function PortalShell() {
       s.off("connect", on);
       s.off("disconnect", off);
       s.off("sms:ping", onPing);
+    };
+  }, []);
+
+  // Sidebar Inbox badge: unread in-app DMs addressed to me. Refreshed on load,
+  // on every realtime DM event, when the tab regains focus, and every 30s.
+  useEffect(() => {
+    let alive = true;
+    let timer: number | null = null;
+    const refresh = () => {
+      api<{ unread?: number }>("/inbox/dm/unread-count")
+        .then((r) => { if (alive) setDmUnread(r?.unread || 0); })
+        .catch(() => { /* keep the last count */ });
+    };
+    const refreshSoon = () => {
+      if (timer) window.clearTimeout(timer);
+      timer = window.setTimeout(refresh, 400);
+    };
+    refresh();
+    const s = getSocket();
+    s.on("inapp_message", refreshSoon);
+    s.on("inapp_read", refreshSoon);
+    s.on("connect", refreshSoon);
+    window.addEventListener("focus", refreshSoon);
+    const iv = window.setInterval(refresh, 30000);
+    return () => {
+      alive = false;
+      if (timer) window.clearTimeout(timer);
+      window.clearInterval(iv);
+      s.off("inapp_message", refreshSoon);
+      s.off("inapp_read", refreshSoon);
+      s.off("connect", refreshSoon);
+      window.removeEventListener("focus", refreshSoon);
     };
   }, []);
 
@@ -489,6 +527,9 @@ export default function PortalShell() {
                 <a key={l.href} className="sb-item" href={l.href}>
                   <Icon name={l.icon} />
                   <span className="sb-tip">{agentView && l.agentLabel ? l.agentLabel : l.label}</span>
+                  {l.href === "/inbox.html" && dmUnread > 0 && (
+                    <span className="sb-badge">{dmUnread > 99 ? "99+" : dmUnread}</span>
+                  )}
                 </a>
               ))}
               {/* Training — INTERNAL SPA route for agents + admin-class + dev (the

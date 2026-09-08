@@ -115,29 +115,72 @@
     window.location.href = '/login.html';
   }
 
-  function handleRefresh(url, method, headers, body) {
+  // Two kinds of refresh failure, and only ONE of them ends the session:
+  //   sessionLost — the server REJECTED the refresh token (401/403) or there
+  //                 is none: the 7-day session really is over → login page.
+  //   transient   — anything else: a 5xx / 502 while the API restarts or
+  //                 redeploys, a 429, a dropped connection. The tokens are
+  //                 still perfectly good, so they are KEPT and the caller just
+  //                 sees a failed request; the next request retries the refresh.
+  // Before this split every non-OK refresh (including a 502 during a Railway
+  // restart) wiped the tokens and threw the user out to login. Agents and head
+  // managers were hit far more than admins simply because their pages poll
+  // (queue offer every 6s, inbox badge, notifications) and they navigate more —
+  // so a restart or blip was far more likely to land on one of their requests
+  // right after the access token had aged out.
+  function sessionLostError(msg) {
+    var e = new Error(msg || 'Session expired');
+    e.status = 401;
+    e.sessionLost = true;
+    return e;
+  }
+  function transientError(msg) {
+    var e = new Error(msg || 'Could not refresh the session — please try again');
+    e.transient = true;
+    return e;
+  }
+
+  // ONE refresh at a time. A page load fires many requests in parallel; when
+  // the access token has aged out they ALL 401 at once, and each used to start
+  // its own POST /auth/refresh (7+ per page load). They now share a single
+  // in-flight refresh and simply await its result.
+  var refreshInFlight = null;
+
+  function refreshAccessToken() {
+    if (refreshInFlight) return refreshInFlight;
     var tokens = getTokens();
-    if (tokens.refresh_token) {
-      return fetch(API_URL + '/api/v1/auth/refresh', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ refresh_token: tokens.refresh_token }),
-      }).then(function (refreshRes) {
-        if (refreshRes.ok) {
-          return refreshRes.json().then(function (data) {
-            setTokens(data.access_token, data.refresh_token);
-            headers['Authorization'] = 'Bearer ' + data.access_token;
-            return fetch(url, { method: method, headers: headers, body: body });
-          });
-        }
+    if (!tokens.refresh_token) return Promise.reject(sessionLostError('Unauthorized'));
+    refreshInFlight = fetch(API_URL + '/api/v1/auth/refresh', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refresh_token: tokens.refresh_token }),
+    }).then(function (refreshRes) {
+      if (refreshRes.ok) {
+        return refreshRes.json().then(function (data) {
+          if (!data || !data.access_token) throw transientError('Refresh returned no token');
+          setTokens(data.access_token, data.refresh_token);
+          return data.access_token;
+        }, function () { throw transientError('Refresh returned an unreadable response'); });
+      }
+      if (refreshRes.status === 401 || refreshRes.status === 403) throw sessionLostError('Session expired');
+      throw transientError('Refresh failed (' + refreshRes.status + ')');
+    }, function () {
+      throw transientError('Refresh failed (network)');
+    }).finally(function () { refreshInFlight = null; });
+    return refreshInFlight;
+  }
+
+  function handleRefresh(url, method, headers, body) {
+    return refreshAccessToken().then(function (accessToken) {
+      headers['Authorization'] = 'Bearer ' + accessToken;
+      return fetch(url, { method: method, headers: headers, body: body });
+    }, function (err) {
+      if (err && err.sessionLost) {
         clearTokens();
         redirectToLogin();
-        throw new Error('Session expired');
-      });
-    }
-    clearTokens();
-    redirectToLogin();
-    throw new Error('Unauthorized');
+      }
+      throw err;
+    });
   }
 
   // Auth endpoints must NOT trigger the refresh-then-redirect flow: a 401 here
@@ -148,18 +191,34 @@
     return /\/auth\/(login|refresh|password-reset)/.test(url || '');
   }
 
-  function handleResponse(res, url, method, headers, body) {
+  function parseBody(res) {
+    // Never assume JSON: a 502 from the edge while the API restarts is an HTML
+    // page, and an empty 200 body is valid. A parse failure must not masquerade
+    // as a session problem.
+    return res.text().then(function (text) {
+      if (!text) return null;
+      try { return JSON.parse(text); } catch (e) { return null; }
+    }, function () { return null; });
+  }
+
+  function handleResponse(res, url, method, headers, body, retried) {
     if (res.status === 204) return null;
-    if (res.status === 401 && !isAuthEndpoint(url)) {
+    // Refresh + replay exactly once. A 401 on the replay (with a token the
+    // server itself just minted) is that endpoint's own verdict, not a dead
+    // session — surface it as an error instead of refreshing forever.
+    if (res.status === 401 && !isAuthEndpoint(url) && !retried) {
       return handleRefresh(url, method, headers, body).then(function (retryRes) {
-        return handleResponse(retryRes, url, method, headers, body);
+        return handleResponse(retryRes, url, method, headers, body, true);
       });
     }
-    return res.json().then(function (data) {
+    return parseBody(res).then(function (data) {
       if (!res.ok) {
-        var err = new Error(data.detail || data.message || 'Request failed');
+        var detail = data && (data.detail || data.message);
+        var msg = typeof detail === 'string' ? detail
+          : (detail ? JSON.stringify(detail) : ('Request failed (' + res.status + ')'));
+        var err = new Error(msg);
         err.status = res.status;
-        err.data = data;
+        err.data = data || {};
         throw err;
       }
       return data;
@@ -259,7 +318,10 @@
       var socket = window.io(API_URL, {
         path: '/socket.io',
         transports: ['websocket', 'polling'],
-        auth: { token: tokens.access_token },
+        // A callback, not a literal: socket.io re-runs it on every reconnect,
+        // so a reconnect after the access token was refreshed presents the
+        // NEW token instead of the expired one captured at page load.
+        auth: function (cb) { cb({ token: getTokens().access_token }); },
         reconnection: true,
         reconnectionAttempts: 10,
         reconnectionDelay: 1000,
@@ -339,10 +401,13 @@
     connectRealtime();
   }
   window.addEventListener('storage', function(evt) {
-    if (evt.key === 'access_token') {
-      disconnectRealtime();
-      if (evt.newValue) connectRealtime();
-    }
+    if (evt.key !== 'access_token') return;
+    // Token REMOVED in another tab (logout / session lost): drop the socket.
+    // Token REFRESHED in another tab: the live socket is still authenticated
+    // (the server checked it at handshake) and the auth callback above hands
+    // the new token to any future reconnect — no need to tear it down.
+    if (!evt.newValue) { disconnectRealtime(); return; }
+    if (!realtime.socket) connectRealtime();
   });
 
   // Draft backup helpers — persists wizard draft to the API for recovery

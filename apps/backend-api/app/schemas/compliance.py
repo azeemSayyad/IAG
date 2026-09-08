@@ -132,7 +132,12 @@ class DealProduct(BaseModel):
 
 
 class DealSubmitRequest(BaseModel):
-    agent_id: UUID
+    # Optional: when omitted the deal is filed against the SIGNED-IN user's own
+    # agent profile. The page used to have to work this out for itself and, if
+    # it guessed wrong, the deal came back "blocked" (an agent id that does not
+    # resolve is the ONLY thing that fails the eligibility check) or was filed
+    # under the wrong person. The server knows who is calling, so it decides.
+    agent_id: Optional[UUID] = None
     lead_id: Optional[UUID] = None
     customer_name: Optional[str] = None
     customer_phone: Optional[str] = None

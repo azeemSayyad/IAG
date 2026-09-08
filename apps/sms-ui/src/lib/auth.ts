@@ -45,8 +45,23 @@ export function goToLogin(): void {
 // call instead, and the rest simply await its result.
 let inflightRefresh: Promise<string | null> | null = null;
 
-/** Swap the refresh token for a new access token. Resolves to the new token, or
- *  null when there's nothing to refresh with / the refresh was rejected. */
+/** Swap the refresh token for a new access token.
+ *
+ *  Resolves to the new token, or to `null` ONLY when the session is really
+ *  over: there is no refresh token, or the server REJECTED it (401/403).
+ *
+ *  Any other failure REJECTS with a `TransientRefreshError` — a 5xx / 502 while
+ *  the API restarts or redeploys, a 429, a dropped connection, an unreadable
+ *  body. The tokens are still good in that case, so they are kept and the
+ *  caller simply sees a failed request; the next request retries the refresh.
+ *  Before this, every one of those was collapsed into `null`, which api.ts
+ *  treated as "session over" — wiping the tokens and bouncing to login. Agents
+ *  and head managers live on the polling Queue page, so a single backend blip
+ *  landing on one of their refreshes was enough to throw them out. */
+export class TransientRefreshError extends Error {
+  constructor(msg: string) { super(msg); this.name = "TransientRefreshError"; }
+}
+
 export function refreshAccessToken(): Promise<string | null> {
   if (inflightRefresh) return inflightRefresh;
   const refresh = getRefreshToken();
@@ -57,13 +72,18 @@ export function refreshAccessToken(): Promise<string | null> {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ refresh_token: refresh }),
   })
-    .then((res) => (res.ok ? res.json() : null))
-    .then((data: { access_token?: string; refresh_token?: string } | null) => {
-      if (!data?.access_token) return null;
-      setTokens(data.access_token, data.refresh_token);
-      return data.access_token;
-    })
-    .catch(() => null)               // offline / network blip — treat as "no new token"
+    .then(
+      async (res) => {
+        if (res.status === 401 || res.status === 403) return null;   // refresh token refused → session over
+        if (!res.ok) throw new TransientRefreshError(`refresh failed (${res.status})`);
+        let data: { access_token?: string; refresh_token?: string } | null = null;
+        try { data = await res.json(); } catch { data = null; }
+        if (!data?.access_token) throw new TransientRefreshError("refresh returned no token");
+        setTokens(data.access_token, data.refresh_token);
+        return data.access_token;
+      },
+      () => { throw new TransientRefreshError("refresh failed (network)"); },
+    )
     .finally(() => { inflightRefresh = null; });
 
   return inflightRefresh;

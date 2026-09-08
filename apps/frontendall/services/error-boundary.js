@@ -137,18 +137,36 @@
     function run(){
       showLoading();
 
-      // Session check — if token exists, verify it's still valid
+      // Session check — if token exists, verify it's still valid.
+      //
+      // ONLY a rejected session sends the user to login: a 401 that survived
+      // api.js's refresh-and-replay (i.e. the refresh token itself was
+      // refused), or api.js having already dropped the tokens. Every other
+      // failure — a 502 while the API restarts, a network blip, an unreadable
+      // body — is transient and must NOT end the session: we carry on into the
+      // page's own init, whose error overlay offers Retry. Before this, ANY
+      // failure here wiped both tokens and bounced to login.html, which is why
+      // users were "logged out on their own" whenever a page load coincided
+      // with a backend hiccup.
       var sessionPromise;
       if (localStorage.getItem('access_token')) {
         sessionPromise = window.__ebAPI && typeof window.__ebAPI.get === 'function'
           ? window.__ebAPI.get('/auth/me').then(function(u){
               if (!u || !u.email) throw new Error('Session expired');
               return u;
-            }).catch(function(){
-              localStorage.removeItem('access_token');
-              localStorage.removeItem('refresh_token');
-              window.location.href = 'login.html';
-              throw new Error('Redirecting to login');
+            }).catch(function(err){
+              var status = err && err.status;
+              var tokensGone = !localStorage.getItem('access_token');
+              var sessionLost = tokensGone || status === 401 || (err && err.sessionLost);
+              if (sessionLost) {
+                localStorage.removeItem('access_token');
+                localStorage.removeItem('refresh_token');
+                try { localStorage.removeItem('ebRole'); } catch(e){}
+                window.location.href = 'login.html';
+                throw new Error('Redirecting to login');
+              }
+              // Transient: keep the session, let the page load (or show Retry).
+              return null;
             })
           : Promise.resolve();
       } else {

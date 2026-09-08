@@ -735,26 +735,25 @@
         // :not(.ch-brand) — the Add-Deal wizard's BRAND lockup also links to
         // appointments.html, and without this the gate hid the logo too.
         'html[data-role="head"]  a[href="appointments.html"]:not(.ch-brand),' +
-        // Admin: no Appointments, no Inbox, no My Team; Analytics merges into
-        // Dashboard. Admin works at the org level (Team Performance, not the
-        // operator-level My Team / Inbox / Appointments surfaces).
+        // Admin: no Appointments, no My Team; Analytics merges into Dashboard.
+        // Admin works at the org level (Team Performance, not the operator-level
+        // My Team / Appointments surfaces). The Inbox is NOT gated: it is the
+        // one in-app messaging page and every role (admin ↔ agent, agent ↔
+        // agent, admin ↔ admin) uses it.
         'html[data-role="tenant_admin"] a[href="appointments.html"]:not(.ch-brand),' +
-        'html[data-role="tenant_admin"] a[href="inbox.html"],' +
         'html[data-role="tenant_admin"] a[href="my-team.html"],' +
         'html[data-role="tenant_admin"] a[href="analytics.html"],' +
         'html[data-role="super_admin"]  a[href="appointments.html"]:not(.ch-brand),' +
-        'html[data-role="super_admin"]  a[href="inbox.html"],' +
         'html[data-role="super_admin"]  a[href="my-team.html"],' +
         'html[data-role="super_admin"]  a[href="analytics.html"],' +
         'html[data-role="admin"] a[href="appointments.html"]:not(.ch-brand),' +
-        'html[data-role="admin"] a[href="inbox.html"],' +
         'html[data-role="admin"] a[href="my-team.html"],' +
         'html[data-role="admin"] a[href="analytics.html"]{display:none !important}' +
-        // Applicant Inbox (admin↔hiree SMS) is admin/dev ONLY: hide it for the
-        // operator roles. admin/tenant_admin/super_admin + dev keep it.
-        'html[data-role="agent"] a[href="applicant-inbox.html"],' +
-        'html[data-role="lead"] a[href="applicant-inbox.html"],' +
-        'html[data-role="manager"] a[href="applicant-inbox.html"]{display:none !important}' +
+        // Applicant Inbox (admin↔hiree SMS) is HIDDEN for every role until the
+        // Hirees flow exists (page kept; injectApplicantInboxLink is a no-op).
+        'a[href="applicant-inbox.html"]{display:none !important}' +
+        // Hirees is HIDDEN for every role too (same reason; page kept).
+        'a[href="hirees.html"]{display:none !important}' +
         // Admin Inbox (agent↔admin in-app chat) is AGENT/dev only: hide it for
         // everyone else (the admin side reaches agents from their own Inbox).
         'html[data-role="lead"] a[href="admin-inbox.html"],' +
@@ -866,6 +865,20 @@
       document.head.appendChild(st);
     }
 
+    // Logging out must drop the TOKENS, not just the cached role. Before this
+    // the sidebar Log out only removed ebRole, so index.html (which forwards a
+    // signed-in user straight back into the app) could never show the login
+    // form, and a "logged out" browser still held a live 7-day refresh token.
+    function ebClearSession(){
+      try {
+        localStorage.removeItem('access_token');
+        localStorage.removeItem('refresh_token');
+        localStorage.removeItem('ebRole');
+        localStorage.removeItem('ebName');
+        localStorage.removeItem('ebAvatar');
+      } catch(e){}
+    }
+
     function addLogoutBtn(){
       var settings = document.querySelector('.sb-bottom a.sb-item[href="settings.html"]');
       if(!settings) return;
@@ -876,7 +889,7 @@
         if(!existing._ebWired){
           existing._ebWired = true;
           existing.addEventListener('click', function(){
-            try { localStorage.removeItem('ebRole'); } catch(e){}
+            ebClearSession();
           });
         }
         return;
@@ -895,7 +908,7 @@
         '<span class="sb-tip" style="display:none!important">Log out</span>';
       a._ebWired = true;
       a.addEventListener('click', function(){
-        try { localStorage.removeItem('ebRole'); } catch(e){}
+        ebClearSession();
       });
       settings.parentNode.insertBefore(a, settings.nextSibling);
     }
@@ -1042,16 +1055,17 @@
     }
 
     // ===== Role gating: admin tab set =====
-    // Admin doesn't use Appointments or Inbox, and Analytics is merged into the
+    // Admin doesn't use Appointments, and Analytics is merged into the
     // Dashboard. Hide those links and bounce direct visits to the dashboard.
+    // (Inbox is open to admins — it's the shared in-app messaging page.)
     function gateAdminTabs(){
       var role = localStorage.getItem('ebRole') || 'agent';
       if(role !== 'admin' && role !== 'tenant_admin' && role !== 'super_admin') return;
-      document.querySelectorAll('a[href="appointments.html"]:not(.ch-brand), a[href="inbox.html"], a[href="analytics.html"], a[href="my-team.html"]').forEach(function(a){
+      document.querySelectorAll('a[href="appointments.html"]:not(.ch-brand), a[href="analytics.html"], a[href="my-team.html"]').forEach(function(a){
         a.style.display = 'none';
       });
       var here = (location.pathname.split('/').pop() || '').toLowerCase();
-      if(here === 'appointments.html' || here === 'inbox.html' || here === 'analytics.html' || here === 'my-team.html'){
+      if(here === 'appointments.html' || here === 'analytics.html' || here === 'my-team.html'){
         location.replace('dashboard.html');
       }
     }
@@ -1173,7 +1187,7 @@
     // right before the Inbox entry.
     function injectMyDealsLink(){
       var role = localStorage.getItem('ebRole') || 'agent';
-      if(role !== 'agent' && role !== 'dev') return;
+      // Every role logs its own deals now, so this link is for everyone.
       var wsBody = document.querySelector('#sbWorkspaces .sb-group-body');
       if(!wsBody) return;
       if(wsBody.querySelector('a[href="my-deals.html"]')) return;
@@ -1198,7 +1212,7 @@
       var here = (location.pathname.split('/').pop() || '').toLowerCase();
       if(here !== 'my-deals.html') return;
       var role = localStorage.getItem('ebRole') || 'agent';
-      if(role !== 'agent' && role !== 'dev') location.replace('ask-the-brain.html');
+      // No role gate: My Deals is every signed-in user's own deal book.
     }
 
     // ===== Inject "All Deals" link for admins (org-wide, all agents) =====
@@ -1611,8 +1625,7 @@
         var logoutBtn = menu.querySelector('#ebAvatarLogout');
         if(logoutBtn){
           logoutBtn.addEventListener('click', function(){
-            try { localStorage.removeItem('ebRole'); } catch(e){ }
-            try { localStorage.removeItem('ebName'); localStorage.removeItem('ebAvatar'); } catch(e){ }
+            ebClearSession();
             window.location.href = 'login.html';
           });
         }
@@ -1735,7 +1748,10 @@
     // Hirees was hardcoded in only a few pages' sidebars, so it vanished when
     // you navigated elsewhere. Inject it on every page (admin roles only) so
     // it's always present and in the same spot. Mirrors injectAllDealsLink.
+    // HIDDEN (not deleted): the Hirees flow isn't in use yet, so the link is
+    // not injected for anyone. Drop the early `return` below to restore.
     function injectHireesLink(){
+      if(true) return;
       var role = localStorage.getItem('ebRole') || 'agent';
       if(['admin','tenant_admin','super_admin','head','dev'].indexOf(role) === -1) return;
       var wsBody = document.querySelector('#sbWorkspaces .sb-group-body');
@@ -1763,7 +1779,10 @@
     // Admin/dev-only surface to text job applicants (hirees). The sidebar is
     // hardcoded per page, so inject at runtime; normalizeWorkspaceOrder() gives
     // it its canonical slot (right after Hirees) regardless.
+    // HIDDEN (not deleted): there is no Hirees flow yet, so the Applicant Inbox
+    // link is not injected for anyone. Drop the early `return` below to restore.
     function injectApplicantInboxLink(){
+      if(true) return;
       var role = localStorage.getItem('ebRole') || 'agent';
       if(['admin','tenant_admin','super_admin','head','dev'].indexOf(role) === -1) return;
       var wsBody = document.querySelector('#sbWorkspaces .sb-group-body');
@@ -1952,12 +1971,20 @@
     };
 
     function updateInboxBadge(){
+      // Every page's sidebar has the Inbox link; not every page's markup has the
+      // badge span — create it so the unread count shows everywhere.
+      document.querySelectorAll('.sidebar a.sb-item[href="inbox.html"]').forEach(function(link){
+        if(!link.querySelector('.sb-badge')){
+          var b = document.createElement('span'); b.className = 'sb-badge'; b.style.display = 'none'; b.textContent = '0';
+          link.appendChild(b);
+        }
+      });
       var badges = document.querySelectorAll('.sidebar a.sb-item[href="inbox.html"] .sb-badge');
       if(!badges.length) return;
       function hide(){ badges.forEach(function(b){ b.style.display='none'; }); }
       if(!window.__ebAPI){ hide(); return; }
-      // Inbox unread = unread customer conversations + (for agents) unread in-app
-      // admin DMs, which are pinned inside this same Inbox.
+      // Inbox unread = unread customer conversations + unread in-app DMs from
+      // any user (pinned inside this same Inbox). Same number for every role.
       Promise.all([
         window.__ebAPI.get('/conversations', { page: 1, size: 50 }).catch(function(){ return null; }),
         window.__ebAPI.get('/inbox/dm/unread-count').catch(function(){ return null; })
@@ -1986,48 +2013,24 @@
     function bindInboxBadgeRealtime(){
       if(window._ebInboxBadgeBound) return;
       window._ebInboxBadgeBound = true;
-      ['engage_cloud_inbound_processed','conversation_message_created','lead_replied','message_delivery_updated','socket_connected','inapp_message']
+      ['engage_cloud_inbound_processed','conversation_message_created','lead_replied','message_delivery_updated','socket_connected','inapp_message','inapp_read']
         .forEach(function(ev){
           window.addEventListener('launchpad:realtime:' + ev, refreshInboxBadgeSoon);
         });
+      // Catch anything missed while the tab was hidden / the socket was down.
+      window.addEventListener('focus', refreshInboxBadgeSoon);
+      document.addEventListener('visibilitychange', function(){ if(!document.hidden) refreshInboxBadgeSoon(); });
+      setInterval(updateInboxBadge, 30000);
     }
 
-    // ===== Sidebar badge for IN-APP admin↔agent messages =====
-    // Separate from the customer Inbox badge above. The admin side badges the
-    // Inbox (applicant-inbox.html); an agent badges the Admin Inbox
-    // (admin-inbox.html). Count = unread DMs addressed to me (/inbox/dm).
-    function dmBadgeHref(){
-      var role = ''; try { role = localStorage.getItem('ebRole') || ''; } catch(_){}
-      // Agents: admin DMs are pinned INSIDE the Inbox now → folded into the
-      // inbox.html badge by updateInboxBadge. Admin-side roles badge their Inbox
-      // (applicant-inbox.html).
-      if(role === 'tenant_admin' || role === 'super_admin' || role === 'admin' || role === 'dev') return 'applicant-inbox.html';
-      return null;
-    }
-    function updateDmBadge(){
-      var href = dmBadgeHref();
-      if(!href || !window.__ebAPI || !window.__ebAPI.get) return;
-      var link = document.querySelector('.sidebar a.sb-item[href="' + href + '"]');
-      if(!link) return;
-      window.__ebAPI.get('/inbox/dm/unread-count').then(function(r){
-        var n = (r && r.unread) || 0;
-        var b = link.querySelector('.sb-badge');
-        if(!b){ b = document.createElement('span'); b.className = 'sb-badge'; link.appendChild(b); }
-        if(n > 0){ b.textContent = n > 99 ? '99+' : String(n); b.style.display = ''; }
-        else { b.style.display = 'none'; }
-      }).catch(function(){});
-    }
-    window.__ebUpdateDmBadge = updateDmBadge;   // inbox pages call this after marking a thread read
-    var _dmBadgeT = null;
-    function refreshDmBadgeSoon(){ if(_dmBadgeT) clearTimeout(_dmBadgeT); _dmBadgeT = setTimeout(updateDmBadge, 400); }
+    // ===== In-app DM badge =====
+    // In-app DMs (any user ↔ any user) live inside the single Inbox, so their
+    // unread count is folded into the Inbox badge above. These names are kept
+    // because inbox pages call window.__ebUpdateDmBadge after reading a thread.
+    function updateDmBadge(){ updateInboxBadge(); }
+    window.__ebUpdateDmBadge = updateDmBadge;
     function bindDmBadgeRealtime(){
-      if(window._ebDmBadgeBound) return;
-      window._ebDmBadgeBound = true;
-      ['inapp_message','socket_connected'].forEach(function(ev){
-        window.addEventListener('launchpad:realtime:' + ev, refreshDmBadgeSoon);
-      });
-      window.addEventListener('focus', refreshDmBadgeSoon);
-      setInterval(updateDmBadge, 30000);
+      bindInboxBadgeRealtime();
       // Ensure the socket is connected even on pages that don't open it themselves.
       try { window.__ebRealtime && window.__ebRealtime.connect(); } catch(_){}
     }

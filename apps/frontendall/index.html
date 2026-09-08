@@ -5,20 +5,32 @@
 <title>Insurance Alliance Group</title>
 <link rel="icon" type="image/png" href="assets/favicon.png"/>
 <link rel="apple-touch-icon" href="assets/apple-touch-icon.png"/>
-<meta http-equiv="refresh" content="0; url=login.html"/>
-<script>location.replace('login.html');</script>
-  <script src="services/api.js?v=10"></script>
-  <script src="services/error-boundary.js?v=23"></script>
+<noscript><meta http-equiv="refresh" content="0; url=login.html"/></noscript>
+  <script src="services/api.js?v=11"></script>
+  <script src="services/error-boundary.js?v=24"></script>
 <script>
-// If user is already authenticated, skip login
-if (localStorage.getItem('access_token')) {
-  window.__ebAPI.get('/auth/me').then(function(user){
-    if (user && user.email) window.location.replace('dashboard.html');
-  }).catch(function(){
-    localStorage.removeItem('access_token');
-    localStorage.removeItem('refresh_token');
+// Site root. A signed-in user is forwarded straight into the app; everyone else
+// goes to the login page. This used to redirect to login.html unconditionally
+// (a <meta refresh> plus location.replace fired before the session check ever
+// ran), so anyone who opened the site from its root — a bookmark, the address
+// bar — was dropped on the login page even though they were still signed in.
+(function () {
+  function toLogin() { location.replace('login.html'); }
+  function landing(role) { return role === 'agent' ? 'appointments.html' : 'ask-the-brain.html'; }
+  var token = null;
+  try { token = localStorage.getItem('access_token'); } catch (e) {}
+  if (!token || !window.__ebAPI) { toLogin(); return; }
+  window.__ebAPI.get('/auth/me').then(function (user) {
+    if (!user || !user.email) { toLogin(); return; }
+    var role = user.role || 'agent';
+    try { localStorage.setItem('ebRole', role); } catch (e) {}
+    location.replace(landing(role));
+  }).catch(function (err) {
+    // api.js already cleared the tokens + redirected on a genuinely dead
+    // session; on a transient failure keep the tokens and just show login.
+    toLogin();
   });
-}
+})();
 </script>
 </head>
 <body></body>

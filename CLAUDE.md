@@ -233,6 +233,35 @@ Backend domain `apps/backend-api/app/training/` (router + `defaults.py`), model
 - Sidebar: the SPA shell renders it via `canSeeTraining()` (agents + admin-class
   + dev); static pages get it injected by `prefs-extras.js` (`injectTrainingLink`).
 
+## Inbox (in-app messaging) — ONE page for every role
+
+`inbox.html` is the single messaging page and is visible to **every** role
+(the admin CSS/JS gates in `prefs-extras.js` deliberately do NOT hide it). It
+lists a pinned **Team** section — in-app direct messages with every other
+active user in the tenant, any role (admin ↔ agent, agent ↔ agent, admin ↔
+admin) — above the customer SMS conversations. Backend `app/direct_messages/`
+(`/inbox/dm/*`): `_counterpart_query` returns all active users, not just
+admin ↔ agent pairs; opening a thread marks it read and emits `inapp_read` to
+the reader's own socket room.
+
+- **Sidebar unread badge** = unread customer conversations + unread DMs
+  (`/inbox/dm/unread-count`). Static pages: `updateInboxBadge` in prefs-extras
+  (creates the badge span if the page lacks it; refreshes on `inapp_message` /
+  `inapp_read` / focus / 30s). SPA: `dmUnread` in `PortalShell.tsx`. Page
+  scripts must NOT write the sidebar badge themselves (dashboard.html used to
+  and blanked it).
+- The list is **latest activity first** on every render (`byLatest` in
+  inbox.html — realtime updates change `last_message_at` in place), and the
+  page shows the unread total beside its "Inbox" title plus a count on the
+  "Team" divider.
+- **`applicant-inbox.html` (admin ↔ hiree SMS) and `hirees.html` are HIDDEN,
+  not deleted** — no Hirees flow yet. `injectApplicantInboxLink` /
+  `injectHireesLink` early-return, CSS rules hide any `a[href="applicant-inbox.html"]`
+  / `a[href="hirees.html"]`, and both SPA entries hide for all roles.
+  `admin-inbox.html` is a redirect stub to `inbox.html`.
+- `.localpreview/verify-inbox-all-roles.mjs` checks all of the above per role
+  against the real backend (`run-local.sh`).
+
 ## SMS pool — two ways a lead gets to an agent
 
 The agent pool is `sms_leads WHERE status='QUEUED'`; everything downstream

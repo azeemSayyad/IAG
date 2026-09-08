@@ -1,9 +1,9 @@
-"""In-app direct messaging between admins and agents (NOT SMS).
+"""In-app direct messaging between portal users (NOT SMS).
 
-Channel:
-  * An ADMIN-side user (tenant_admin / super_admin / admin / dev) chats with AGENTS.
-  * An AGENT chats with ADMINS (tenant_admin / super_admin / admin).
-Other roles (lead / manager / head) are not part of this channel.
+Channel: EVERY active user in the tenant can message EVERY other active user,
+whatever their roles (admin ↔ agent, agent ↔ agent, admin ↔ admin, …). It used
+to be restricted to admin ↔ agent pairs; that restriction was lifted so the
+single Inbox page is one place for all in-app conversations.
 
 Messages persist in direct_messages (source of truth) and are pushed in realtime
 over Socket.IO to the recipient's per-user room as an ``inapp_message`` event.
@@ -25,11 +25,6 @@ from app.realtime.websocket import emit_to_user_room
 
 router = APIRouter(prefix="/inbox/dm", tags=["direct-messages"])
 
-# Roles whose Inbox shows AGENTS (they sit on the "admin" side of the channel).
-ADMIN_SIDE = {"tenant_admin", "super_admin", "admin", "dev"}
-# Admin roles an AGENT may message (the contacts shown in their Admin Inbox).
-ADMIN_CONTACTS = {"tenant_admin", "super_admin", "admin"}
-
 _ROLE_LABELS = {
     "agent": "Agent", "lead": "Team Lead", "manager": "Manager", "head": "Head Manager",
     "tenant_admin": "Admin", "super_admin": "Super Admin", "admin": "Admin", "dev": "Dev",
@@ -46,14 +41,17 @@ def _name(u: User) -> str:
 
 
 def _counterpart_query(db: Session, me: User):
-    """Users the current user is allowed to DM, as a SQLAlchemy query (or None)."""
-    q = db.query(User).filter(User.tenant_id == me.tenant_id, User.deleted_at.is_(None), User.id != me.id)
-    if me.role in ADMIN_SIDE:
-        # Admins only DM ACTIVE agents — deactivated agents drop out of the inbox roster.
-        return q.filter(User.role == "agent", User.status == "active")
-    if me.role == "agent":
-        return q.filter(User.role.in_(list(ADMIN_CONTACTS)))
-    return None
+    """Users the current user is allowed to DM, as a SQLAlchemy query (or None).
+
+    Everyone in the tenant, any role. Deactivated / deleted users drop out of
+    the roster (their history stays in direct_messages).
+    """
+    return db.query(User).filter(
+        User.tenant_id == me.tenant_id,
+        User.deleted_at.is_(None),
+        User.status == "active",
+        User.id != me.id,
+    )
 
 
 def _resolve_counterpart(db: Session, me: User, other_id: str) -> User:
@@ -100,7 +98,7 @@ def unread_count(db: Session = Depends(get_db), me: User = Depends(get_current_a
 
 @router.get("/threads")
 def list_threads(db: Session = Depends(get_db), me: User = Depends(get_current_active_user)):
-    """Counterpart list (admins↔agents), newest activity first, with unread counts."""
+    """Counterpart list (every other active user), newest activity first, with unread counts."""
     cq = _counterpart_query(db, me)
     if cq is None:
         return {"threads": [], "self_id": str(me.id)}
@@ -148,7 +146,7 @@ def list_threads(db: Session = Depends(get_db), me: User = Depends(get_current_a
 
 
 @router.get("/threads/{user_id}")
-def get_thread(user_id: str, db: Session = Depends(get_db), me: User = Depends(get_current_active_user)):
+async def get_thread(user_id: str, db: Session = Depends(get_db), me: User = Depends(get_current_active_user)):
     """Full message history with one counterpart; marks their messages read."""
     other = _resolve_counterpart(db, me, user_id)
     pair = or_(
@@ -170,6 +168,12 @@ def get_thread(user_id: str, db: Session = Depends(get_db), me: User = Depends(g
             changed = True
     if changed:
         db.commit()
+        # Tell MY other tabs/pages the thread is read so their sidebar Inbox
+        # badge drops without waiting for the focus / 30s refresh.
+        try:
+            await emit_to_user_room(str(me.id), "inapp_read", {"peer_id": str(other.id)})
+        except Exception:
+            pass
 
     return {
         "contact": {

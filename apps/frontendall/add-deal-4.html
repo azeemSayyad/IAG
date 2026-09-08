@@ -8,13 +8,13 @@
 <link rel="apple-touch-icon" href="assets/apple-touch-icon.png"/>
 <script src="brand.js?v=2"></script>
 <script src="i18n-dict.js?v=2"></script>
-<script src="prefs-extras.js?v=37"></script>
+<script src="prefs-extras.js?v=40"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
 <link rel="stylesheet" href="wizard.css"/>
-  <script src="services/api.js?v=10"></script>
-  <script src="services/error-boundary.js?v=23"></script>
+  <script src="services/api.js?v=11"></script>
+  <script src="services/error-boundary.js?v=24"></script>
 </head>
 <body data-chapter="aca">
 
@@ -340,13 +340,14 @@
     box.innerHTML = message || '';
   }
 
+  // Resolve the SIGNED-IN user's own agent profile. This used to fall back to
+  // `agents[0]` when it found none, which silently filed the deal under the
+  // FIRST agent in the company — every user now has their own profile
+  // (app/core/agent_profile.py), so there is no fallback and never a wrong owner.
   async function resolveCurrentAgent(){
-    var me = await window.__ebAPI.get('/auth/me');
-    var agentsRes = await window.__ebAPI.get('/compliance/agents');
-    var agents = (agentsRes && agentsRes.items) || [];
-    var mine = agents.find(function(a){ return a.user_id === me.id; }) || agents[0];
-    if(!mine || !mine.id) throw new Error('No agent profile is available for compliance approval');
-    return mine;
+    var mine = await window.__ebAPI.get('/compliance/me/profile');
+    if(!mine || !mine.agent_id) throw new Error('No agent profile is available for compliance approval');
+    return { id: mine.agent_id };
   }
 
   async function runComplianceApproval(){

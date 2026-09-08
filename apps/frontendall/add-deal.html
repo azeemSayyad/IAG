@@ -8,13 +8,13 @@
 <link rel="apple-touch-icon" href="assets/apple-touch-icon.png"/>
 <script src="brand.js?v=2"></script>
 <script src="i18n-dict.js?v=2"></script>
-<script src="prefs-extras.js?v=37"></script>
+<script src="prefs-extras.js?v=40"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
 <link rel="stylesheet" href="wizard.css"/>
-  <script src="services/api.js?v=10"></script>
-  <script src="services/error-boundary.js?v=23"></script>
+  <script src="services/api.js?v=11"></script>
+  <script src="services/error-boundary.js?v=24"></script>
 <style>
   .ch-prog{display:flex;gap:14px}
   /* Required-field marker — every field except Apt / Unit # and Social */
@@ -29,8 +29,8 @@
   .dob-cal:hover{color:var(--c);background:var(--c-soft)}
   .dob-cal:focus-visible{outline:2px solid var(--c);outline-offset:1px}
   .dob-cal svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
-  .dob-hint{margin:0;font-size:.75rem;font-weight:600;color:#A3525C}
-  html[data-mode="dark"] .dob-hint{color:#F2A0A9}
+  .field-hint{margin:0;font-size:.75rem;font-weight:600;color:#A3525C}
+  html[data-mode="dark"] .field-hint{color:#F2A0A9}
   /* Attached-file rows (call recordings + consent forms) are built with inline
      light styles, which prefs-extras' global dark block doesn't reach — recolour
      them here so both lists read correctly in dark mode. */
@@ -167,8 +167,8 @@
     <form class="form-grid" autocomplete="off" novalidate>
       <div class="field"><label class="field-label">First name <span class="req" title="Required">*</span></label><input class="ctl" data-f="first" type="text" placeholder="Maria"/></div>
       <div class="field"><label class="field-label">Last name <span class="req" title="Required">*</span></label><input class="ctl" data-f="last" type="text" placeholder="Rodriguez"/></div>
-      <div class="field"><label class="field-label">Date of birth <span class="req" title="Required">*</span></label><div class="dob-wrap"><input class="ctl" data-f="dob" type="text" inputmode="numeric" autocomplete="bday" maxlength="10" placeholder="MM/DD/YYYY"/><input class="dob-picker" type="date" tabindex="-1" aria-hidden="true"/><button class="dob-cal" type="button" title="Pick from a calendar" aria-label="Pick the date of birth from a calendar"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg></button></div><p class="dob-hint" hidden></p></div>
-      <div class="field"><label class="field-label">Phone <span class="req" title="Required">*</span></label><input class="ctl" data-f="phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="(555) 123-4567" required aria-required="true"/></div>
+      <div class="field"><label class="field-label">Date of birth <span class="req" title="Required">*</span></label><div class="dob-wrap"><input class="ctl" data-f="dob" type="text" inputmode="numeric" autocomplete="bday" maxlength="10" placeholder="MM/DD/YYYY"/><input class="dob-picker" type="date" tabindex="-1" aria-hidden="true"/><button class="dob-cal" type="button" title="Pick from a calendar" aria-label="Pick the date of birth from a calendar"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg></button></div><p class="field-hint" hidden></p></div>
+      <div class="field"><label class="field-label">Phone <span class="req" title="Required">*</span></label><input class="ctl" data-f="phone" type="tel" inputmode="numeric" autocomplete="tel" placeholder="(555) 123-4567" required aria-required="true"/><p class="field-hint" hidden></p></div>
       <div class="field" style="grid-column:1/-1"><label class="field-label">Address <span class="req" title="Required">*</span></label><input class="ctl" data-f="address" type="text" autocomplete="address-line1" placeholder="102 North Church Avenue"/></div>
       <div class="field" style="grid-column:1/-1"><label class="field-label">Apt / Unit # <span class="opt">optional</span></label><input class="ctl" data-f="apartment" type="text" autocomplete="address-line2" placeholder="Apt, suite, unit (optional)"/></div>
       <div class="field"><label class="field-label">City <span class="req" title="Required">*</span></label><input class="ctl" data-f="city" type="text" autocomplete="address-level2" placeholder="Fort Meade"/></div>
@@ -309,13 +309,14 @@
   function flash(msg){ if(window.__ebShowToast) window.__ebShowToast(msg,'danger'); else alert(msg); }
   function num(v){ return parseFloat(String(v||'').replace(/[$,]/g,'')) || 0; }
 
+  // Resolve the SIGNED-IN user's own agent profile. This used to fall back to
+  // `agents[0]` when it found none, which silently filed the deal under the
+  // FIRST agent in the company — every user now has their own profile
+  // (app/core/agent_profile.py), so there is no fallback and never a wrong owner.
   async function resolveAgent(){
-    const me = await window.__ebAPI.get('/auth/me');
-    const res = await window.__ebAPI.get('/compliance/agents');
-    const agents = (res && res.items) || [];
-    const mine = agents.find(a=>a.user_id===me.id) || agents[0];
-    if(!mine || !mine.id) throw new Error('No agent profile is available for this user');
-    return mine.id;
+    const mine = await window.__ebAPI.get('/compliance/me/profile');
+    if(!mine || !mine.agent_id) throw new Error('No agent profile is available for this user');
+    return mine.agent_id;
   }
 
   // Agent NPN is fixed per agent: pull the signed-in agent's own NPN (the same
@@ -407,9 +408,9 @@
     if(dobError(v) || d.length!==8) return '';
     return d.slice(4)+'-'+d.slice(0,2)+'-'+d.slice(2,4);
   }
-  function setDobHint(el, msg){
+  function setFieldHint(el, msg){
     const field = el.closest('.field');
-    const hint = field && field.querySelector('.dob-hint');
+    const hint = field && field.querySelector('.field-hint');
     if(hint){ hint.textContent = msg||''; hint.hidden = !msg; }
     if(msg) markInvalid(el);
     else { el.classList.remove('eb-invalid'); el.style.outline=''; }
@@ -427,17 +428,17 @@
     }
     // Keep an already-shown error honest as the agent retypes — but never nag
     // about a half-typed date; that one only appears once they leave the field.
-    const field = el.closest('.field'), hint = field && field.querySelector('.dob-hint');
+    const field = el.closest('.field'), hint = field && field.querySelector('.field-hint');
     if(hint && !hint.hidden){
       const err = dobError(el.value);
-      setDobHint(el, err===DOB_INCOMPLETE ? '' : err);
+      setFieldHint(el, err===DOB_INCOMPLETE ? '' : err);
     }
   });
   // Validate once the agent leaves the field.
   wrap.addEventListener('focusout', function(e){
     const el = e.target;
     if(!el || !el.matches || !el.matches('[data-f="dob"]')) return;
-    setDobHint(el, dobError(el.value));
+    setFieldHint(el, dobError(el.value));
   });
   // Calendar button -> native date picker, seeded with whatever is typed.
   wrap.addEventListener('click', function(e){
@@ -457,7 +458,47 @@
     const [y,m,d] = pk.value.split('-');
     const txt = pk.closest('.field').querySelector('[data-f="dob"]');
     txt.value = m+'/'+d+'/'+y;
-    setDobHint(txt, dobError(txt.value));
+    setFieldHint(txt, dobError(txt.value));
+  });
+
+  // ---- Phone ---------------------------------------------------------------
+  // Digits only, exactly 10, displayed US style as (555) 123-4567. Anything that
+  // is not a digit is dropped as it is typed, so the field can never hold letters
+  // or a half-typed number in some other shape. A pasted 1-555-… / +1 keeps its
+  // 10 real digits: no NANP area code starts with 1, so an 11th leading 1 can
+  // only ever be the country code.
+  function phoneMask(v){
+    let d = String(v||'').replace(/\D/g,'');
+    if(d.length>10 && d[0]==='1') d = d.slice(1);
+    d = d.slice(0,10);
+    if(d.length<=3) return d;
+    if(d.length<=6) return '('+d.slice(0,3)+') '+d.slice(3);
+    return '('+d.slice(0,3)+') '+d.slice(3,6)+'-'+d.slice(6);
+  }
+  // '' when the value is a usable US number, otherwise the reason why not.
+  function phoneError(v){
+    const raw = String(v||'').trim();
+    if(!raw) return '';                                   // empty is the required-check's job
+    return raw.replace(/\D/g,'').length===10 ? '' : 'Enter a 10-digit phone number.';
+  }
+  wrap.addEventListener('input', function(e){
+    const el = e.target;
+    if(!el || !el.matches || !el.matches('[data-f="phone"]')) return;
+    const atEnd = el.selectionStart === el.value.length;
+    const pos = el.selectionStart;
+    const masked = phoneMask(el.value);
+    if(masked !== el.value){
+      el.value = masked;
+      try{ const c = atEnd ? masked.length : Math.min(pos, masked.length); el.setSelectionRange(c, c); }catch(_){}
+    }
+    const field = el.closest('.field'), hint = field && field.querySelector('.field-hint');
+    if(hint && !hint.hidden && !phoneError(el.value)) setFieldHint(el, '');
+  });
+  // Validate once the agent leaves the field.
+  wrap.addEventListener('focusout', function(e){
+    const el = e.target;
+    if(!el || !el.matches || !el.matches('[data-f="phone"]')) return;
+    setFieldHint(el, phoneError(el.value));
   });
 
   function collectPerson(card){
@@ -630,7 +671,9 @@
       // A typed-but-unparseable date (e.g. "13/45/1990") is called out as invalid
       // rather than "missing", so the agent knows to fix it, not fill it.
       if(i===0) req(!p.dob, p.dobRaw ? 'a valid Date of birth (MM/DD/YYYY)' : 'Date of birth', 'dob');
-      req(!p.phone,'Phone','phone');
+      // Same shape as the DOB check: a half-typed number is called out as invalid
+      // rather than "missing", so the agent knows to fix it, not fill it.
+      req(!p.phone || !!phoneError(p.phone), p.phone ? 'a valid 10-digit Phone' : 'Phone', 'phone');
       req(!p.address,'Address','address');
       req(!p.city,'City','city');
       req(!p.zip,'ZIP','zip');

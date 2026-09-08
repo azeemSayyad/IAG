@@ -8,7 +8,7 @@
 <link rel="apple-touch-icon" href="assets/apple-touch-icon.png"/>
 <script src="brand.js?v=2"></script>
 <script src="i18n-dict.js?v=2"></script>
-<script src="prefs-extras.js?v=37"></script>
+<script src="prefs-extras.js?v=40"></script>
 <script src="coach.js" defer></script>
 <script src="tour.js" defer></script>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
@@ -141,7 +141,9 @@ html[data-mode="dark"] .sb-brand-logo{background:#FFFFFF;border-radius:8px;paddi
 .list-tools{display:flex;flex-direction:column;gap:10px;padding:12px;flex-shrink:0}
 .list-tools .hdr-meta:empty{display:none}
 .panel-title-row{display:flex;align-items:center;justify-content:space-between;gap:10px}
-.panel-title{font-size:.9375rem;font-weight:600;letter-spacing:-0.005em}
+.panel-title{font-size:.9375rem;font-weight:600;letter-spacing:-0.005em;display:flex;align-items:center;gap:8px}
+.unread-pill{display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:18px;padding:0 6px;border-radius:9px;background:var(--accent);color:#fff;font-size:.6875rem;font-weight:700;line-height:1}
+.lead-divider .unread-pill{margin-left:6px;height:16px;min-width:16px;font-size:.625rem}
 .panel-sub{font-size:.75rem;color:var(--text-muted)}
 
 /* Left panel: leads */
@@ -470,9 +472,9 @@ html[data-mode="dark"] .sb-brand-logo{background:#FFFFFF;border-radius:8px;paddi
   .fab-quote{display:none}
 }
 </style>
-  <script src="services/api.js?v=10"></script>
+  <script src="services/api.js?v=11"></script>
   <script src="services/call-now-popup.js?v=1"></script>
-  <script src="services/error-boundary.js?v=23"></script>
+  <script src="services/error-boundary.js?v=24"></script>
 </head>
 <body>
 
@@ -573,7 +575,7 @@ html[data-mode="dark"] .sb-brand-logo{background:#FFFFFF;border-radius:8px;paddi
   <section class="panel leads">
     <div class="panel-head">
       <div class="panel-title-row">
-        <div class="panel-title">Inbox</div>
+        <div class="panel-title">Inbox <span class="unread-pill" id="inboxUnreadPill" style="display:none" title="Unread messages">0</span></div>
       </div>
     </div>
     <div class="list-tools">
@@ -895,7 +897,7 @@ html[data-mode="dark"] .sb-brand-logo{background:#FFFFFF;border-radius:8px;paddi
           <div class="lead-name-row">
             <svg class="pin-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17v5"/><path d="M9 3h6l-1 7 3 3H7l3-3-1-7Z"/></svg>
             <span class="lead-name">${escapeHtml(l.name)}</span>
-            <span class="lt admin">${escapeHtml(l.tag||'Admin')}</span>
+            <span class="lt admin">${escapeHtml(l.tag||'Team')}</span>
           </div>
           <div class="lead-msg">${escapeHtml(l.last)}</div>
         </div>
@@ -905,12 +907,23 @@ html[data-mode="dark"] .sb-brand-logo{background:#FFFFFF;border-radius:8px;paddi
         </div>
       </div>`;
   }
+  // Latest activity first (realtime updates change last_message_at in place,
+  // so sort on EVERY render, not just on load). Never-messaged team rows go
+  // after the active ones, alphabetically.
+  function byLatest(a, b){
+    var ta = a.last_message_at ? new Date(a.last_message_at).getTime() : 0;
+    var tb = b.last_message_at ? new Date(b.last_message_at).getTime() : 0;
+    if(ta !== tb) return tb - ta;
+    return (a.name||'').localeCompare(b.name||'');
+  }
   function renderLeadList(){
-    const pinned = leads.filter(l => l.channel==='dm' && matchSearch(l));
-    const list = leads.filter(l => l.channel!=='dm' && matchFilter(l) && matchSearch(l));
+    const pinned = leads.filter(l => l.channel==='dm' && matchSearch(l)).sort(byLatest);
+    const list = leads.filter(l => l.channel!=='dm' && matchFilter(l) && matchSearch(l)).sort(byLatest);
     { var lcEl = $('#leadCount'); if(lcEl) lcEl.textContent = list.length; }
     const listHtml = list.map(leadRowHtml).join('');
+    const teamUnread = pinned.reduce((s,l)=>s+(l.unread||0),0);
     $('#leadList').innerHTML =
+      (pinned.length ? `<div class="lead-divider">Team${teamUnread>0?`<span class="unread-pill">${teamUnread}</span>`:''}</div>` : '') +
       pinned.map(dmRowHtml).join('') +
       (pinned.length && listHtml ? `<div class="lead-divider">Conversations</div>` : '') +
       (listHtml || (pinned.length ? '' : `<div style="padding:30px 12px;text-align:center;color:var(--text-faint);font-size:.8125rem">No leads match this filter.</div>`));
@@ -927,6 +940,9 @@ html[data-mode="dark"] .sb-brand-logo{background:#FFFFFF;border-radius:8px;paddi
     const totalUnread = leads.reduce((s,l)=>s+l.unread,0);
     var ib = $('#inboxBadge');
     if(ib){ ib.textContent = totalUnread; ib.style.display = totalUnread>0 ? '' : 'none'; }
+    // Unread count beside the page title (team DMs + customer conversations).
+    var pill = $('#inboxUnreadPill');
+    if(pill){ pill.textContent = totalUnread > 99 ? '99+' : totalUnread; pill.style.display = totalUnread>0 ? '' : 'none'; }
     // Real header count (was a hardcoded "4 unread").
     var psEl = document.querySelector('#pageScope');
     if(psEl) psEl.textContent = leads.length + ' conversation' + (leads.length===1?'':'s') + ' · ' + totalUnread + ' unread';
@@ -1083,7 +1099,7 @@ html[data-mode="dark"] .sb-brand-logo{background:#FFFFFF;border-radius:8px;paddi
   function openDmThread(l){
     document.body.classList.add('eb-dm-open');
     $('#convName').textContent = l.name;
-    $('#convSub').innerHTML = '<span>'+escapeHtml(l.phone||'')+'</span><span class="dot-sep"></span><span>'+escapeHtml(l.tag||'Admin')+' · in-app realtime</span>';
+    $('#convSub').innerHTML = '<span>'+escapeHtml(l.phone||'')+'</span><span class="dot-sep"></span><span>'+escapeHtml(l.tag||'Team')+' · in-app message</span>';
     $('#thread').innerHTML = '<div style="padding:24px;text-align:center;color:var(--text-faint);font-size:.8125rem">Loading…</div>';
     if(window.__ebAPI.clearCache) window.__ebAPI.clearCache();
     window.__ebAPI.get('/inbox/dm/threads/'+encodeURIComponent(l.dm_user_id)).then(function(res){
@@ -1375,13 +1391,13 @@ html[data-mode="dark"] .sb-brand-logo{background:#FFFFFF;border-radius:8px;paddi
   $('#fabAssistant').addEventListener('click',()=>{window.location.href='ask-the-brain.html'});
 
   /* === Real data fetching === */
-  // Pinned in-app admin DM → list row.
+  // Pinned in-app DM (any user in the tenant) → list row.
   function buildDmLead(t){
-    var nm = t.name || 'Admin';
+    var nm = t.name || 'Team';
     return {
       id: 'dm:'+t.user_id, channel:'dm', dm_user_id: t.user_id, pinned:true,
       name: nm, initials: nm.split(' ').map(function(s){ return s[0]; }).join('').slice(0,2).toUpperCase(),
-      phone: t.email || '', tag: t.tag || 'Admin',
+      phone: t.email || '', tag: t.tag || 'Team',
       last: t.last_message || 'Start a conversation',
       last_message_at: t.last_message_at || null,
       time: t.last_message_at ? timeAgo(t.last_message_at) : '',
@@ -1428,8 +1444,8 @@ html[data-mode="dark"] .sb-brand-logo{background:#FFFFFF;border-radius:8px;paddi
     var convP = window.__ebAPI.get('/conversations', { page: 1, size: 20 }).catch(function(){ return null; });
     var dmP = window.__ebAPI.get('/inbox/dm/threads').catch(function(){ return null; });
 
-    // Pinned admin DMs (only returned for agents) — paint them the moment they
-    // arrive, before /conversations resolves, so there's no empty-list gap.
+    // Pinned in-app DMs (every other user in the tenant, any role) — paint
+    // them the moment they arrive, before /conversations resolves.
     var dmLeads = [];
     try {
       var dmRes = await dmP;

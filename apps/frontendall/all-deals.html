@@ -8,9 +8,9 @@
 <link rel="apple-touch-icon" href="assets/apple-touch-icon.png"/>
 <script src="brand.js?v=2"></script>
 <script src="i18n-dict.js?v=2"></script>
-<script src="prefs-extras.js?v=37"></script>
-<script src="services/api.js?v=10"></script>
-<script src="services/error-boundary.js?v=23"></script>
+<script src="prefs-extras.js?v=40"></script>
+<script src="services/api.js?v=11"></script>
+<script src="services/error-boundary.js?v=24"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
@@ -418,7 +418,7 @@ html[data-mode="dark"] #recPlayer{background:#1C2029;border-color:rgba(255,255,2
   var PAGE_SIZE = 40, PAGE = 1;
   var FILTERS = { agent:'', carrier:'', state:'', status:'', coverage:'', rec:'', q:'', sort:'desc' };
   // Edit is admin-only: hide the button for non-admins (the backend enforces it too).
-  var IS_ADMIN = ['admin','tenant_admin','super_admin'].indexOf(localStorage.getItem('ebRole')||'') !== -1;
+  var IS_ADMIN = ['admin','tenant_admin','super_admin','head','dev'].indexOf(localStorage.getItem('ebRole')||'') !== -1;
 
   // ── Date-range filter (computed in Florida / Eastern, matching the backend) ──
   var BIZ_TZ='America/New_York';
@@ -608,7 +608,9 @@ html[data-mode="dark"] #recPlayer{background:#1C2029;border-color:rgba(255,255,2
       if(FILTERS.rec==='rec' && !d.recording_id) return false;
       if(FILTERS.rec==='norec' && d.recording_id) return false;
       if(q){
-        var hay = [d.customer_name,d.customer_phone,d.carrier,d.agent_name,d.state]
+        // The phone's bare digits ride along so "5551234567" still finds a row
+        // stored as (555) 123-4567 (and vice-versa).
+        var hay = [d.customer_name,d.customer_phone,String(d.customer_phone||'').replace(/\D/g,''),d.carrier,d.agent_name,d.state]
           .map(function(x){return (x==null?'':String(x)).toLowerCase();}).join(' ');
         if(hay.indexOf(q)===-1) return false;
       }

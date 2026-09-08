@@ -282,6 +282,7 @@ def ai_objections(
 
 from app.core.security import hash_password
 from app.models.agent import Agent
+from app.core.agent_profile import ensure_agent_profile, sync_profile_status
 
 # IAG runs with three roles: "agent", "head" (Head Manager) and "super_admin".
 # A Head Manager is an admin everywhere except company Expenses, Contacts and
@@ -301,7 +302,10 @@ def _assignable_roles(current_user: User) -> set[str]:
     if current_user.role == "dev":
         roles.add("dev")
     return roles
-_AGENT_ROLES = {"agent", "lead", "manager"}  # roles that get their own Agent record
+# EVERY user gets an agent profile now (see app/core/agent_profile.py) so any
+# role can log its own deals. Only these roles get a ROUTABLE one — the rest are
+# created inactive so lead distribution and booking never hand them a customer.
+_AGENT_ROLES = {"agent", "lead", "manager"}
 
 
 class CreateUserRequest(BaseModel):
@@ -391,12 +395,7 @@ def create_user(
         existing.preferences = prefs
         existing.failed_login_attempts = 0
         existing.locked_until = None
-        agent = db.query(Agent).filter(Agent.user_id == existing.id).first()
-        if role in _AGENT_ROLES:
-            if agent:
-                agent.status = "active"
-            else:
-                db.add(Agent(tenant_id=tenant_id, user_id=existing.id, status="active"))
+        sync_profile_status(db, existing)   # profile exists for every role; routable only for operators
         db.commit()
         db.refresh(existing)
         return {"id": str(existing.id), "email": existing.email, "role": existing.role}
@@ -414,9 +413,9 @@ def create_user(
     db.add(user)
     db.flush()
 
-    # Operator roles get an Agent record (their own calendar/inbox).
-    if role in _AGENT_ROLES:
-        db.add(Agent(tenant_id=tenant_id, user_id=user.id, status="active"))
+    # Every role gets an agent profile so it can log its own deals; only
+    # operator roles get a routable (active) one.
+    ensure_agent_profile(db, user, commit=False)
     db.commit()
     db.refresh(user)
     return {"id": str(user.id), "email": user.email, "role": user.role}
@@ -465,22 +464,18 @@ def update_user(
         if role not in _assignable_roles(current_user):
             raise HTTPException(status_code=422, detail=f"Invalid role: {role}")
         user.role = role
-        # Operator roles need an Agent record (calendar/inbox/distribution). Create
-        # one if the user is becoming an operator and doesn't have one yet.
-        if role in _AGENT_ROLES:
-            existing = db.query(Agent).filter(Agent.user_id == user.id).first()
-            if not existing:
-                db.add(Agent(tenant_id=tenant_id, user_id=user.id, status="active"))
+        # Every role keeps a profile (so past deals still resolve); changing role
+        # only changes whether it is routable.
+        sync_profile_status(db, user)
 
     if request.status is not None:
         st = request.status.strip().lower()
         if st not in ("active", "suspended"):
             raise HTTPException(status_code=422, detail="status must be active or suspended")
         user.status = st
-        # Suspended operators stop receiving leads (their Agent record goes inactive).
-        agent = db.query(Agent).filter(Agent.user_id == user.id).first()
-        if agent:
-            agent.status = "active" if st == "active" else "inactive"
+        # Suspended users stop receiving leads. Re-activating a user must NOT make
+        # an admin routable — sync_profile_status re-derives it from the role.
+        sync_profile_status(db, user)
 
     db.commit()
     db.refresh(user)
