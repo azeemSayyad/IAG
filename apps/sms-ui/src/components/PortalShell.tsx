@@ -64,7 +64,9 @@ const WORKSPACE_LINKS: PortalLink[] = [
 
 // Appointments lives in the "Leads" section (matches the static sidebar, where
 // error-boundary.js moves it into the #sbSms group). Hidden for admin-class roles.
-const APPOINTMENTS_LINK: PortalLink = { href: "/appointments.html", label: "Appointments", icon: "calendar", hideRoles: ["head", "tenant_admin", "super_admin", "admin"] };
+// Appointments is for EVERY role: head managers and admins run the same
+// calendar the agents do, so nothing is hidden here any more.
+const APPOINTMENTS_LINK: PortalLink = { href: "/appointments.html", label: "Appointments", icon: "calendar", hideRoles: [] };
 // Each SMS link carries its own visibility check (see lib/auth):
 //   Queue → agents + dev · Manager → manager-class + admin + dev · Monitoring → dev only.
 const SMS_LINKS: { to: string; label: string; icon: string; show: () => boolean }[] = [

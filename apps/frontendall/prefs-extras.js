@@ -731,22 +731,15 @@
         'html[data-role="manager"] a[href="dispositions.html"],' +
         'html[data-role="manager"] #navUpload,' +
         'html[data-role="manager"] a[href="dashboard.html"],' +
-        // Head manager: no Appointments (operates above the appointment level).
-        // :not(.ch-brand) — the Add-Deal wizard's BRAND lockup also links to
-        // appointments.html, and without this the gate hid the logo too.
-        'html[data-role="head"]  a[href="appointments.html"]:not(.ch-brand),' +
-        // Admin: no Appointments, no My Team; Analytics merges into Dashboard.
-        // Admin works at the org level (Team Performance, not the operator-level
-        // My Team / Appointments surfaces). The Inbox is NOT gated: it is the
-        // one in-app messaging page and every role (admin ↔ agent, agent ↔
-        // agent, admin ↔ admin) uses it.
-        'html[data-role="tenant_admin"] a[href="appointments.html"]:not(.ch-brand),' +
+        // Admin: no My Team; Analytics merges into Dashboard. Admin works at the
+        // org level (Team Performance rather than the operator-level My Team).
+        // NOT gated any more: the Inbox (one shared in-app messaging page) and
+        // APPOINTMENTS — head managers and admins keep the same appointment
+        // calendar the agents have, so they can book and run their own.
         'html[data-role="tenant_admin"] a[href="my-team.html"],' +
         'html[data-role="tenant_admin"] a[href="analytics.html"],' +
-        'html[data-role="super_admin"]  a[href="appointments.html"]:not(.ch-brand),' +
         'html[data-role="super_admin"]  a[href="my-team.html"],' +
         'html[data-role="super_admin"]  a[href="analytics.html"],' +
-        'html[data-role="admin"] a[href="appointments.html"]:not(.ch-brand),' +
         'html[data-role="admin"] a[href="my-team.html"],' +
         'html[data-role="admin"] a[href="analytics.html"]{display:none !important}' +
         // Applicant Inbox (admin↔hiree SMS) is HIDDEN for every role until the
@@ -1024,15 +1017,11 @@
 
     // ===== Role gating: hide Appointments for head managers =====
     // Head managers operate above the appointment level.
+    // Head managers now KEEP Appointments — they run the same calendar the
+    // agents do. Left as a no-op rather than deleted so the call site and the
+    // history stay obvious.
     function hideAppointmentsForHeads(){
-      if((localStorage.getItem('ebRole') || 'agent') !== 'head') return;
-      document.querySelectorAll('a[href="appointments.html"]:not(.ch-brand)').forEach(function(a){
-        a.style.display = 'none';
-      });
-      var here = (location.pathname.split('/').pop() || '').toLowerCase();
-      if(here === 'appointments.html'){
-        location.replace('ask-the-brain.html');
-      }
+      return;
     }
 
     // ===== Role gating: Dispositions report is ADMIN-ONLY =====
@@ -1061,11 +1050,13 @@
     function gateAdminTabs(){
       var role = localStorage.getItem('ebRole') || 'agent';
       if(role !== 'admin' && role !== 'tenant_admin' && role !== 'super_admin') return;
-      document.querySelectorAll('a[href="appointments.html"]:not(.ch-brand), a[href="analytics.html"], a[href="my-team.html"]').forEach(function(a){
+      // Appointments is deliberately NOT in this list any more: admins keep the
+      // appointment calendar. Analytics and My Team stay gated as before.
+      document.querySelectorAll('a[href="analytics.html"], a[href="my-team.html"]').forEach(function(a){
         a.style.display = 'none';
       });
       var here = (location.pathname.split('/').pop() || '').toLowerCase();
-      if(here === 'appointments.html' || here === 'analytics.html' || here === 'my-team.html'){
+      if(here === 'analytics.html' || here === 'my-team.html'){
         location.replace('dashboard.html');
       }
     }

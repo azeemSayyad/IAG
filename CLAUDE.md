@@ -159,9 +159,35 @@ page mid-session once the access token ages out:
    ~8 requests at once and each would otherwise trigger its own refresh.
 Anything doing a raw `fetch` must go through `authedFetch`/`apiUpload`, not
 `fetch` + `getAccessToken()` — that was how the multipart uploaders each grew
-their own "401 → /login.html" line. `lib/socket.ts` passes `auth` as a callback
-so reconnects re-read the current token rather than the one from page load.
-Regression test: `.localpreview/verify-session-refresh.mjs` (git-ignored).
+their own "401 → /login.html" line. BOTH socket layers pass `auth` as a callback
+(`lib/socket.ts` and `services/api.js`) so reconnects re-read the current token
+rather than the one captured at page load.
+
+**Only a REJECTED refresh may end a session.** This is the rule that keeps users
+from being thrown out at random, and every layer now obeys it:
+  * `POST /auth/refresh` answering **401/403** = the 7-day refresh token is
+    really dead -> clear tokens, go to login.
+  * ANY other failure (**502/503 while the API restarts or redeploys**, 429, a
+    network blip, an unparseable body) is TRANSIENT -> keep the tokens, fail
+    just that one request. Treating these as "session over" is what logged
+    people out mid-shift; it hit agents and head managers hardest simply
+    because their pages poll (the 6s queue-offer poll, inbox badge,
+    notifications) so a blip was far likelier to land on one of their requests.
+  * A 401 that survives one refresh+replay is that ENDPOINT's verdict, not a
+    dead session — surface the error, never refresh in a loop (`handleResponse`
+    takes a `retried` flag; `authedFetch` replays exactly once).
+  * A 401 carrying a token that is no longer the stored one just lost a race
+    with another request's refresh — replay it with the current token instead
+    of starting a second refresh (this is why exactly ONE `/auth/refresh` goes
+    out per page load, not one per in-flight request).
+  * `error-boundary.js`'s `safeInit()` session probe follows the same rule: it
+    only bounces to login when the tokens are already gone or the probe itself
+    came back 401.
+Logging out must clear `access_token` + `refresh_token`, not just `ebRole`
+(`ebClearSession()` in prefs-extras.js).
+Regression tests (both git-ignored):
+`.localpreview/verify-session-refresh.mjs` and, with backend fault injection
+across roles, `.localpreview/verify-session-resilience.mjs`.
 
 ### The sidebar has THREE sources — check all three for any nav change
 1. Static `<a class="sb-item" href="…">` blocks hardcoded in each `.html` page.

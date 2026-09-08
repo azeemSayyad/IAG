@@ -30,12 +30,19 @@ export async function authedFetch(
     return fetch(BASE + path, { ...init, headers });
   };
 
-  const res = await send(getAccessToken());
+  const used = getAccessToken();
+  const res = await send(used);
   if (res.status !== 401) return res;
 
   // Never try to refresh a failed refresh/login — that 401 means bad
   // credentials or a genuinely expired session, not a stale access token.
   if (/^\/auth\/(login|refresh|password-reset)/.test(path)) return res;
+
+  // Already refreshed by a request that raced ahead of this one: this 401 is
+  // just a stale token, not a dead session. Replay with the current token
+  // rather than starting a second refresh.
+  const currentToken = getAccessToken();
+  if (currentToken && used && currentToken !== used) return send(currentToken);
 
   let fresh: string | null;
   try {

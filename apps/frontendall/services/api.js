@@ -171,6 +171,17 @@
   }
 
   function handleRefresh(url, method, headers, body) {
+    // A request that was already in flight when another one refreshed the token
+    // comes back 401 carrying the OLD token. Nothing is wrong with the session —
+    // it just missed the swap. Replay it with the current token instead of
+    // starting a second refresh (this is what kept an extra POST /auth/refresh
+    // trailing every page load).
+    var used = (headers['Authorization'] || '').replace(/^Bearer /, '');
+    var currentToken = getTokens().access_token;
+    if (currentToken && used && currentToken !== used) {
+      headers['Authorization'] = 'Bearer ' + currentToken;
+      return fetch(url, { method: method, headers: headers, body: body });
+    }
     return refreshAccessToken().then(function (accessToken) {
       headers['Authorization'] = 'Bearer ' + accessToken;
       return fetch(url, { method: method, headers: headers, body: body });
