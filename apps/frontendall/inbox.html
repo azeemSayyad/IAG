@@ -583,17 +583,29 @@ html[data-mode="dark"] .sb-brand-logo{background:#FFFFFF;border-radius:8px;paddi
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
         <input id="leadSearch" placeholder="Search by name or message"/>
       </div>
-      <div class="chips" id="leadChips">
-        <button class="chip active" data-filter="all">All <span class="chip-count" id="cc-all">0</span></button>
-        <button class="chip" data-filter="hot">Hot <span class="chip-count" id="cc-hot">0</span></button>
-        <button class="chip" data-filter="appt">Appointments <span class="chip-count" id="cc-appt">0</span></button>
-        <button class="chip" data-filter="replied">Replied <span class="chip-count" id="cc-replied">0</span></button>
-        <button class="chip" data-filter="dead">Dead <span class="chip-count" id="cc-dead">0</span></button>
-        <button class="chip" data-filter="dnc">DNC <span class="chip-count" id="cc-dnc">0</span></button>
-      </div>
     </div>
     <div class="lead-list" id="leadList"><div class="eb-list-loader"><span class="eb-spin"></span>Loading…</div></div>
   </section>
+
+  <!-- Group composer — create or edit an in-app group. Super admin only; the
+       backend enforces the same rule, so this gate is convenience, not security. -->
+  <div class="gp-back" id="gpBack" role="dialog" aria-modal="true" aria-labelledby="gpTitle">
+    <div class="gp-modal">
+      <h3 id="gpTitle">New group</h3>
+      <div class="gp-body">
+        <label class="gp-lbl" for="gpName">Group name</label>
+        <input type="text" id="gpName" maxlength="120" placeholder="e.g. Managers, All Agents" autocomplete="off"/>
+        <label class="gp-lbl">Members <span id="gpCount" style="color:var(--accent)"></span></label>
+        <div class="gp-people" id="gpPeople"></div>
+      </div>
+      <div class="gp-hint" id="gpHint" style="padding-top:8px">You are always a member of groups you create.</div>
+      <div class="gp-actions">
+        <button class="gp-btn danger" id="gpDelete" type="button" style="display:none">Delete group</button>
+        <button class="gp-btn" id="gpCancel" type="button">Cancel</button>
+        <button class="gp-btn primary" id="gpSave" type="button">Create group</button>
+      </div>
+    </div>
+  </div>
 
   <div class="col-resize col-resize--inner" data-resize="leads" aria-label="Resize inbox column" role="separator">
     <span class="cr-grip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6-6 6 6 6"/><path d="m15 6 6 6-6 6"/></svg></span>
@@ -824,6 +836,8 @@ html[data-mode="dark"] .sb-brand-logo{background:#FFFFFF;border-radius:8px;paddi
   var leads = [];
   var currentLeadId = null;
   var selfId = '';   // current user id (for in-app DM out/in detection)
+  var canManageGroups = false;   // super_admin only — set from /inbox/dm/groups
+  var dmRoster = [];             // every other active user, for the group member picker
 
   // Styling for the pinned in-app admin rows + the "dm mode" chrome hiding.
   try {
@@ -831,7 +845,48 @@ html[data-mode="dark"] .sb-brand-logo{background:#FFFFFF;border-radius:8px;paddi
       '.lead.pinned{background:linear-gradient(90deg,rgba(var(--accent-rgb),.06),transparent)}'+
       '.lead .pin-ic{width:11px;height:11px;color:var(--accent);flex:none;margin-right:2px}'+
       '.lt.admin{background:rgba(63,110,158,.14);color:#3F6E9E}'+
-      '.lead-divider{padding:8px 14px 4px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-faint)}'+
+      '.lead-divider{padding:8px 14px 4px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-faint);display:flex;align-items:center;gap:6px}'+
+      '.lead-divider .gp-new{margin-left:auto;display:inline-flex;align-items:center;gap:4px;border:1px solid var(--border);background:transparent;color:var(--accent);border-radius:999px;padding:2px 8px;font:inherit;font-size:10px;font-weight:700;letter-spacing:.04em;cursor:pointer}'+
+      '.lead-divider .gp-new:hover{background:rgba(var(--accent-rgb),.10);border-color:var(--accent)}'+
+      '.lt.group{background:rgba(var(--accent-rgb),.14);color:var(--accent)}'+
+      '.lead .gp-ic{width:12px;height:12px;color:var(--accent);flex:none;margin-right:2px}'+
+      // A text link inside .lead-meta (the right-hand column stack), so it sits
+      // in normal flow under the time / unread badge and can never overlap them.
+      '.lead .gp-edit{display:inline-flex;align-items:center;border:0;background:none;padding:0;margin:0;color:var(--accent);font:inherit;font-size:.6875rem;font-weight:700;line-height:1;cursor:pointer}'+
+      '.lead .gp-edit:hover{text-decoration:underline}'+
+      /* Group composer modal (create / edit) */
+      '.gp-back{position:fixed;inset:0;background:rgba(15,23,42,.45);backdrop-filter:blur(2px);display:none;align-items:center;justify-content:center;z-index:9000}'+
+      '.gp-back.show{display:flex}'+
+      '.gp-modal{width:min(440px,92vw);max-height:86vh;display:flex;flex-direction:column;background:#fff;border:1px solid var(--border);border-radius:14px;box-shadow:0 24px 60px rgba(15,23,42,.28);overflow:hidden}'+
+      '.gp-modal h3{margin:0;padding:16px 18px 12px;font-size:.9375rem;font-weight:700;color:var(--text)}'+
+      '.gp-modal .gp-body{padding:0 18px 4px;overflow:auto}'+
+      '.gp-modal label.gp-lbl{display:block;font-size:.6875rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-faint);margin:6px 0 6px}'+
+      '.gp-modal input[type=text]{width:100%;padding:9px 11px;border:1px solid var(--border);border-radius:9px;background:transparent;color:var(--text);font:inherit;font-size:.875rem}'+
+      '.gp-modal input[type=text]:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(var(--accent-rgb),.14)}'+
+      '.gp-people{border:1px solid var(--border);border-radius:10px;max-height:230px;overflow:auto}'+
+      '.gp-person{display:flex;align-items:center;gap:9px;padding:8px 11px;cursor:pointer;border-bottom:1px solid var(--border)}'+
+      '.gp-person:last-child{border-bottom:none}'+
+      '.gp-person:hover{background:rgba(var(--accent-rgb),.06)}'+
+      '.gp-person input{accent-color:var(--accent);width:15px;height:15px;flex:none}'+
+      '.gp-person .gp-nm{font-size:.8125rem;color:var(--text);font-weight:600}'+
+      '.gp-person .gp-tg{margin-left:auto;font-size:.6875rem;color:var(--text-faint)}'+
+      '.gp-actions{display:flex;align-items:center;gap:8px;padding:14px 18px 16px}'+
+      '.gp-actions .gp-btn{padding:8px 14px;border-radius:9px;border:1px solid var(--border);background:transparent;color:var(--text);font:inherit;font-size:.8125rem;font-weight:600;cursor:pointer}'+
+      '.gp-actions .gp-btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}'+
+      '.gp-actions .gp-btn.danger{color:var(--down);border-color:rgba(220,38,38,.35);margin-right:auto}'+
+      '.gp-actions .gp-btn[disabled]{opacity:.55;cursor:not-allowed}'+
+      '.gp-hint{padding:0 18px;font-size:.75rem;color:var(--text-faint)}'+
+      '.msg .who{font-size:.6875rem;font-weight:700;color:var(--accent);margin:0 0 3px 2px}'+
+      'html[data-mode="dark"] .gp-modal{background:#161A22;border-color:rgba(255,255,255,.10)}'+
+      'html[data-mode="dark"] .gp-modal h3{color:#E8EAEE}'+
+      'html[data-mode="dark"] .gp-modal input[type=text]{background:rgba(255,255,255,.04);color:#F0F2F5;border-color:rgba(255,255,255,.12)}'+
+      'html[data-mode="dark"] .gp-people{border-color:rgba(255,255,255,.10)}'+
+      'html[data-mode="dark"] .gp-person{border-bottom-color:rgba(255,255,255,.08)}'+
+      'html[data-mode="dark"] .gp-person:hover{background:rgba(255,255,255,.06)}'+
+      'html[data-mode="dark"] .gp-person .gp-nm{color:#E8EAEE}'+
+      'html[data-mode="dark"] .gp-actions .gp-btn{background:rgba(255,255,255,.06);color:#F0F2F5;border-color:rgba(255,255,255,.12)}'+
+      'html[data-mode="dark"] .gp-actions .gp-btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}'+
+      'html[data-mode="dark"] .gp-actions .gp-btn.danger{background:transparent;color:#E88B94;border-color:rgba(232,139,148,.40)}'+
       'body.eb-dm-open #copilot,body.eb-dm-open [data-resize="copilot"],body.eb-dm-open .composer-toolrow,body.eb-dm-open .conv-actions{display:none !important}'+
       'html[data-mode="dark"] .lead.pinned{background:linear-gradient(90deg,rgba(255,255,255,.05),transparent)}'+
       '.eb-spin{display:inline-block;width:16px;height:16px;border:2px solid var(--border-hover);border-top-color:var(--accent);border-radius:50%;animation:ebspin .7s linear infinite;vertical-align:middle}'+
@@ -841,11 +896,12 @@ html[data-mode="dark"] .sb-brand-logo{background:#FFFFFF;border-radius:8px;paddi
     '</style>');
   } catch(e){}
 
-  let leadFilter='all', leadSearchQ='';
+  let leadSearchQ='';
 
+  // No filter chips any more — the list is every live conversation. Dead and
+  // DNC stay out of it, as they did under the old default "All" chip.
   function matchFilter(l){
-    if(leadFilter==='all') return l.tags.indexOf('dead')<0 && l.tags.indexOf('dnc')<0;
-    return l.tags.indexOf(leadFilter)>=0;
+    return l.tags.indexOf('dead')<0 && l.tags.indexOf('dnc')<0;
   }
   function matchSearch(l){
     if(!leadSearchQ) return true;
@@ -907,6 +963,26 @@ html[data-mode="dark"] .sb-brand-logo{background:#FFFFFF;border-radius:8px;paddi
         </div>
       </div>`;
   }
+  // Group row — same pinned treatment as a team DM, tagged with its size. The
+  // gear only renders for a super admin (see canManageGroups).
+  function groupRowHtml(l){
+    return `
+      <div class="lead pinned ${l.id===currentLeadId?'active':''} ${l.unread>0?'unread':''}" data-id="${l.id}">
+        <div class="lead-body">
+          <div class="lead-name-row">
+            <svg class="gp-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            <span class="lead-name">${escapeHtml(l.name)}</span>
+            <span class="lt group">${l.member_count} member${l.member_count===1?'':'s'}</span>
+          </div>
+          <div class="lead-msg">${escapeHtml(l.last)}</div>
+        </div>
+        <div class="lead-meta">
+          <span class="lead-time">${l.time}</span>
+          ${l.unread>0?`<span class="lead-unread">${l.unread}</span>`:''}
+          ${canManageGroups?`<button class="gp-edit" type="button" title="Edit group" data-gp-edit="${escapeHtml(l.group_id)}">Edit</button>`:''}
+        </div>
+      </div>`;
+  }
   // Latest activity first (realtime updates change last_message_at in place,
   // so sort on EVERY render, not just on load). Never-messaged team rows go
   // after the active ones, alphabetically.
@@ -917,26 +993,31 @@ html[data-mode="dark"] .sb-brand-logo{background:#FFFFFF;border-radius:8px;paddi
     return (a.name||'').localeCompare(b.name||'');
   }
   function renderLeadList(){
+    const groups = leads.filter(l => l.channel==='group' && matchSearch(l)).sort(byLatest);
     const pinned = leads.filter(l => l.channel==='dm' && matchSearch(l)).sort(byLatest);
-    const list = leads.filter(l => l.channel!=='dm' && matchFilter(l) && matchSearch(l)).sort(byLatest);
+    const list = leads.filter(l => l.channel!=='dm' && l.channel!=='group' && matchFilter(l) && matchSearch(l)).sort(byLatest);
     { var lcEl = $('#leadCount'); if(lcEl) lcEl.textContent = list.length; }
     const listHtml = list.map(leadRowHtml).join('');
     const teamUnread = pinned.reduce((s,l)=>s+(l.unread||0),0);
+    const groupUnread = groups.reduce((s,l)=>s+(l.unread||0),0);
+    // The Groups header carries the "New group" button, so it renders for a
+    // super admin even when there are no groups yet.
+    const newBtn = canManageGroups
+      ? `<button class="gp-new" type="button" data-gp-new="1" title="Create a group">+ New</button>` : '';
+    const groupsHead = (groups.length || canManageGroups)
+      ? `<div class="lead-divider">Groups${groupUnread>0?`<span class="unread-pill">${groupUnread}</span>`:''}${newBtn}</div>` : '';
     $('#leadList').innerHTML =
+      groupsHead +
+      groups.map(groupRowHtml).join('') +
       (pinned.length ? `<div class="lead-divider">Team${teamUnread>0?`<span class="unread-pill">${teamUnread}</span>`:''}</div>` : '') +
       pinned.map(dmRowHtml).join('') +
-      (pinned.length && listHtml ? `<div class="lead-divider">Conversations</div>` : '') +
-      (listHtml || (pinned.length ? '' : `<div style="padding:30px 12px;text-align:center;color:var(--text-faint);font-size:.8125rem">No leads match this filter.</div>`));
+      ((pinned.length||groups.length) && listHtml ? `<div class="lead-divider">Conversations</div>` : '') +
+      (listHtml || ((pinned.length||groups.length) ? '' : `<div style="padding:30px 12px;text-align:center;color:var(--text-faint);font-size:.8125rem">No leads match this filter.</div>`));
     refreshChipCounts();
   }
+  // The Hot / Appointments / Replied / Dead / DNC chip row was removed — this
+  // now only keeps the unread totals (sidebar badge, title pill, header count).
   function refreshChipCounts(){
-    var cust = leads.filter(l=>l.channel!=='dm');   // filter chips count customer convos only
-    $('#cc-all').textContent = cust.filter(l=>l.tags.indexOf('dead')<0 && l.tags.indexOf('dnc')<0).length;
-    $('#cc-hot').textContent = cust.filter(l=>l.tags.indexOf('hot')>=0).length;
-    $('#cc-appt').textContent = cust.filter(l=>l.tags.indexOf('appt')>=0).length;
-    $('#cc-replied').textContent = cust.filter(l=>l.tags.indexOf('replied')>=0).length;
-    $('#cc-dead').textContent = cust.filter(l=>l.tags.indexOf('dead')>=0).length;
-    $('#cc-dnc').textContent = cust.filter(l=>l.tags.indexOf('dnc')>=0).length;
     const totalUnread = leads.reduce((s,l)=>s+l.unread,0);
     var ib = $('#inboxBadge');
     if(ib){ ib.textContent = totalUnread; ib.style.display = totalUnread>0 ? '' : 'none'; }
@@ -948,14 +1029,6 @@ html[data-mode="dark"] .sb-brand-logo{background:#FFFFFF;border-radius:8px;paddi
     if(psEl) psEl.textContent = leads.length + ' conversation' + (leads.length===1?'':'s') + ' · ' + totalUnread + ' unread';
   }
 
-  $$('#leadChips .chip').forEach(c=>{
-    c.addEventListener('click',()=>{
-      $$('#leadChips .chip').forEach(x=>x.classList.remove('active'));
-      c.classList.add('active');
-      leadFilter = c.dataset.filter;
-      renderLeadList();
-    });
-  });
   $('#leadSearch').addEventListener('input',e=>{leadSearchQ=e.target.value;renderLeadList()});
 
   // Topbar search drives the same lead filter, and ⌘K / Ctrl+K focuses it.
@@ -976,6 +1049,9 @@ html[data-mode="dark"] .sb-brand-logo{background:#FFFFFF;border-radius:8px;paddi
   });
 
   $('#leadList').addEventListener('click', function(e){
+    if(e.target.closest('[data-gp-new]')){ e.stopPropagation(); openGroupModal(null); return; }
+    var edit = e.target.closest('[data-gp-edit]');
+    if(edit){ e.stopPropagation(); openGroupModal(edit.dataset.gpEdit); return; }
     var actBtn = e.target.closest('[data-act]');
     if(actBtn){ e.stopPropagation(); handleLeadAction(actBtn.dataset.act, actBtn.dataset.id); return; }
     var card = e.target.closest('.lead');
@@ -1003,7 +1079,7 @@ html[data-mode="dark"] .sb-brand-logo{background:#FFFFFF;border-radius:8px;paddi
   function renderThread(l){
     $('#thread').innerHTML = l.thread.map(item=>{
       if(item.type==='day') return `<div class="day-sep"><span class="ds-line"></span><span class="ds-label">${escapeHtml(item.label)}</span><span class="ds-line"></span></div>`;
-      if(item.type==='in') return `<div class="msg in"><div class="bubble">${escapeHtml(item.text)}</div><div class="meta"><span>${escapeHtml(item.time)}</span></div></div>`;
+      if(item.type==='in') return `<div class="msg in">${item.who?`<div class="who">${escapeHtml(item.who)}</div>`:''}<div class="bubble">${escapeHtml(item.text)}</div><div class="meta"><span>${escapeHtml(item.time)}</span></div></div>`;
       if(item.type==='out') return `<div class="msg out"><div class="bubble">${escapeHtml(item.text)}</div><div class="meta"><span class="status ${item.status||''}">${statusSvg(item.status||'sent')} ${statusLabel(item.status||'sent')}</span><span>${escapeHtml(item.time)}</span></div></div>`;
       if(item.type==='signal') return `<div class="signal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>${escapeHtml(item.text)}</div>`;
       if(item.type==='warning') return `<div class="warning"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 2 22h20L12 2Z"/><path d="M12 9v4M12 17h.01"/></svg><span>${escapeHtml(item.text)}</span></div>`;
@@ -1082,6 +1158,12 @@ html[data-mode="dark"] .sb-brand-logo{background:#FFFFFF;border-radius:8px;paddi
       openDmThread(l);
       return;
     }
+    // ----- In-app group thread (pinned) -----
+    if(l.channel === 'group'){
+      renderLeadList();
+      openGroupThread(l);
+      return;
+    }
     // ----- Normal customer (SMS) conversation -----
     document.body.classList.remove('eb-dm-open');
     // Mark this conversation read (shared, persisted) and refresh the sidebar
@@ -1121,6 +1203,168 @@ html[data-mode="dark"] .sb-brand-logo{background:#FFFFFF;border-radius:8px;paddi
       refreshDmRows();
     } catch(e){ pending.status='failed'; renderThread(l); toast('Message failed: '+((e&&e.message)||'send error')); }
   }
+  // ===== In-app GROUP channel =====
+  // A group message has many readers, so an incoming bubble is labelled with
+  // who sent it — without that a group thread is unreadable.
+  function groupMsgItem(m){
+    var mine = (String(m.sender_id)===String(selfId)) || m.mine;
+    return { type: mine?'out':'in', text:m.body, time: formatTime(m.created_at), status:'sent',
+             id:m.id, who: mine?null:(m.sender_name||'') };
+  }
+  function openGroupThread(l){
+    document.body.classList.add('eb-dm-open');
+    $('#convName').textContent = l.name;
+    $('#convSub').innerHTML = '<span>'+l.member_count+' member'+(l.member_count===1?'':'s')+'</span><span class="dot-sep"></span><span>Group · in-app message</span>';
+    $('#thread').innerHTML = '<div class="eb-thread-loader"><span class="eb-spin"></span>Loading…</div>';
+    if(window.__ebAPI.clearCache) window.__ebAPI.clearCache();
+    window.__ebAPI.get('/inbox/dm/groups/'+encodeURIComponent(l.group_id)).then(function(res){
+      if(currentLeadId !== l.id) return;
+      if(res && res.self_id) selfId = res.self_id;
+      if(res && res.group){
+        l.member_count = res.group.member_count;
+        l.member_ids = res.group.member_ids || l.member_ids;
+        $('#convSub').innerHTML = '<span>'+l.member_count+' member'+(l.member_count===1?'':'s')+'</span><span class="dot-sep"></span><span>Group · in-app message</span>';
+      }
+      l.thread = ((res && res.messages)||[]).map(groupMsgItem);
+      renderThread(l);
+      refreshGroupRows();   // the open group is now read
+      if(window.__ebUpdateInboxBadge) window.__ebUpdateInboxBadge();
+    }).catch(function(e){ $('#thread').innerHTML = '<div style="padding:24px;text-align:center;color:var(--text-faint);font-size:.8125rem">'+escapeHtml((e&&e.message)||'Failed to load group')+'</div>'; });
+  }
+  async function sendGroup(l, text){
+    var pending = { type:'out', text:text, time: formatTime(new Date().toISOString()), status:'sent', id:'tmp-'+(window.__ebMid=(window.__ebMid||0)+1) };
+    l.thread.push(pending);
+    composer.value=''; syncSend(); renderThread(l);
+    try {
+      var res = await window.__ebAPI.post('/inbox/dm/groups/'+encodeURIComponent(l.group_id)+'/send', { body: text });
+      if(res && res.message && res.message.id) pending.id = res.message.id;
+      refreshGroupRows();
+    } catch(e){ pending.status='failed'; renderThread(l); toast('Message failed: '+((e&&e.message)||'send error')); }
+  }
+  // Re-pull the group rows' unread/snippet in place. Also picks up groups a
+  // super admin created for me elsewhere, since group membership changes are
+  // not pushed over the socket.
+  function refreshGroupRows(){
+    if(!window.__ebAPI || !window.__ebAPI.get) return Promise.resolve();
+    if(window.__ebAPI.clearCache) window.__ebAPI.clearCache();
+    return window.__ebAPI.get('/inbox/dm/groups').then(function(res){
+      if(!res) return;
+      if(res.self_id) selfId = res.self_id;
+      canManageGroups = !!res.can_manage;
+      var seen = {};
+      (res.groups||[]).forEach(function(g){
+        var id = 'gp:'+g.group_id; seen[id] = true;
+        var l = leads.find(function(x){ return x.id===id; });
+        if(!l){ leads.push(buildGroupLead(g)); return; }
+        l.name = g.name;
+        l.member_count = g.member_count;
+        l.member_ids = g.member_ids || [];
+        l.unread = (l.id===currentLeadId) ? 0 : (g.unread||0);
+        l.last = g.last_message || 'No messages yet';
+        l.last_message_at = g.last_message_at || null;
+        l.time = g.last_message_at ? timeAgo(g.last_message_at) : '';
+      });
+      // Drop groups I was removed from / that were deleted.
+      leads = leads.filter(function(l){ return l.channel!=='group' || seen[l.id]; });
+      if(currentLeadId && String(currentLeadId).slice(0,3)==='gp:' && !seen[currentLeadId]){
+        currentLeadId = null; document.body.classList.remove('eb-dm-open');
+        $('#thread').innerHTML = '<div style="padding:24px;text-align:center;color:var(--text-faint);font-size:.8125rem">This group is no longer available.</div>';
+      }
+      renderLeadList();
+    }).catch(function(){});
+  }
+
+  // ===== Group composer (create / edit) — super admin only =====
+  var gpEditingId = null;
+  function gpPeopleHtml(selected){
+    if(!dmRoster.length) return '<div style="padding:14px;color:var(--text-faint);font-size:.8125rem">No other users in this tenant yet.</div>';
+    return dmRoster.map(function(u){
+      var on = selected.indexOf(String(u.user_id)) >= 0;
+      return '<label class="gp-person"><input type="checkbox" value="'+escapeHtml(u.user_id)+'"'+(on?' checked':'')+'/>'+
+             '<span class="gp-nm">'+escapeHtml(u.name)+'</span><span class="gp-tg">'+escapeHtml(u.tag||'')+'</span></label>';
+    }).join('');
+  }
+  function gpSyncCount(){
+    var n = $$('#gpPeople input:checked').length;
+    $('#gpCount').textContent = n ? '· '+n+' selected' : '';
+  }
+  function openGroupModal(groupId){
+    if(!canManageGroups){ toast('Only a super admin can manage groups'); return; }
+    gpEditingId = groupId || null;
+    var existing = groupId ? leads.find(function(l){ return l.id==='gp:'+groupId; }) : null;
+    var selected = existing ? (existing.member_ids||[]).map(String) : [];
+    $('#gpTitle').textContent = existing ? 'Edit group' : 'New group';
+    $('#gpSave').textContent = existing ? 'Save changes' : 'Create group';
+    $('#gpDelete').style.display = existing ? '' : 'none';
+    $('#gpName').value = existing ? existing.name : '';
+    $('#gpPeople').innerHTML = gpPeopleHtml(selected);
+    var del = $('#gpDelete'); del.dataset.armed = ''; del.textContent = 'Delete group';
+    gpResetHint();
+    gpSyncCount();
+    $('#gpBack').classList.add('show');
+    setTimeout(function(){ $('#gpName').focus(); }, 30);
+  }
+  function closeGroupModal(){ $('#gpBack').classList.remove('show'); gpEditingId = null; }
+  function gpResetHint(){
+    $('#gpHint').textContent = gpEditingId
+      ? 'Everyone in the group can reply. Only a super admin can change it.'
+      : 'You are always a member of groups you create.';
+  }
+  function gpBusy(on){ ['#gpSave','#gpCancel','#gpDelete'].forEach(function(sel){ var b=$(sel); if(b) b.disabled = !!on; }); }
+
+  (function bindGroupModal(){
+    var back = $('#gpBack'); if(!back) return;
+    back.addEventListener('click', function(e){ if(e.target===back) closeGroupModal(); });
+    $('#gpCancel').addEventListener('click', closeGroupModal);
+    $('#gpPeople').addEventListener('change', gpSyncCount);
+    document.addEventListener('keydown', function(e){ if(e.key==='Escape' && back.classList.contains('show')) closeGroupModal(); });
+    $('#gpName').addEventListener('keydown', function(e){ if(e.key==='Enter'){ e.preventDefault(); $('#gpSave').click(); } });
+
+    $('#gpSave').addEventListener('click', async function(){
+      var name = $('#gpName').value.trim();
+      if(!name){ toast('Give the group a name'); $('#gpName').focus(); return; }
+      var member_ids = Array.prototype.map.call($$('#gpPeople input:checked'), function(i){ return i.value; });
+      gpBusy(true);
+      try {
+        if(gpEditingId){
+          await window.__ebAPI.patch('/inbox/dm/groups/'+encodeURIComponent(gpEditingId), { name: name, member_ids: member_ids });
+          toast('Group updated · '+name, true);
+        } else {
+          var res = await window.__ebAPI.post('/inbox/dm/groups', { name: name, member_ids: member_ids });
+          toast('Group created · '+name, true);
+          if(res && res.group) currentLeadId = null;
+        }
+        closeGroupModal();
+        await refreshGroupRows();
+      } catch(e){ toast('Could not save group: '+((e&&e.message)||'request failed')); }
+      gpBusy(false);
+    });
+
+    $('#gpDelete').addEventListener('click', async function(){
+      if(!gpEditingId) return;
+      var btn = this;
+      // First click arms, second click deletes — an in-app confirmation rather
+      // than the browser's native confirm() dialog.
+      if(btn.dataset.armed !== '1'){
+        btn.dataset.armed = '1';
+        btn.textContent = 'Confirm delete';
+        $('#gpHint').textContent = 'Members will no longer see this group. Click again to confirm.';
+        setTimeout(function(){ if(btn.dataset.armed==='1'){ btn.dataset.armed=''; btn.textContent='Delete group'; gpResetHint(); } }, 5000);
+        return;
+      }
+      btn.dataset.armed = '';
+      btn.textContent = 'Delete group';
+      gpBusy(true);
+      try {
+        await window.__ebAPI.del('/inbox/dm/groups/'+encodeURIComponent(gpEditingId));
+        toast('Group deleted', true);
+        closeGroupModal();
+        await refreshGroupRows();
+      } catch(e){ toast('Could not delete group: '+((e&&e.message)||'request failed')); }
+      gpBusy(false);
+    });
+  })();
+
   // Refresh the pinned admin rows' unread/snippet in place (without disturbing
   // the open thread or the customer conversations).
   function refreshDmRows(){
@@ -1276,7 +1520,8 @@ html[data-mode="dark"] .sb-brand-logo{background:#FFFFFF;border-radius:8px;paddi
     const text = composer.value.trim(); if(!text) return;
     const l = curLead();
     if(!l){ toast('Select a conversation before sending'); return; }
-    if(l.channel === 'dm'){ return sendDm(l, text); }   // in-app admin DM (optimistic)
+    if(l.channel === 'dm'){ return sendDm(l, text); }        // in-app team DM (optimistic)
+    if(l.channel === 'group'){ return sendGroup(l, text); }  // in-app group (optimistic)
     const time = new Date().toLocaleTimeString([],{hour:'numeric',minute:'2-digit'});
     if(l.thread.length && l.thread[l.thread.length-1].type==='aiDraft') l.thread.pop();
     const pendingMsg = {type:'out',text,time,status:'sent'};
@@ -1404,6 +1649,21 @@ html[data-mode="dark"] .sb-brand-logo{background:#FFFFFF;border-radius:8px;paddi
       unread: t.unread || 0, score:0, priority:'cool', tags:[], thread:[]
     };
   }
+  // Pinned in-app rows (team DMs + groups) are not customer conversations —
+  // they don't get the filter chips, the copilot panel or auto-focus on load.
+  function isCustomerLead(l){ return !!l && l.channel!=='dm' && l.channel!=='group'; }
+  // In-app group → list row.
+  function buildGroupLead(g){
+    return {
+      id: 'gp:'+g.group_id, channel:'group', group_id: g.group_id, pinned:true,
+      name: g.name || 'Group', member_count: g.member_count || 0,
+      member_ids: g.member_ids || [],
+      last: g.last_message || 'No messages yet',
+      last_message_at: g.last_message_at || null,
+      time: g.last_message_at ? timeAgo(g.last_message_at) : '',
+      unread: g.unread || 0, score:0, priority:'cool', tags:[], thread:[]
+    };
+  }
   // Customer conversation → list row.
   function buildConvLead(c, idx){
     var leadName = c.lead_name || c.sender || 'Conversation ' + (idx + 1);
@@ -1436,13 +1696,15 @@ html[data-mode="dark"] .sb-brand-logo{background:#FFFFFF;border-radius:8px;paddi
   }
 
   async function initInbox() {
-    // Preserve an open in-app DM thread across realtime reloads.
-    var _openDmId = (currentLeadId && String(currentLeadId).slice(0,3)==='dm:') ? currentLeadId : null;
+    // Preserve an open in-app DM / group thread across realtime reloads.
+    var _pinPrefix = currentLeadId ? String(currentLeadId).slice(0,3) : '';
+    var _openDmId = (_pinPrefix==='dm:' || _pinPrefix==='gp:') ? currentLeadId : null;
     var _openDmThread = _openDmId ? (((leads.find(function(l){ return l.id===_openDmId; })||{}).thread) || null) : null;
 
-    // Fire BOTH in parallel so the pinned admin doesn't wait behind /conversations.
+    // Fire all three in parallel so the pinned rows don't wait behind /conversations.
     var convP = window.__ebAPI.get('/conversations', { page: 1, size: 20 }).catch(function(){ return null; });
     var dmP = window.__ebAPI.get('/inbox/dm/threads').catch(function(){ return null; });
+    var gpP = window.__ebAPI.get('/inbox/dm/groups').catch(function(){ return null; });
 
     // Pinned in-app DMs (every other user in the tenant, any role) — paint
     // them the moment they arrive, before /conversations resolves.
@@ -1451,13 +1713,23 @@ html[data-mode="dark"] .sb-brand-logo{background:#FFFFFF;border-radius:8px;paddi
       var dmRes = await dmP;
       if(dmRes){
         if(dmRes.self_id) selfId = dmRes.self_id;
+        // The same roster feeds the group member picker.
+        dmRoster = (dmRes.threads||[]).map(function(t){ return { user_id: t.user_id, name: t.name, tag: t.tag }; });
         dmLeads = (dmRes.threads||[]).map(buildDmLead);
-        if(_openDmId && _openDmThread){ var keep = dmLeads.find(function(l){ return l.id===_openDmId; }); if(keep) keep.thread = _openDmThread; }
       }
     } catch(e){}
-    if(dmLeads.length && !leads.some(function(l){ return l.channel!=='dm'; })){
+    try {
+      var gpRes = await gpP;
+      if(gpRes){
+        if(gpRes.self_id) selfId = gpRes.self_id;
+        canManageGroups = !!gpRes.can_manage;
+        dmLeads = (gpRes.groups||[]).map(buildGroupLead).concat(dmLeads);
+      }
+    } catch(e){}
+    if(_openDmId && _openDmThread){ var keep = dmLeads.find(function(l){ return l.id===_openDmId; }); if(keep) keep.thread = _openDmThread; }
+    if(dmLeads.length && !leads.some(isCustomerLead)){
       leads = dmLeads.slice();
-      renderLeadList();   // show pinned admins immediately
+      renderLeadList();   // show pinned groups + team rows immediately
     }
 
     // Then merge in the customer conversations.
@@ -1474,17 +1746,23 @@ html[data-mode="dark"] .sb-brand-logo{background:#FFFFFF;border-radius:8px;paddi
     // clears. On realtime reloads, keep what's already open.
     if(currentLeadId && leads.find(function(l){ return l.id===currentLeadId; })){
       var cur = leads.find(function(l){ return l.id===currentLeadId; });
-      if(cur.channel!=='dm'){ renderThread(cur); renderCopilot(cur); }
+      if(isCustomerLead(cur)){ renderThread(cur); renderCopilot(cur); }
     } else {
-      var firstCust = leads.find(function(l){ return l.channel!=='dm'; });
-      if(firstCust) selectLead(firstCust.id);
-      else if(leads.length) selectLead(leads[0].id);
+      var firstCust = leads.find(isCustomerLead);
+      if(firstCust){ selectLead(firstCust.id); }
       else {
-        // Nothing to show — clear the loader + the hardcoded placeholder.
-        document.body.classList.remove('eb-dm-open');
-        $('#convName').textContent = '';
-        $('#convSub').innerHTML = '';
-        $('#thread').innerHTML = '<div class="eb-thread-loader">No conversations yet.</div>';
+        // No customer conversations: open a pinned row only to clear the
+        // placeholder — and never an UNREAD one. Auto-opening a group would
+        // mark an unread blast read before anyone actually looked at it.
+        var firstQuiet = leads.find(function(l){ return !l.unread; });
+        if(firstQuiet){ selectLead(firstQuiet.id); }
+        else {
+          document.body.classList.remove('eb-dm-open');
+          $('#convName').textContent = '';
+          $('#convSub').innerHTML = '';
+          $('#thread').innerHTML = '<div class="eb-thread-loader">' +
+            (leads.length ? 'Select a conversation to open it.' : 'No conversations yet.') + '</div>';
+        }
       }
     }
   }
@@ -1519,6 +1797,26 @@ html[data-mode="dark"] .sb-brand-logo{background:#FFFFFF;border-radius:8px;paddi
   window.addEventListener('launchpad:realtime:inapp_message', function(ev){
     var d = (ev && ev.detail) || {};
     var l = curLead();
+    // Group message: same socket event, distinguished by group_id.
+    if(d.group_id){
+      if(l && l.channel==='group' && String(d.group_id)===String(l.group_id)){
+        var gdup = l.thread.some(function(it){ return it.id && String(it.id)===String(d.id); });
+        if(!gdup){
+          l.thread.push({ type: String(d.sender_id)===String(selfId)?'out':'in', text:d.body,
+                          time:formatTime(d.created_at), status:'sent', id:d.id,
+                          who: String(d.sender_id)===String(selfId)?null:(d.sender_name||'') });
+          renderThread(l);
+        }
+        // Reading the open group moves my watermark server-side.
+        if(window.__ebAPI.clearCache) window.__ebAPI.clearCache();
+        window.__ebAPI.get('/inbox/dm/groups/'+encodeURIComponent(l.group_id))
+          .then(function(){ refreshGroupRows(); if(window.__ebUpdateInboxBadge) window.__ebUpdateInboxBadge(); })
+          .catch(function(){ refreshGroupRows(); });
+      } else {
+        refreshGroupRows();
+      }
+      return;
+    }
     if(l && l.channel==='dm' && String(d.peer_id)===String(l.dm_user_id)){
       var dup = l.thread.some(function(it){ return it.id && String(it.id)===String(d.id); });
       if(!dup){ l.thread.push({ type: String(d.sender_id)===String(selfId)?'out':'in', text:d.body, time:formatTime(d.created_at), status:'sent', id:d.id }); renderThread(l); }
@@ -1530,6 +1828,70 @@ html[data-mode="dark"] .sb-brand-logo{background:#FFFFFF;border-radius:8px;paddi
       refreshDmRows();
     }
   });
+
+  // ---- Safety net: never rely on the socket alone ----
+  // The Socket.IO connection is best-effort — it can fail outright (the local
+  // preview proxy cannot upgrade to WebSocket, and this socket.io build does
+  // not fall back to polling on its own), drop on a sleeping laptop, or be cut
+  // by a proxy. When it is down NOTHING arrives live, so an open thread just
+  // sat there until you navigated away and back.
+  //
+  // So poll the OPEN in-app thread and repaint it only when the server actually
+  // has a message we don't (a blind re-render every tick would fight the user's
+  // scroll). Group creation / membership changes are never pushed at all, so the
+  // row list is re-read on a slower beat and whenever the tab regains focus.
+  (function pollInApp(){
+    var THREAD_MS = 7000, ROWS_MS = 45000;
+    var busy = false;
+
+    function mapMessages(l, res){
+      var fn = l.channel === 'dm' ? dmMsgItem : groupMsgItem;
+      return (res.messages || []).map(fn);
+    }
+
+    function pollThread(){
+      var l = curLead();
+      if(!l || (l.channel !== 'dm' && l.channel !== 'group')) return Promise.resolve();
+      if(!window.__ebAPI || !window.__ebAPI.get) return Promise.resolve();
+      var path = l.channel === 'dm'
+        ? '/inbox/dm/threads/' + encodeURIComponent(l.dm_user_id)
+        : '/inbox/dm/groups/' + encodeURIComponent(l.group_id);
+      if(window.__ebAPI.clearCache) window.__ebAPI.clearCache();
+      return window.__ebAPI.get(path).then(function(res){
+        if(!res || !res.messages) return;
+        if(curLead() !== l) return;            // user switched threads mid-flight
+        if(res.self_id) selfId = res.self_id;
+        var have = {};
+        l.thread.forEach(function(m){ if(m.id) have[String(m.id)] = 1; });
+        var fresh = res.messages.filter(function(m){ return !have[String(m.id)]; });
+        if(!fresh.length) return;
+        // Keep failed optimistic sends visible — they exist only on this client.
+        var failed = l.thread.filter(function(m){ return m.status === 'failed'; });
+        l.thread = mapMessages(l, res).concat(failed);
+        renderThread(l);
+        if(l.channel === 'dm') refreshDmRows(); else refreshGroupRows();
+        if(window.__ebUpdateInboxBadge) window.__ebUpdateInboxBadge();
+      }).catch(function(){});
+    }
+
+    function tickThread(){
+      if(document.hidden || busy) return;
+      busy = true;
+      pollThread().then(function(){ busy = false; }, function(){ busy = false; });
+    }
+    function tickRows(){
+      if(document.hidden) return;
+      refreshGroupRows();
+      refreshDmRows();
+    }
+
+    var t1 = setInterval(tickThread, THREAD_MS);
+    var t2 = setInterval(tickRows, ROWS_MS);
+    function onFocus(){ if(!document.hidden){ tickThread(); tickRows(); } }
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onFocus);
+    window.addEventListener('beforeunload', function(){ clearInterval(t1); clearInterval(t2); });
+  })();
 
   // === Column resizing ===
   // Drag the thin handles between panels to resize them. Widths persist

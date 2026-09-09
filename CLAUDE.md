@@ -285,8 +285,44 @@ the reader's own socket room.
   `injectHireesLink` early-return, CSS rules hide any `a[href="applicant-inbox.html"]`
   / `a[href="hirees.html"]`, and both SPA entries hide for all roles.
   `admin-inbox.html` is a redirect stub to `inbox.html`.
+- **Groups** (`/inbox/dm/groups`, models `DmGroup` / `DmGroupMember`, migration
+  055) sit in their own "Groups" divider above Team. **Only `super_admin`** can
+  create / rename / re-member / delete one (`_GROUP_ADMIN_ROLES`; legacy
+  `tenant_admin` and `admin` cannot) — every member can read and reply. The
+  picker is a free pick of tenant users; the creator is always added.
+  * A group message is a `direct_messages` row with `group_id` set and
+    `recipient_id` NULL, so `recipient_id` is now nullable and every 1:1 query
+    filters `group_id IS NULL` or it grows a phantom "None" peer.
+  * Read state can't live on the row (one row, many readers): each member has
+    `DmGroupMember.last_read_at`, and unread = messages newer than
+    `coalesce(last_read_at, added_at)` that they didn't send.
+  * Delivery reuses the already-whitelisted `inapp_message` socket event with a
+    `group_id` — deliberately, so `services/api.js` stays untouched (no `?v=`
+    bump).
+  * The inbox never auto-opens an UNREAD row on load — doing so would mark a
+    group blast read before anyone looked at it.
+  * The create/edit modal is a bespoke surface, so it carries its own
+    `html[data-mode="dark"]` rules (see "Dark mode").
+- **The Inbox never trusts the socket alone** (`pollInApp` in inbox.html). The
+  Socket.IO connection can be down entirely — `services/api.js` asks for
+  `transports: ['websocket','polling']`, and this socket.io build does NOT fall
+  back when the first transport fails, so anything that blocks WebSocket kills
+  realtime outright (the local preview proxy does exactly that: `serve.py` 404s
+  `transport=websocket` because a plain HTTP proxy can't upgrade). When that
+  happens no event ever arrives and an open thread used to sit there until you
+  navigated away and back. So the page polls the OPEN in-app thread every 7s and
+  repaints ONLY when the server has a message id it doesn't (a blind re-render
+  would fight the user's scroll); the row list re-reads every 45s and on focus,
+  which is also how group creation / membership changes arrive since those are
+  never pushed. Customer SMS threads do NOT have this net — they still depend on
+  the socket.
+- The filter chips (All / Hot / Appointments / Replied / Dead / DNC) were
+  REMOVED from inbox.html. `matchFilter` stays, hardcoded to the old "All"
+  behaviour, so dead + DNC conversations remain hidden.
 - `.localpreview/verify-inbox-all-roles.mjs` checks all of the above per role
-  against the real backend (`run-local.sh`).
+  against the real backend (`run-local.sh`); `verify-inbox-groups.mjs` drives the
+  group flow end-to-end (super admin creates + posts, agent replies but cannot
+  manage).
 
 ## SMS pool — two ways a lead gets to an agent
 
