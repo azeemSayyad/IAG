@@ -152,11 +152,14 @@ def ingest_csv(
         return {"ok": False, "reason": "no_name_column",
                 "errors": [{"row": 0, "error": "No name column found — the file needs First/Last Name or a Name column."}]}, []
 
-    # Numbers already open in the pool (any source) — never pool someone twice.
+    # Numbers already open in the pool (any source) — never pool someone twice —
+    # and numbers an agent already DISPOSITIONED: an overlapping list must never
+    # hand a customer who was already worked back to an agent.
     open_digits = {
         _dnc_phone(p)
         for (p,) in db.query(SmsLead.phone_number)
-        .filter(SmsLead.tenant_id == tenant_id, SmsLead.status.in_(OPEN_STATUSES))
+        .filter(SmsLead.tenant_id == tenant_id,
+                SmsLead.status.in_(OPEN_STATUSES + ("DISPOSITIONED",)))
         .all()
     }
     # Do-Not-Call, loaded once (digits-only keys, same as queue_service.is_dnc).
@@ -166,12 +169,21 @@ def ingest_csv(
         .all()
     }
 
+    # A new list joins at the BOTTOM of the serving order — the same place it
+    # would land by upload time — so an upload never jumps ahead of a list the
+    # manager has put first.
+    last_prio = (
+        db.query(func.max(SmsPoolBatch.priority))
+        .filter(SmsPoolBatch.tenant_id == tenant_id, SmsPoolBatch.deleted_at.is_(None))
+        .scalar()
+    )
     batch = SmsPoolBatch(
         tenant_id=tenant_id,
         name=(name or "upload.csv").strip()[:255],
         uploaded_by=uploaded_by,
         total_rows=len(rows),
         columns=extra,
+        priority=(last_prio or 0) + 1,
     )
     db.add(batch)
     db.flush()
@@ -315,7 +327,7 @@ def _live_counts(db: Session, tenant_id: str, batch_ids: list) -> dict:
     for bid, status, disp, n in rows:
         c = out.setdefault(str(bid), {"in_pool": 0, "working": 0, "done": 0, "appointments": 0, "sales": 0})
         if status == "QUEUED":
-            c["in_pool"] += n
+            pass  # counted below with the pool's own rules
         elif status in ("ASSIGNED", "IN_PROGRESS"):
             c["working"] += n
         elif status == "DISPOSITIONED":
@@ -324,6 +336,18 @@ def _live_counts(db: Session, tenant_id: str, batch_ids: list) -> dict:
                 c["appointments"] += n
             elif disp == "SALE":
                 c["sales"] += n
+    # "In pool" = what an agent can actually be handed from this list (paused or
+    # not — a paused list still shows how many are waiting for it to resume).
+    from app.sms_queue.services.queue_service import pool_query
+    waiting = (
+        pool_query(db, tenant_id, include_paused=True)
+        .filter(SmsLead.batch_id.in_(batch_ids))
+        .with_entities(SmsLead.batch_id, func.count(SmsLead.id))
+        .group_by(SmsLead.batch_id)
+        .all()
+    )
+    for bid, n in waiting:
+        out.setdefault(str(bid), {"in_pool": 0, "working": 0, "done": 0, "appointments": 0, "sales": 0})["in_pool"] = n
     return out
 
 
@@ -342,20 +366,69 @@ def _batch_dict(b: SmsPoolBatch, live: dict) -> dict:
         "done": live.get("done", 0),
         "appointments": live.get("appointments", 0),
         "sales": live.get("sales", 0),
+        "priority": b.priority,
+        "paused": b.paused_at is not None,
+        "paused_at": b.paused_at.isoformat() if b.paused_at else None,
         "created_at": b.created_at.isoformat() if b.created_at else None,
     }
 
 
 def list_batches(db: Session, tenant_id: str, limit: int = 50) -> dict:
+    """Lists in SERVING order (top = handed out first). `serving` marks the one
+    list agents are being handed right now: the first un-paused list that still
+    has leads waiting."""
     batches = (
         db.query(SmsPoolBatch)
         .filter(SmsPoolBatch.tenant_id == tenant_id, SmsPoolBatch.deleted_at.is_(None))
-        .order_by(SmsPoolBatch.created_at.desc())
+        .order_by(SmsPoolBatch.priority.asc().nullslast(), SmsPoolBatch.created_at.asc())
         .limit(limit)
         .all()
     )
     live = _live_counts(db, tenant_id, [b.id for b in batches])
-    return {"batches": [_batch_dict(b, live.get(str(b.id), {})) for b in batches]}
+    out = [_batch_dict(b, live.get(str(b.id), {})) for b in batches]
+    serving = next((d for d in out if not d["paused"] and d["in_pool"] > 0), None)
+    for d in out:
+        d["serving"] = d is serving
+    return {"batches": out}
+
+
+def set_paused(db: Session, tenant_id: str, batch_id: str, paused: bool) -> tuple[dict, list[dict]]:
+    """Pause = the list's waiting leads leave the pool (nothing is deleted);
+    Resume = they come back at the list's place in the order. A lead already
+    offered to / taken by an agent is left with them."""
+    batch = (
+        db.query(SmsPoolBatch)
+        .filter(SmsPoolBatch.id == batch_id, SmsPoolBatch.tenant_id == tenant_id,
+                SmsPoolBatch.deleted_at.is_(None))
+        .first()
+    )
+    if not batch:
+        return {"ok": False, "reason": "not_found"}, []
+    batch.paused_at = _now() if paused else None
+    db.commit()
+    return {"ok": True, "paused": paused}, [
+        _evt("tenant", tenant_id, "sms:queue_updated", {"reason": "pool_paused" if paused else "pool_resumed"})
+    ]
+
+
+def reorder(db: Session, tenant_id: str, batch_ids: list[str]) -> tuple[dict, list[dict]]:
+    """Set the serving order: batch_ids[0] is handed out first. Lists not named
+    keep their relative order after the named ones."""
+    batches = (
+        db.query(SmsPoolBatch)
+        .filter(SmsPoolBatch.tenant_id == tenant_id, SmsPoolBatch.deleted_at.is_(None))
+        .order_by(SmsPoolBatch.priority.asc().nullslast(), SmsPoolBatch.created_at.asc())
+        .all()
+    )
+    by_id = {str(b.id): b for b in batches}
+    wanted = [by_id[i] for i in dict.fromkeys(str(x) for x in batch_ids) if i in by_id]
+    rest = [b for b in batches if b not in wanted]
+    for n, b in enumerate(wanted + rest, start=1):
+        b.priority = n
+    db.commit()
+    return {"ok": True, "order": [str(b.id) for b in wanted + rest]}, [
+        _evt("tenant", tenant_id, "sms:queue_updated", {"reason": "pool_reordered"})
+    ]
 
 
 def delete_batch(db: Session, tenant_id: str, batch_id: str) -> tuple[dict, list[dict]]:

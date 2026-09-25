@@ -46,7 +46,7 @@ type DailyRow = {
   agent_name: string; shift_seconds: number; break_seconds: number; billable_seconds: number;
   applications: number; appts: number; avg_response_ms: number; conv_pct: number;
 };
-type QueuedLead = { id: string; phone_number: string; customer_name?: string | null; priority: string; source?: string; last_message: string | null; created_at: string | null; last_message_at?: string | null };
+type QueuedLead = { id: string; phone_number: string; customer_name?: string | null; priority: string; source?: string; batch_name?: string | null; last_message: string | null; created_at: string | null; last_message_at?: string | null };
 type ActiveLead = {
   id: string; phone_number: string; status: string; priority: string; source?: string;
   last_message: string | null; agent_name: string; message_count: number; accepted_at: string | null;
@@ -470,7 +470,7 @@ export default function SmsManager() {
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-semibold text-ink">{l.phone_number}</span>
-                  {l.source === "CSV_DIRECT" && <span className="rounded-full bg-accent/12 px-1.5 py-0.5 text-[10px] font-semibold text-accent" title="Uploaded to the pool — no text sent">📋 list</span>}
+                  {l.source === "CSV_DIRECT" && <span className="max-w-[12rem] truncate rounded-full bg-accent/12 px-1.5 py-0.5 text-[10px] font-semibold text-accent" title={`From list ${l.batch_name || ""} — no text sent. Order and pause are set in "Direct to agent pool" above.`}>📋 {l.batch_name || "list"}</span>}
                   <span className="text-[10px] text-ink-faint">{ago(l.last_message_at ?? l.created_at)}</span>
                 </div>
                 <div className="truncate text-xs text-ink-muted">{l.source === "CSV_DIRECT" ? (l.customer_name || "—") : (l.last_message || "").slice(0, 60)}</div>

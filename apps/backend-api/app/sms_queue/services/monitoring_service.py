@@ -93,17 +93,10 @@ def get_stats(db: Session, tenant_id: str) -> dict:
     polls_attempted = polls_ok + polls.get(False, 0)
 
     # --- Queue + agents (live) ---
-    queued = (
-        db.query(func.count(SmsLead.id))
-        .filter(SmsLead.tenant_id == tenant_id, SmsLead.status == "QUEUED")
-        .scalar()
-        or 0
-    )
-    oldest_queued = (
-        db.query(func.min(SmsLead.created_at))
-        .filter(SmsLead.tenant_id == tenant_id, SmsLead.status == "QUEUED")
-        .scalar()
-    )
+    from app.sms_queue.services.queue_service import pool_query
+    pool = pool_query(db, tenant_id)
+    queued = pool.count()
+    oldest_queued = pool.with_entities(func.min(SmsLead.created_at)).scalar()
     oldest_age_s = int((now - oldest_queued).total_seconds()) if oldest_queued else 0
 
     agent_rows = (

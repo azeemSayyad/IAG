@@ -9,12 +9,14 @@ Shape of the domain (see app/models/expense.py):
   items       standing commitments; posting one CREATES a ledger entry
   entries     the ledger — the only thing ever summed, agent hours included
   rates       append-only hourly rate history
+  sale rates  append-only per-sale (ACA/Dental/Vision) pay; sale pay is DERIVED
+              from approved deals, never posted to the ledger
 
 Every write logs to audit_logs (resource_type "expense_*"), and entries are
 voided rather than deleted, so /expenses/audit can reconstruct the whole history.
 """
 
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Optional
 from uuid import UUID
@@ -29,7 +31,7 @@ from app.core.deps import get_current_active_user, get_tenant_id, require_role
 from app.expenses import services
 from app.models.agent import Agent
 from app.models.audit_log import AuditLog
-from app.models.expense import AgentRate, ExpenseCategory, ExpenseEntry, ExpenseItem
+from app.models.expense import AgentRate, AgentSaleRate, ExpenseCategory, ExpenseEntry, ExpenseItem
 from app.models.user import User
 from app.schemas.expense import (
     AgentPayRow,
@@ -46,6 +48,8 @@ from app.schemas.expense import (
     ItemUpdate,
     RateResponse,
     RateSet,
+    SaleRateResponse,
+    SaleRateSet,
     SummaryResponse,
 )
 
@@ -55,7 +59,7 @@ router = APIRouter(prefix="/expenses", tags=["expenses"])
 # check on purpose); no other role can reach ANY endpoint in this file.
 _require_owner = require_role("super_admin")
 
-AUDIT_RESOURCES = ("expense_entry", "expense_item", "expense_category", "agent_rate")
+AUDIT_RESOURCES = ("expense_entry", "expense_item", "expense_category", "agent_rate", "agent_sale_rate")
 
 
 # ── helpers ──────────────────────────────────────────────────────────────────
@@ -147,6 +151,12 @@ def _window(from_: Optional[str], to: Optional[str]) -> tuple[date, date]:
     Eastern-day helper every other number-bearing page uses."""
     _s, _e, from_d, to_d = resolve_range(from_, to)
     return from_d, to_d
+
+
+def _day_bounds(a: date, b: date) -> tuple[datetime, datetime]:
+    """Inclusive Eastern days a..b -> UTC [start, end) for filtering deals."""
+    start, end, _f, _t = resolve_range(a.isoformat(), b.isoformat())
+    return start, end
 
 
 # ── categories ───────────────────────────────────────────────────────────────
@@ -458,11 +468,13 @@ def agent_pay(
     rows: dict = {}
     for agent in db.query(Agent).filter(Agent.tenant_id == tenant_id).all():
         rate = services.current_rate(db, tenant_id, agent.id)
+        sale_rate = services.current_sale_rate(db, tenant_id, agent.id)
         rows[agent.id] = AgentPayRow(
             agent_id=agent.id,
             agent_name=names.get(agent.id, str(agent.id)),
             current_rate_cents=rate.rate_cents_per_hour if rate else None,
             rate_effective_from=rate.effective_from if rate else None,
+            sale_rate=SaleRateResponse.model_validate(sale_rate) if sale_rate else None,
         )
     posted = (
         db.query(ExpenseEntry)
@@ -480,7 +492,61 @@ def agent_pay(
             continue
         row.hours += Decimal(e.quantity or 0)
         row.cost_cents += int(e.amount_cents or 0)
-    return sorted(rows.values(), key=lambda r: (-r.cost_cents, r.agent_name))
+    start, end = _day_bounds(from_d, to_d)
+    for line in services.sale_pay_lines(db, tenant_id, start, end):
+        row = rows.get(line.agent_id)
+        if not row:
+            continue
+        row.sales += 1
+        row.sale_pay_cents += line.cents
+    return sorted(rows.values(), key=lambda r: (-(r.cost_cents + r.sale_pay_cents), r.agent_name))
+
+
+@router.get("/agents/{agent_id}/sale-rates", response_model=list[SaleRateResponse])
+def list_sale_rates(
+    agent_id: UUID,
+    db: Session = Depends(get_db),
+    tenant_id: str = Depends(get_tenant_id),
+    _user: User = Depends(_require_owner),
+):
+    return (
+        db.query(AgentSaleRate)
+        .filter(AgentSaleRate.tenant_id == tenant_id, AgentSaleRate.agent_id == agent_id)
+        .order_by(AgentSaleRate.effective_at.desc())
+        .all()
+    )
+
+
+@router.put("/agents/{agent_id}/sale-rates", response_model=SaleRateResponse, status_code=status.HTTP_201_CREATED)
+def set_sale_rates(
+    agent_id: UUID,
+    payload: SaleRateSet,
+    db: Session = Depends(get_db),
+    tenant_id: str = Depends(get_tenant_id),
+    user: User = Depends(_require_owner),
+):
+    """Set an agent's per-sale pay (ACA / Dental / Vision). Always a NEW row in
+    force from right now — deals already logged keep the rate they were sold at,
+    so a change can never raise (or cut) past earnings."""
+    if not db.query(Agent).filter(Agent.tenant_id == tenant_id, Agent.id == agent_id).first():
+        raise HTTPException(status_code=404, detail="Agent not found")
+    before = services.current_sale_rate(db, tenant_id, agent_id)
+    rate = AgentSaleRate(
+        tenant_id=tenant_id, agent_id=agent_id, created_by=user.id,
+        aca_cents=payload.aca_cents, dental_cents=payload.dental_cents,
+        vision_cents=payload.vision_cents, note=payload.note,
+        effective_at=datetime.now(timezone.utc),
+    )
+    db.add(rate)
+    db.commit()
+    db.refresh(rate)
+    _audit(db, tenant_id, user, "create", "agent_sale_rate", rate.id,
+           {"agent_id": str(agent_id),
+            "before": ({"aca": before.aca_cents, "dental": before.dental_cents,
+                        "vision": before.vision_cents} if before else None),
+            "after": {"aca": rate.aca_cents, "dental": rate.dental_cents, "vision": rate.vision_cents},
+            "effective_at": rate.effective_at.isoformat()})
+    return rate
 
 
 @router.get("/agents/{agent_id}/rates", response_model=list[RateResponse])
@@ -618,12 +684,18 @@ def summary(
             ).all()
         )
 
+    def _sales(a: date, b: date):
+        start, end = _day_bounds(a, b)
+        return services.sale_pay_lines(db, tenant_id, start, end)
+
     rows = _live(from_d, to_d)
+    sale_lines = _sales(from_d, to_d)
 
     span = (to_d - from_d).days + 1
     prev_to = from_d - timedelta(days=1)
     prev_from = prev_to - timedelta(days=span - 1)
-    previous_total = sum(int(e.amount_cents or 0) for e in _live(prev_from, prev_to))
+    previous_total = (sum(int(e.amount_cents or 0) for e in _live(prev_from, prev_to))
+                      + sum(l.cents for l in _sales(prev_from, prev_to)))
 
     by_cat: dict = {}
     buckets: dict = {}
@@ -638,6 +710,20 @@ def summary(
         if e.agent_id:
             agent_hours += Decimal(e.quantity or 0)
             agent_cost += amt
+
+    # Per-sale pay is derived from approved deals; it counts as Agent Payroll.
+    sale_pay = sum(l.cents for l in sale_lines)
+    if sale_pay:
+        payroll = services.agent_payroll_category(db, tenant_id)
+        cats.setdefault(payroll.id, payroll)
+        by_cat[payroll.id] = by_cat.get(payroll.id, 0) + sale_pay
+        for l in sale_lines:
+            if not l.cents:
+                continue
+            key, label = services.bucket(l.sold_on, granularity)
+            b = buckets.setdefault(key, {"label": label, "date": key, "amount_cents": 0})
+            b["amount_cents"] += l.cents
+        agent_cost += sale_pay
 
     monthly_commitment = sum(
         services.monthly_cents(it)
@@ -665,6 +751,8 @@ def summary(
         monthly_commitment_cents=monthly_commitment,
         agent_hours=agent_hours,
         agent_cost_cents=agent_cost,
+        agent_sales=len(sale_lines),
+        agent_sale_pay_cents=sale_pay,
         previous_total_cents=previous_total,
     )
 

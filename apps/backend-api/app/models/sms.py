@@ -108,6 +108,12 @@ class SmsPoolBatch(Base):
     # agent card will show for every lead in this batch.
     columns = Column(JSONB, default=[])
 
+    # Serving order set on the SMS Manager (drag to reorder): lower = served first.
+    # Strictly one list after another; replies still come before every list.
+    priority = Column(Integer, nullable=True)
+    # Paused lists stay intact but their leads are out of the pool until resumed.
+    paused_at = Column(DateTime(timezone=True), nullable=True)
+
     created_at = Column(DateTime(timezone=True), nullable=False, default=_now)
     deleted_at = Column(DateTime(timezone=True), nullable=True)
 

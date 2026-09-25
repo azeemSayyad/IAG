@@ -183,13 +183,38 @@ class HoursCreate(BaseModel):
     notes: Optional[str] = None
 
 
+class SaleRateSet(BaseModel):
+    """Per-sale pay per product. Always takes effect NOW — never backdated."""
+
+    aca_cents: int = Field(ge=0)
+    dental_cents: int = Field(ge=0)
+    vision_cents: int = Field(ge=0)
+    note: Optional[str] = Field(default=None, max_length=255)
+
+
+class SaleRateResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    agent_id: UUID
+    aca_cents: int
+    dental_cents: int
+    vision_cents: int
+    effective_at: datetime
+    note: Optional[str] = None
+
+
 class AgentPayRow(BaseModel):
     agent_id: UUID
     agent_name: str
     current_rate_cents: Optional[int] = None
     rate_effective_from: Optional[date] = None
     hours: Decimal = Decimal(0)
-    cost_cents: int = 0
+    cost_cents: int = 0          # hourly pay posted to the ledger
+    # Per-sale pay: current rates + approved sales and their pay in the window.
+    sale_rate: Optional[SaleRateResponse] = None
+    sales: int = 0
+    sale_pay_cents: int = 0
 
 
 # ── Summary ──────────────────────────────────────────────────────────────────
@@ -217,6 +242,8 @@ class SummaryResponse(BaseModel):
     # What the standing commitments add up to per month, regardless of the window.
     monthly_commitment_cents: int
     agent_hours: Decimal
-    agent_cost_cents: int
+    agent_cost_cents: int        # hourly + per-sale agent pay
+    agent_sales: int = 0
+    agent_sale_pay_cents: int = 0
     # Same window, immediately preceding — lets the UI show a period-over-period delta.
     previous_total_cents: int

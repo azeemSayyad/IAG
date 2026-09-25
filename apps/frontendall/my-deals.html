@@ -64,7 +64,12 @@ h1{font-size:1.625rem;letter-spacing:-.015em;color:var(--strong);font-weight:700
 .btn:hover{background:var(--n96)}.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}.btn.primary:hover{background:var(--accent-hover);border-color:var(--accent-hover)}
 .panel{background:rgba(255,255,255,.78);border:1px solid rgba(255,255,255,.72);border-radius:12px;box-shadow:0 1px 2px rgba(26,31,42,.04),0 6px 18px rgba(var(--accent-hover-rgb),.07)}
 /* Deal summary band (total deals + ACA/Dental/Vision breakdown bar) */
-.deal-summary{display:grid;grid-template-columns:minmax(220px,300px) 1fr;gap:16px;margin-bottom:16px}
+.deal-summary{display:grid;grid-template-columns:minmax(200px,260px) 1fr minmax(220px,300px);gap:16px;margin-bottom:16px}
+/* Per-sale earnings (approved deals x the rate in force when sold) */
+.ds-earn .ds-num{font-size:2.4rem}
+.ds-earn .ds-all{margin-top:10px;padding-top:10px;border-top:1px solid var(--border);font-size:.8125rem;color:var(--muted);display:flex;justify-content:space-between;gap:10px}
+.ds-earn .ds-all b{color:var(--strong);font-weight:800;font-variant-numeric:tabular-nums}
+.ds-earn .ds-sub{font-size:.75rem;color:var(--muted);margin-top:6px;font-variant-numeric:tabular-nums}
 .ds-card{display:flex;flex-direction:column;justify-content:center;padding:20px 24px;border-radius:16px;background:rgba(255,255,255,0.78);border:1px solid rgba(255,255,255,0.72);box-shadow:0 1px 2px rgba(26,31,42,0.04),0 6px 18px rgba(var(--accent-hover-rgb),0.07)}
 .ds-label{font-size:.875rem;color:var(--muted);font-weight:600}
 .ds-num{font-size:3.1rem;font-weight:800;line-height:1;color:var(--strong);margin-top:6px;font-variant-numeric:tabular-nums}
@@ -270,6 +275,7 @@ html[data-mode="dark"] #recPlayer{background:#1C2029;border-color:rgba(255,255,2
         <button type="button" class="seg-btn active" data-range="today">Today</button>
         <button type="button" class="seg-btn" data-range="yesterday">Yesterday</button>
         <button type="button" class="seg-btn" data-range="week">This week</button>
+        <button type="button" class="seg-btn" data-range="month">This month</button>
         <button type="button" class="seg-btn" data-range="custom" id="customBtn">Custom</button>
       </div>
       <a class="btn primary" href="add-deal.html" style="height:46px;padding:0 24px;font-size:1rem;text-decoration:none">+ Add Deal</a>
@@ -299,6 +305,12 @@ html[data-mode="dark"] #recPlayer{background:#1C2029;border-color:rgba(255,255,2
         <span class="ds-leg"><span class="ds-dot dental"></span>Dental <b id="dsDental">0</b></span>
         <span class="ds-leg"><span class="ds-dot vision"></span>Vision <b id="dsVision">0</b></span>
       </div>
+    </div>
+    <div class="ds-card ds-earn">
+      <div class="ds-label" id="erLabel">You earned</div>
+      <div class="ds-num" id="erRange">$0.00</div>
+      <div class="ds-sub" id="erRangeSub">0 approved sales</div>
+      <div class="ds-all"><span>All time</span><span><b id="erAll">$0.00</b> · <span id="erAllSales">0</span> sales</span></div>
     </div>
   </div>
 
@@ -747,9 +759,24 @@ html[data-mode="dark"] #recPlayer{background:#1C2029;border-color:rgba(255,255,2
     $('#dateLbl').textContent = txt + ' · Eastern';
   }
 
+  // Per-sale earnings: the selected range + all time. Only this user's own totals.
+  function fmtMoney(c){ return '$'+((Number(c)||0)/100).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+  async function loadEarnings(qs){
+    try{
+      var e = await window.__ebAPI.get('/compliance/deals/my-earnings?'+qs);
+      var rg = (e && e.range) || {}, all = (e && e.all_time) || {};
+      $('#erLabel').textContent = (FROM===TO && FROM===todayET()) ? 'You earned today' : 'You earned';
+      $('#erRange').textContent = fmtMoney(rg.cents);
+      $('#erRangeSub').textContent = (rg.sales||0)+' approved sale'+((rg.sales||0)===1?'':'s')+' in this range';
+      $('#erAll').textContent = fmtMoney(all.cents);
+      $('#erAllSales').textContent = (all.sales||0);
+    }catch(_){ /* non-fatal: deals still render without the earnings card */ }
+  }
+
   async function load(){
     try{
       var qs = 'from='+encodeURIComponent(FROM)+'&to='+encodeURIComponent(TO)+'&_='+Date.now();
+      loadEarnings(qs);
       var r = await window.__ebAPI.get('/compliance/deals/my-today?'+qs);
       DEALS = (r && r.deals) || [];
       rebuildFilterOptions();

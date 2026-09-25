@@ -1066,6 +1066,33 @@ def list_deals(
     return {"items": [DealResponse.model_validate(item).model_dump(mode="json") for item in items], "total": total, "page": page, "size": size}
 
 
+@router.get("/deals/my-earnings")
+def my_earnings(
+    from_: Optional[str] = Query(None, alias="from"),
+    to: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+    tenant_id: str = Depends(get_tenant_id),
+    current_user: User = Depends(require_compliance_read),
+):
+    """Per-sale pay the SIGNED-IN user has earned: for the selected Eastern range
+    and all time. Approved deals only, each priced at the rate in force when it
+    was logged. Only the user's own totals — never rates or anyone else's pay."""
+    from app.expenses.services import sale_pay_lines
+
+    agent = _current_agent(db, current_user)
+    _start, _end, from_label, to_label = _eastern_range(from_, to)
+
+    def _sum(lines):
+        return {"cents": sum(l.cents for l in lines), "sales": len(lines)}
+
+    if not agent:
+        zero = {"cents": 0, "sales": 0}
+        return {"from": from_label, "to": to_label, "range": zero, "all_time": zero}
+    all_lines = sale_pay_lines(db, tenant_id, agent_id=agent.id)
+    in_range = [l for l in all_lines if from_label <= l.sold_on.isoformat() <= to_label]
+    return {"from": from_label, "to": to_label, "range": _sum(in_range), "all_time": _sum(all_lines)}
+
+
 @router.get("/deals/my-today")
 def my_deals_today(
     from_: Optional[str] = Query(None, alias="from"),

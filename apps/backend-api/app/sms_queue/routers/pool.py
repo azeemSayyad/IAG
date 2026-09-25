@@ -2,11 +2,11 @@
 
 Mounted under /api/v1/sms/pool. An admin uploads a list and the rows go
 straight into the agent pool as QUEUED; agents work them by phone. Upload /
-remove are admin-only; listing is open to managers so the SMS Manager board can
-show the batches.
+remove are admin-only; listing, pausing and reordering are open to everyone who
+runs the SMS Manager board.
 """
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Body, Depends, File, Form, HTTPException, Query, UploadFile
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -65,7 +65,7 @@ async def upload(
         if s and s.get("total_rows"):
             detail = (
                 f"No leads were added from {s['total_rows']} rows "
-                f"({s['skipped_duplicates']} already in the pool, {s['skipped_dnc']} on Do-Not-Call, "
+                f"({s['skipped_duplicates']} already in the pool or already worked, {s['skipped_dnc']} on Do-Not-Call, "
                 f"{s['failed']} with no usable name/phone)."
             )
         raise HTTPException(status_code=400, detail=detail)
@@ -81,6 +81,50 @@ def batches(
     _user: User = Depends(_require_manager),
 ) -> dict:
     return pool_ingest.list_batches(db, tenant_id, limit)
+
+
+async def _distribute(db: Session, tenant_id: str) -> None:
+    """Offer leads straight away to agents who were waiting on an empty pool."""
+    from app.sms_queue.services import queue_service
+    _data, events = queue_service.distribute_all(db, tenant_id)
+    await _flush(events)
+
+
+@router.post("/batches/{batch_id}/pause")
+async def pause_batch(
+    batch_id: str,
+    body: dict = Body(default={}),
+    db: Session = Depends(get_db),
+    tenant_id: str = Depends(get_tenant_id),
+    _user: User = Depends(_require_manager),
+):
+    """Pause (take the list's waiting leads out of the pool) or resume it.
+    Anyone who can run the SMS Manager can do this."""
+    paused = bool(body.get("paused", True))
+    data, events = pool_ingest.set_paused(db, tenant_id, batch_id, paused)
+    if not data.get("ok"):
+        raise HTTPException(status_code=404, detail="Batch not found")
+    await _flush(events)
+    if not paused:
+        await _distribute(db, tenant_id)
+    return data
+
+
+@router.put("/batches/order")
+async def order_batches(
+    body: dict = Body(...),
+    db: Session = Depends(get_db),
+    tenant_id: str = Depends(get_tenant_id),
+    _user: User = Depends(_require_manager),
+):
+    """Serving order for the uploaded lists: `batch_ids[0]` is handed out first."""
+    ids = body.get("batch_ids") or []
+    if not isinstance(ids, list):
+        raise HTTPException(status_code=422, detail="batch_ids must be a list")
+    data, events = pool_ingest.reorder(db, tenant_id, ids)
+    await _flush(events)
+    await _distribute(db, tenant_id)
+    return data
 
 
 @router.delete("/batches/{batch_id}")

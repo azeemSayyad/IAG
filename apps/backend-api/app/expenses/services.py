@@ -4,13 +4,20 @@ Kept out of the router so the money rules (which rate applies on which day, what
 a weekly item costs per month) live in one place and can be read at a glance.
 """
 
-from datetime import date, timedelta
+from bisect import bisect_right
+from dataclasses import dataclass
+from datetime import date, datetime, timedelta
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Optional
+from zoneinfo import ZoneInfo
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.models.expense import AgentRate, ExpenseCategory, ExpenseEntry, ExpenseItem
+from app.core.config import settings
+from app.core.date_ranges import APPROVED_STATUSES
+from app.models.compliance import Deal
+from app.models.expense import AgentRate, AgentSaleRate, ExpenseCategory, ExpenseEntry, ExpenseItem
 
 
 # Seeded on first read so a new tenant opens the page to something usable. These
@@ -154,3 +161,63 @@ def bucket(d: date, granularity: str) -> tuple[str, str]:
         key = d - timedelta(days=d.weekday())        # Monday
         return key.isoformat(), key.strftime("%b %-d")
     return d.isoformat(), d.strftime("%b %-d")
+
+
+# ── Per-sale pay ─────────────────────────────────────────────────────────────
+# Derived, never posted: every APPROVED deal pays the agent the per-product rate
+# that was in force when the deal was logged. A deal that is later blocked drops
+# out on its own, and a new rate only prices deals logged after it was set.
+
+@dataclass
+class SaleLine:
+    agent_id: object
+    sold_on: date          # Eastern calendar day the deal was logged
+    aca: bool
+    dental: bool
+    vision: bool
+    cents: int
+
+
+def current_sale_rate(db: Session, tenant_id: str, agent_id) -> Optional[AgentSaleRate]:
+    return (
+        db.query(AgentSaleRate)
+        .filter(AgentSaleRate.tenant_id == tenant_id, AgentSaleRate.agent_id == agent_id)
+        .order_by(AgentSaleRate.effective_at.desc())
+        .first()
+    )
+
+
+def sale_pay_lines(db: Session, tenant_id: str, start: Optional[datetime] = None,
+                   end: Optional[datetime] = None, agent_id=None) -> list[SaleLine]:
+    """One line per approved deal logged in [start, end) (all time when omitted),
+    priced with the agent's sale rate in force at the deal's created_at."""
+    q = db.query(Deal.agent_id, Deal.created_at, Deal.aca_count, Deal.dental_count, Deal.vision_count).filter(
+        Deal.tenant_id == tenant_id,
+        func.lower(Deal.status).in_(APPROVED_STATUSES),
+    )
+    rq = db.query(AgentSaleRate).filter(AgentSaleRate.tenant_id == tenant_id)
+    if agent_id is not None:
+        q = q.filter(Deal.agent_id == agent_id)
+        rq = rq.filter(AgentSaleRate.agent_id == agent_id)
+    if start is not None:
+        q = q.filter(Deal.created_at >= start)
+    if end is not None:
+        q = q.filter(Deal.created_at < end)
+
+    rates: dict = {}
+    for r in rq.order_by(AgentSaleRate.effective_at).all():
+        rates.setdefault(r.agent_id, []).append(r)
+    starts = {aid: [r.effective_at for r in rs] for aid, rs in rates.items()}
+
+    tz = ZoneInfo(settings.AGENT_TZ)
+    out = []
+    for aid, created, aca, dental, vision in q.all():
+        has_aca, has_dental, has_vision = (aca or 0) > 0, (dental or 0) > 0, (vision or 0) > 0
+        cents = 0
+        i = bisect_right(starts.get(aid, []), created) - 1
+        if i >= 0:
+            r = rates[aid][i]
+            cents = ((r.aca_cents if has_aca else 0) + (r.dental_cents if has_dental else 0)
+                     + (r.vision_cents if has_vision else 0))
+        out.append(SaleLine(aid, created.astimezone(tz).date(), has_aca, has_dental, has_vision, cents))
+    return out

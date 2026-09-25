@@ -12,6 +12,10 @@ Four tables, deliberately split so the numbers stay auditable:
                    the hourly rate SNAPSHOT so history can't move under you.
   AgentRate        Hourly rate history per agent, keyed by effective_from. Rates
                    are never overwritten — a raise must not restate last month.
+  AgentSaleRate    Per-sale pay (ACA / Dental / Vision) history per agent, keyed
+                   by effective_at. Sale pay is NOT posted to the ledger: it is
+                   derived from approved deals, each priced at the rate in force
+                   when the deal was logged (see expenses.services.sale_pay_lines).
 
 Money is stored as integer CENTS everywhere. Never floats.
 Entries are never hard-deleted: voided_at keeps the audit trail whole.
@@ -172,4 +176,29 @@ class AgentRate(Base):
     __table_args__ = (
         UniqueConstraint("agent_id", "effective_from", name="uq_agent_rates_agent_from"),
         Index("idx_agent_rates_tenant_agent", "tenant_id", "agent_id"),
+    )
+
+
+class AgentSaleRate(Base):
+    """Per-sale pay for an agent, one amount per product, in force from
+    `effective_at`. Append-only and never backdated: a new rate only prices deals
+    logged AFTER it was set, so changing it can never restate past earnings."""
+
+    __tablename__ = "agent_sale_rates"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True)
+    agent_id = Column(UUID(as_uuid=True), ForeignKey("agents.id"), nullable=False, index=True)
+    aca_cents = Column(Integer, nullable=False, default=0)
+    dental_cents = Column(Integer, nullable=False, default=0)
+    vision_cents = Column(Integer, nullable=False, default=0)
+    effective_at = Column(DateTime(timezone=True), nullable=False)
+    note = Column(String(255), nullable=True)
+    created_by = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
+
+    agent = relationship("Agent")
+
+    __table_args__ = (
+        Index("idx_agent_sale_rates_tenant_agent", "tenant_id", "agent_id", "effective_at"),
     )

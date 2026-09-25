@@ -35,7 +35,10 @@ for (const file of walk(root)) {
   if (!textExts.has(extname(file).toLowerCase())) continue;
 
   const text = readFileSync(file, "utf8");
-  if (/[âÂ]/.test(text)) {
+  // Real mojibake = UTF-8 bytes decoded as Latin-1: "â€" (smart quotes/dashes),
+  // "Ã" + a continuation byte ("Ã©"), "Â" + a continuation byte / nbsp. A bare
+  // "â"/"Â" is legitimate text (Portuguese "Âmbar", "câmera") and must not fail.
+  if (/â€|Ã[\u0080-\u00BF]|Â[\u0080-\u00BF]/.test(text)) {
     errors.push(`${file}: contains mojibake marker`);
   }
 

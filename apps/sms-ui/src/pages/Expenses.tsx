@@ -48,10 +48,17 @@ type Entry = {
   quantity: string | null; unit: string | null; unit_rate_cents: number | null;
   incurred_on: string; source: string; notes: string | null; voided_at: string | null;
 };
+type SaleRate = {
+  id: string; agent_id: string;
+  aca_cents: number; dental_cents: number; vision_cents: number;
+  effective_at: string; note: string | null;
+};
 type AgentRow = {
   agent_id: string; agent_name: string;
   current_rate_cents: number | null; rate_effective_from: string | null;
   hours: string; cost_cents: number;
+  // Per-sale pay: derived from APPROVED deals, each at the rate in force when sold.
+  sale_rate: SaleRate | null; sales: number; sale_pay_cents: number;
 };
 type Summary = {
   range: { from: string; to: string };
@@ -62,7 +69,9 @@ type Summary = {
   trend: { label: string; date: string; amount_cents: number }[];
   monthly_commitment_cents: number;
   agent_hours: string;
-  agent_cost_cents: number;
+  agent_cost_cents: number;       // hourly + per-sale
+  agent_sales: number;
+  agent_sale_pay_cents: number;
   previous_total_cents: number;
 };
 type RateRow = {
@@ -477,9 +486,9 @@ function Overview({ sum, from, to }: { sum: Summary | null; from: string; to: st
           hint="active recurring commitments"
         />
         <Stat
-          label="Agent hours" icon="⏱️" color="#059669"
-          value={`${Number(sum.agent_hours || 0).toLocaleString()} h`}
-          hint={`${money(sum.agent_cost_cents)} in this window`}
+          label="Agent pay" icon="⏱️" color="#059669"
+          value={money(sum.agent_cost_cents)}
+          hint={`${Number(sum.agent_hours || 0).toLocaleString()} h · ${(sum.agent_sales || 0).toLocaleString()} approved sales`}
         />
       </div>
 
@@ -953,8 +962,26 @@ function Agents({ rows, entries, busy, mutate, defaultDate, catById }: {
   // it drives the rate-in-force preview so the drawer prices a line exactly the
   // way the server will, instead of guessing with today's rate.
   const [history, setHistory] = useState<RateRow[]>([]);
+  // Per-sale rates drawer (ACA / Dental / Vision). Always effective from now.
+  const [saleFor, setSaleFor] = useState<AgentRow | null>(null);
+  const [saleAca, setSaleAca] = useState("");
+  const [saleDental, setSaleDental] = useState("");
+  const [saleVision, setSaleVision] = useState("");
+  const [saleNote, setSaleNote] = useState("");
+  // One amount for every product — the ACA box drives Dental + Vision.
+  const [saleSame, setSaleSame] = useState(false);
+  const [saleHistory, setSaleHistory] = useState<SaleRate[]>([]);
 
   useEffect(() => { setWorkDate(defaultDate); }, [defaultDate]);
+
+  useEffect(() => {
+    if (!saleFor) { setSaleHistory([]); return; }
+    let live = true;
+    api<SaleRate[]>(`/expenses/agents/${saleFor.agent_id}/sale-rates`)
+      .then((r) => { if (live) setSaleHistory(Array.isArray(r) ? r : []); })
+      .catch(() => { if (live) setSaleHistory([]); });
+    return () => { live = false; };
+  }, [saleFor]);
 
   const openFor = rateFor || hoursFor;
   useEffect(() => {
@@ -978,23 +1005,45 @@ function Agents({ rows, entries, busy, mutate, defaultDate, catById }: {
   const previewCost = priced ? Math.round(hoursNum * priced.rate_cents_per_hour) : 0;
   const closeRate = () => { setRateFor(null); setRate(""); setRateNote(""); };
   const closeHours = () => { setHoursFor(null); setHours(""); };
+  const closeSale = () => { setSaleFor(null); setSaleNote(""); };
+  const openSale = (r: AgentRow) => {
+    const cur = r.sale_rate;
+    const d = (c: number | undefined) => (cur ? ((c || 0) / 100).toFixed(2) : "");
+    setSaleFor(r);
+    setSaleAca(d(cur?.aca_cents)); setSaleDental(d(cur?.dental_cents)); setSaleVision(d(cur?.vision_cents));
+    setSaleSame(!cur || (cur.aca_cents === cur.dental_cents && cur.aca_cents === cur.vision_cents));
+    setSaleNote("");
+  };
+  const saleCents = saleSame
+    ? { aca: parseMoney(saleAca), dental: parseMoney(saleAca), vision: parseMoney(saleAca) }
+    : { aca: parseMoney(saleAca), dental: parseMoney(saleDental), vision: parseMoney(saleVision) };
+  const saleUnchanged = !!saleFor?.sale_rate
+    && saleFor.sale_rate.aca_cents === saleCents.aca
+    && saleFor.sale_rate.dental_cents === saleCents.dental
+    && saleFor.sale_rate.vision_cents === saleCents.vision;
 
   // Finding someone is the whole job on this tab: an agent is already listed the
   // moment they exist, so "putting them on hourly pay" just means locating their
   // row and setting a rate. Search by name + a payroll filter do that.
   const [q, setQ] = useState("");
-  const [only, setOnly] = useState<"all" | "paid" | "norate">("all");
+  const [only, setOnly] = useState<"all" | "paid" | "sale" | "norate">("all");
+
+  const onSalePay = (r: AgentRow) =>
+    !!r.sale_rate && (r.sale_rate.aca_cents + r.sale_rate.dental_cents + r.sale_rate.vision_cents) > 0;
+  const noRate = (r: AgentRow) => r.current_rate_cents == null && !onSalePay(r);
 
   const shown = rows.filter((r) => {
     if (q && !r.agent_name.toLowerCase().includes(q.trim().toLowerCase())) return false;
     if (only === "paid" && r.current_rate_cents == null) return false;
-    if (only === "norate" && r.current_rate_cents != null) return false;
+    if (only === "sale" && !onSalePay(r)) return false;
+    if (only === "norate" && !noRate(r)) return false;
     return true;
   });
-  const noRateCount = rows.filter((r) => r.current_rate_cents == null).length;
+  const noRateCount = rows.filter(noRate).length;
+  const saleCount = rows.filter(onSalePay).length;
 
   const hourLines = entries.filter((e) => e.agent_id && !e.voided_at);
-  const totalCost = rows.reduce((s, r) => s + r.cost_cents, 0);
+  const totalCost = rows.reduce((s, r) => s + r.cost_cents + (r.sale_pay_cents || 0), 0);
 
   return (
     <div className="space-y-4">
@@ -1002,7 +1051,7 @@ function Agents({ rows, entries, busy, mutate, defaultDate, catById }: {
         title="Agent pay"
         sub={
           `${money(totalCost)} in this window · showing ${shown.length} of ${rows.length}` +
-          (noRateCount ? ` · ${noRateCount} not on hourly pay yet — set a rate to start logging their hours` : "")
+          (noRateCount ? ` · ${noRateCount} with no hourly or per-sale rate yet` : "")
         }
         right={
           <div className="flex flex-wrap items-center gap-2">
@@ -1025,6 +1074,7 @@ function Agents({ rows, entries, busy, mutate, defaultDate, catById }: {
             {([
               ["all", `All ${rows.length}`],
               ["paid", "On hourly pay"],
+              ["sale", `On sale pay ${saleCount}`],
               ["norate", `Needs a rate ${noRateCount}`],
             ] as const).map(([k, label]) => (
               <button
@@ -1048,11 +1098,13 @@ function Agents({ rows, entries, busy, mutate, defaultDate, catById }: {
           </Empty>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[720px] text-left text-xs">
+            <table className="w-full min-w-[980px] text-left text-xs">
               <thead className="text-ink-faint">
                 <tr className="border-b border-hairline-soft">
-                  <Th>Agent</Th><Th>Hourly rate</Th>
-                  <Th className="text-right">Hours</Th><Th className="text-right">Cost</Th>
+                  <Th>Agent</Th><Th>Hourly rate</Th><Th>Per-sale rate</Th>
+                  <Th className="text-right">Hours</Th><Th className="text-right">Hour pay</Th>
+                  <Th className="text-right">Sales</Th><Th className="text-right">Sale pay</Th>
+                  <Th className="text-right">Total</Th>
                   <Th className="text-right">Actions</Th>
                 </tr>
               </thead>
@@ -1070,8 +1122,20 @@ function Agents({ rows, entries, busy, mutate, defaultDate, catById }: {
                         <span className="font-semibold text-danger">No rate set</span>
                       )}
                     </Td>
+                    <Td>
+                      {onSalePay(r) && r.sale_rate ? (
+                        <span className="tabular-nums" title={`Since ${new Date(r.sale_rate.effective_at).toLocaleString()}`}>
+                          ACA {money(r.sale_rate.aca_cents)} · Den {money(r.sale_rate.dental_cents)} · Vis {money(r.sale_rate.vision_cents)}
+                        </span>
+                      ) : (
+                        <span className="text-ink-faint">Not set</span>
+                      )}
+                    </Td>
                     <Td className="text-right tabular-nums">{Number(r.hours || 0).toLocaleString()}</Td>
-                    <Td className="text-right font-bold tabular-nums text-ink">{money(r.cost_cents)}</Td>
+                    <Td className="text-right tabular-nums">{money(r.cost_cents)}</Td>
+                    <Td className="text-right tabular-nums">{(r.sales || 0).toLocaleString()}</Td>
+                    <Td className="text-right tabular-nums">{money(r.sale_pay_cents || 0)}</Td>
+                    <Td className="text-right font-bold tabular-nums text-ink">{money(r.cost_cents + (r.sale_pay_cents || 0))}</Td>
                     <Td className="text-right whitespace-nowrap">
                       <button className={btnGhost} onClick={() => {
                         setRateFor(r);
@@ -1079,6 +1143,7 @@ function Agents({ rows, entries, busy, mutate, defaultDate, catById }: {
                         setRateFrom(todayISO());
                         setRateNote("");
                       }}>Set rate</button>{" "}
+                      <button className={btnGhost} onClick={() => openSale(r)}>Sale rates</button>{" "}
                       <button className={btnCls} disabled={busy || r.current_rate_cents == null}
                               title={r.current_rate_cents == null ? "Set an hourly rate first" : "Log hours worked"}
                               onClick={() => { setHoursFor(r); setHours(""); }}
@@ -1225,6 +1290,92 @@ function Agents({ rows, entries, busy, mutate, defaultDate, catById }: {
         )}
       </Drawer>
 
+      {/* ── Per-sale rates ────────────────────────────────────────────────── */}
+      <Drawer
+        open={!!saleFor}
+        title="Set per-sale rates"
+        sub={saleFor ? (
+          <span className="inline-flex flex-wrap items-center gap-1.5">
+            <SubjectChip name={saleFor.agent_name} color="#C026D3" />
+            <span>paid for every approved sale</span>
+          </span>
+        ) : ""}
+        icon="🏷️"
+        tone="#C026D3"
+        onClose={closeSale}
+        footer={
+          <>
+            <button className={btnGhost} onClick={closeSale}>Cancel</button>
+            <button className={btnCls} disabled={busy || saleUnchanged} onClick={() => {
+              if (!saleFor) return;
+              mutate(() => api(`/expenses/agents/${saleFor.agent_id}/sale-rates`, {
+                method: "PUT",
+                body: JSON.stringify({
+                  aca_cents: saleCents.aca, dental_cents: saleCents.dental, vision_cents: saleCents.vision,
+                  note: saleNote.trim() || null,
+                }),
+              })).then(closeSale);
+            }}>
+              {busy ? "Saving…" : "Save rates"}
+            </button>
+          </>
+        }
+      >
+        <label className="flex cursor-pointer items-center gap-2 text-xs font-semibold text-ink">
+          <input type="checkbox" className="h-4 w-4 accent-accent" checked={saleSame}
+                 onChange={(e) => {
+                   setSaleSame(e.target.checked);
+                   if (!e.target.checked) { setSaleDental(saleAca); setSaleVision(saleAca); }
+                 }} />
+          Same rate for ACA, Dental &amp; Vision
+        </label>
+        <div className="grid grid-cols-3 gap-3">
+          {([
+            ["ACA", saleAca, setSaleAca],
+            ["Dental", saleSame ? saleAca : saleDental, setSaleDental],
+            ["Vision", saleSame ? saleAca : saleVision, setSaleVision],
+          ] as const).map(([label, v, set], i) => (
+            <Field key={label} label={saleSame && i === 0 ? "Every product, per sale" : `${label} per sale`}>
+              <div className="relative">
+                <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-bold text-ink-faint">$</span>
+                <input className={`${drawerCtl} pl-7 font-bold tabular-nums ${saleSame && i > 0 ? "opacity-50" : ""}`}
+                       inputMode="decimal" placeholder="0.00" value={v}
+                       disabled={saleSame && i > 0}
+                       onChange={(e) => set(numericInput(e.target.value))} />
+              </div>
+            </Field>
+          ))}
+        </div>
+        <div className="rounded-xl border border-hairline bg-black/5 px-3 py-2.5 text-xs text-ink-muted">
+          Applies to <strong className="text-ink">approved</strong> sales logged from now on. A deal with
+          ACA + Dental pays both rates. Sales already logged keep the rate they were sold at, so a
+          change never raises or cuts past earnings.
+        </div>
+        <Field label="Note">
+          <input className={drawerCtl} placeholder="Optional — e.g. new commission plan"
+                 value={saleNote} onChange={(e) => setSaleNote(e.target.value)} />
+        </Field>
+
+        {saleHistory.length > 0 && (
+          <Field label="Rate history" plain>
+            <div className="divide-y divide-hairline-soft overflow-hidden rounded-xl border border-hairline">
+              {saleHistory.map((h, i) => (
+                <div key={h.id} className="flex items-center justify-between gap-3 px-3 py-2 text-xs">
+                  <span className="text-ink-muted">
+                    since {new Date(h.effective_at).toLocaleString()}
+                    {i === 0 && <span className="ml-2 text-[0.65rem] font-bold text-success">CURRENT</span>}
+                    {h.note && <span className="ml-2 text-ink-faint">· {h.note}</span>}
+                  </span>
+                  <strong className="tabular-nums text-ink">
+                    {money(h.aca_cents)} · {money(h.dental_cents)} · {money(h.vision_cents)}
+                  </strong>
+                </div>
+              ))}
+            </div>
+          </Field>
+        )}
+      </Drawer>
+
       <Panel title="Hours logged" sub="Every agent line in this window, with the rate it was priced at.">
         {hourLines.length === 0 ? (
           <Empty>No hours logged in this window.</Empty>
@@ -1270,6 +1421,7 @@ const RESOURCE_LABEL: Record<string, string> = {
   expense_item: "Commitment",
   expense_category: "Category",
   agent_rate: "Agent rate",
+  agent_sale_rate: "Per-sale rate",
 };
 const ACTION_COLOR: Record<string, string> = {
   create: "#059669", update: "#2563EB", post: "#C026D3", void: "#E11D48",
@@ -1295,6 +1447,14 @@ function auditDetail(r: AuditRow, nameOf: (id?: unknown) => string): ReactNode {
         {when && <> from {when}</>}</>;
     }
     return <><B>{nameOf(d.agent_id)}</B> — <B>{c(d.rate_cents)}/h</B>{when && <> from {when}</>}</>;
+  }
+
+  if (r.resource_type === "agent_sale_rate") {
+    const a = (d.after || {}) as Record<string, unknown>;
+    const b = d.before as Record<string, unknown> | null | undefined;
+    const trio = (x: Record<string, unknown>) =>
+      `ACA ${c(x.aca)} · Dental ${c(x.dental)} · Vision ${c(x.vision)}`;
+    return <><B>{nameOf(d.agent_id)}</B> — {b && <>{trio(b)} → </>}<B>{trio(a)}</B> per sale</>;
   }
 
   if (d.kind === "agent_hours") {

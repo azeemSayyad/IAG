@@ -297,11 +297,22 @@ def _assignable_roles(current_user: User) -> set[str]:
     """Roles the current user is allowed to assign when creating/updating a user.
 
     Only a "dev" can create or promote users to the "dev" role — admins cannot.
+    A Head Manager onboards agents only — it can never mint or promote a
+    Head Manager or Super Admin.
     """
+    if current_user.role == "head":
+        return {"agent"}
     roles = set(_ALLOWED_NEW_ROLES)
     if current_user.role == "dev":
         roles.add("dev")
     return roles
+
+
+def _ensure_can_manage(current_user: User, user: User) -> None:
+    """A Head Manager may only touch agent accounts (password, role/status, remove)."""
+    if current_user.role == "head" and user.role != "agent":
+        raise HTTPException(status_code=403, detail="Head Managers can only manage agents")
+
 # EVERY user gets an agent profile now (see app/core/agent_profile.py) so any
 # role can log its own deals. Only these roles get a ROUTABLE one — the rest are
 # created inactive so lead distribution and booking never hand them a customer.
@@ -338,6 +349,9 @@ def list_users(
     # they can't see, edit, or remove a dev (mirrors the hidden "Dev" role option).
     if current_user.role != "dev":
         q = q.filter(User.role != "dev")
+    # A Head Manager only onboards/manages agents, so it only sees agents.
+    if current_user.role == "head":
+        q = q.filter(User.role == "agent")
     users = q.order_by(User.created_at.desc()).all()
     return {
         "items": [
@@ -437,6 +451,7 @@ def set_user_password(
     ).first()
     if not user or (user.role == "dev" and current_user.role != "dev"):
         raise HTTPException(status_code=404, detail="User not found")
+    _ensure_can_manage(current_user, user)
     user.password_hash = hash_password(request.password)
     db.commit()
     return {"id": str(user.id), "status": "password_updated"}
@@ -456,6 +471,7 @@ def update_user(
     ).first()
     if not user or (user.role == "dev" and current_user.role != "dev"):
         raise HTTPException(status_code=404, detail="User not found")
+    _ensure_can_manage(current_user, user)
     if str(user.id) == str(current_user.id) and (request.role or request.status):
         raise HTTPException(status_code=409, detail="You cannot change your own role or status")
 
@@ -498,6 +514,7 @@ def delete_user(
     ).first()
     if not user or (user.role == "dev" and current_user.role != "dev"):
         raise HTTPException(status_code=404, detail="User not found")
+    _ensure_can_manage(current_user, user)
     user.deleted_at = datetime.now(timezone.utc)
     agent = db.query(Agent).filter(Agent.user_id == user.id).first()
     if agent:

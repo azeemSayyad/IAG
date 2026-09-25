@@ -19,6 +19,7 @@ from app.models.compliance import (
 from app.models.contact import Contact
 from app.models.expense import (
     AgentRate,
+    AgentSaleRate,
     ExpenseCategory,
     ExpenseEntry,
     ExpenseItem,
@@ -64,6 +65,7 @@ __all__ = [
     "ExpenseItem",
     "ExpenseEntry",
     "AgentRate",
+    "AgentSaleRate",
     "Contact",
     "HireeOnboarding",
     "OnboardingDocument",

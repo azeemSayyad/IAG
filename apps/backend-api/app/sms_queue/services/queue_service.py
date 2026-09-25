@@ -14,9 +14,12 @@ Design notes:
 
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy.orm import Session
+from sqlalchemy import and_, exists, not_, or_, select
+from sqlalchemy.orm import Session, aliased
 
-from app.models.sms import SmsAgentAction, SmsAgentBreak, SmsDoNotCall, SmsLead, SmsMessage, SmsQueueAgent
+from app.models.sms import (
+    SmsAgentAction, SmsAgentBreak, SmsDoNotCall, SmsLead, SmsMessage, SmsPoolBatch, SmsQueueAgent,
+)
 
 BREAK_REASONS = {"Lunch", "Bathroom", "Meeting", "Personal", "Other"}
 
@@ -175,25 +178,63 @@ def _passed_lead_ids(db: Session, tenant_id: str, user_id) -> set[str]:
     return {str(lid) for lid, created in rows if created is None or created >= cutoff}
 
 
+def pool_query(db: Session, tenant_id: str, include_paused: bool = False):
+    """THE lead pool: every QUEUED lead an agent may be handed. Every pool view,
+    count and the assigner read it through here so they can never disagree.
+
+    Two things keep a QUEUED row OUT of the pool:
+      * its list (sms_pool_batches) is PAUSED on the SMS Manager — the leads
+        stay intact and come back on Resume;
+      * it is an uploaded (CSV_DIRECT) row for a phone number an agent has
+        already DISPOSITIONED — overlapping lists must never re-pop a customer
+        someone already worked.
+    """
+    worked = aliased(SmsLead)
+    already_worked = exists().where(
+        worked.tenant_id == tenant_id,
+        worked.phone_number == SmsLead.phone_number,
+        worked.status == "DISPOSITIONED",
+        worked.id != SmsLead.id,
+    )
+    q = db.query(SmsLead).filter(
+        SmsLead.tenant_id == tenant_id,
+        SmsLead.status == "QUEUED",
+        not_(and_(SmsLead.source == "CSV_DIRECT", already_worked)),
+    )
+    if not include_paused:
+        paused = select(SmsPoolBatch.id).where(
+            SmsPoolBatch.tenant_id == tenant_id, SmsPoolBatch.paused_at.isnot(None)
+        )
+        q = q.filter(or_(SmsLead.batch_id.is_(None), SmsLead.batch_id.notin_(paused)))
+    return q
+
+
+def pool_order(db: Session, tenant_id: str, rows: list) -> list:
+    """Serving order. A lead who texted back (REPLY) always comes first — a live
+    reply is worth more than a cold list row. Then the uploaded lists STRICTLY in
+    the order set on the SMS Manager (one list is used up before the next), and
+    oldest-first inside each list."""
+    prio = {
+        bid: (p if p is not None else 10**9)
+        for bid, p in db.query(SmsPoolBatch.id, SmsPoolBatch.priority)
+        .filter(SmsPoolBatch.tenant_id == tenant_id).all()
+    }
+    return sorted(rows, key=lambda l: (
+        0 if (l.source or "REPLY") == "REPLY" else 1,
+        prio.get(l.batch_id, 10**9) if l.batch_id else 10**9,
+        l.created_at,
+    ))
+
+
 def _next_queued_lead(
     db: Session, tenant_id: str, exclude_lead_ids: set[str] | None = None
 ) -> SmsLead | None:
-    rows = (
-        db.query(SmsLead)
-        .filter(SmsLead.tenant_id == tenant_id, SmsLead.status == "QUEUED")
-        .all()
-    )
+    rows = pool_query(db, tenant_id).all()
     if exclude_lead_ids:
         rows = [l for l in rows if str(l.id) not in exclude_lead_ids]
     if not rows:
         return None
-    # First-come-first-served WITHIN each source, but a lead who texted back
-    # (REPLY) is always served before a lead that was only uploaded to the pool
-    # (CSV_DIRECT): a live reply is worth more than a cold list row, and a bulk
-    # upload must never bury the repliers behind thousands of near-identical
-    # created_at timestamps. No HOT/WARM/NORMAL tiers.
-    rows.sort(key=lambda l: (0 if (l.source or "REPLY") == "REPLY" else 1, l.created_at))
-    return rows[0]
+    return pool_order(db, tenant_id, rows)[0]
 
 
 def _available_agents(db: Session, tenant_id: str, exclude_user_id: str | None = None):
@@ -760,6 +801,16 @@ def reap_stale_agents(db: Session, tenant_id: str, stale_seconds: int = STALE_AG
         )
         .all()
     )
+    # An agent on the Add Deal form (after-call work) has left the SMS page, so
+    # its heartbeat stops — but they are mid-sale on the lead they hold. Reaping
+    # them handed that customer to another agent while the sale was being logged.
+    # The form heartbeats wrap presence instead; honour it.
+    try:
+        from app.sms_queue.services.wrap_presence import wrapping_user_ids
+        wrapping = wrapping_user_ids(str(tenant_id))
+    except Exception:
+        wrapping = set()
+    stale = [a for a in stale if str(a.user_id) not in wrapping]
     events: list[dict] = []
     reaped = 0
     for agent in stale:
@@ -986,12 +1037,7 @@ def get_status(db: Session, tenant_id: str, user_id: str) -> dict:
     agent = _get_or_create_agent(db, tenant_id, user_id)
     brk = _open_break(db, tenant_id, user_id) if agent.status == "AWAY" else None
     # "Yes" leads waiting in the shared pool (every queued lead is a positive reply).
-    yes_waiting = (
-        db.query(func.count(SmsLead.id))
-        .filter(SmsLead.tenant_id == tenant_id, SmsLead.status == "QUEUED")
-        .scalar()
-        or 0
-    )
+    yes_waiting = pool_query(db, tenant_id).count()
     db.commit()
     return {
         "status": agent.status,

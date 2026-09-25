@@ -651,6 +651,11 @@
     // Household State and Agent NPN are mandatory.
     const stateEl = $('#sState'); const state = (stateEl.value||'').trim().toUpperCase();
     if(!state){ markInvalid(stateEl); stateEl.scrollIntoView({behavior:'smooth',block:'center'}); flash('Cannot log the sale — missing the household State (fill it at the top of the form).'); btn.disabled=false; return; }
+    // The API only accepts a real 2-letter US code; anything else is rejected
+    // before the deal is saved, so catch it here with a clear message.
+    // Same list as VALID_US_STATES in the API (50 states + DC; no territories).
+    const API_STATES = 'AL AK AZ AR CA CO CT DE FL GA HI IA ID IL IN KS KY LA MA MD ME MI MN MO MS MT NC ND NE NH NJ NM NV NY OH OK OR PA RI SC SD TN TX UT VA VT WA WI WV WY DC'.split(' ');
+    if(API_STATES.indexOf(state) === -1){ markInvalid(stateEl); stateEl.scrollIntoView({behavior:'smooth',block:'center'}); flash('Cannot log the sale — "'+state+'" is not a US state. Use the 2-letter code, e.g. FL.'); btn.disabled=false; return; }
     const npnEl = $('#sNpn');
     if(!(npnEl.value||'').trim()){ markInvalid(npnEl); npnEl.scrollIntoView({behavior:'smooth',block:'center'}); flash('Cannot log the sale — missing the Agent NPN (set it in Settings → Licenses & Appointments).'); btn.disabled=false; return; }
     const cards = $$('.person-card', wrap);
@@ -715,14 +720,16 @@
         const r = await window.__ebAPI.post('/compliance/deals/submit', body);
         rows.push({ name: body.customer_name||('Person '+(i+1)), ok: r.decision==='APPROVED', reason: r.reason||'', n: p.products.length });
       }catch(err){
-        rows.push({ name: body.customer_name||('Person '+(i+1)), ok:false, reason: (err&&err.message)||'Submit failed', n: p.products.length });
+        // The request itself failed — nothing was saved. That is NOT a compliance
+        // "Blocked" decision, so label it differently and keep the reason readable.
+        rows.push({ name: body.customer_name||('Person '+(i+1)), ok:false, failed:true, reason: submitError(err), n: p.products.length });
       }
     }
     // show results
     $('#resultRows').innerHTML = rows.map(x=>
       '<div class="res-row"><span><strong>'+esc(x.name)+'</strong> · '+x.n+' '+(x.n===1?'policy':'policies')+
       '<div style="font-size:.75rem;color:#64748B">'+esc(x.reason)+'</div></span>'+
-      '<span class="res-pill '+(x.ok?'ok':'bad')+'">'+(x.ok?'Approved':'Blocked')+'</span></div>').join('');
+      '<span class="res-pill '+(x.ok?'ok':'bad')+'">'+(x.ok?'Approved':(x.failed?'Not saved':'Blocked'))+'</span></div>').join('');
     $('#resultBox').style.display='';
     $('#resultBox').scrollIntoView({behavior:'smooth',block:'center'});
     const okCount = rows.filter(r=>r.ok).length;
@@ -730,8 +737,9 @@
     btn.innerHTML=_logHTML; btn.disabled=false;
     // After logging the sale, send the agent back to the SMS queue (auto-joined)
     // so they get the next lead pop immediately. Brief pause lets them glance at
-    // the approval result first.
-    if(rows.length){
+    // the approval result first. If any person was NOT saved, stay on the form so
+    // the agent can read why, fix it and submit again.
+    if(rows.length && !rows.some(r=>r.failed)){
       if(window.__ebWrapEnd) window.__ebWrapEnd();   // done wrapping -> clear the Wrapping KPI
       setTimeout(function(){ window.location.href = '/sms/#/queue?autoJoin=1'; }, 1500);
     }
@@ -748,6 +756,21 @@
     window.__ebWrapEnd = function(){ try{ clearInterval(hb); }catch(e){} ping(false); };
     window.addEventListener('beforeunload', window.__ebWrapEnd);
   })();
+
+  // Turn an API error into one readable line (a 422 arrives as the raw
+  // validation list, e.g. [{"loc":["body","state"],"msg":"Value error, ..."}]).
+  function submitError(err){
+    const raw = (err && err.message) || '';
+    try{
+      const d = JSON.parse(raw);
+      const list = Array.isArray(d) ? d : (d && Array.isArray(d.detail) ? d.detail : null);
+      if(list) return 'Not saved — ' + list.map(e => {
+        const f = (e.loc || []).slice(-1)[0];
+        return (f ? String(f).replace(/_/g,' ') + ': ' : '') + String(e.msg || '').replace(/^Value error,\s*/, '');
+      }).join('; ');
+    }catch(_){}
+    return 'Not saved — ' + (raw || 'the server did not accept this deal') + '. Nothing was saved; fix and submit again.';
+  }
 
   function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 

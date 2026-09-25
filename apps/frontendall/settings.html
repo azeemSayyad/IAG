@@ -1633,7 +1633,26 @@ html[data-mode="dark"] .um-tag.mut{background:rgba(255,255,255,.08);color:#C9CFD
   // For non-admins these sections are removed from the DOM entirely — not just hidden —
   // so their content can never even be inspected.
   if(!isAdmin){
-    document.querySelectorAll('[data-admin-only]').forEach(el => el.remove());
+    // A Head Manager keeps Team & Permissions, cut down to agent onboarding only
+    // (the user list is agents-only and the role picker offers only "Agent").
+    const isHead = (role === 'head');
+    document.querySelectorAll('[data-admin-only]').forEach(el => {
+      if(isHead && el.matches('[data-target="team"],[data-section="team"]')) return;
+      el.remove();
+    });
+    if(isHead){
+      const team = document.querySelector('.panel-section[data-section="team"]');
+      if(team){
+        // Keep only the user manager — the tier cards, CEO toggle and Members list are admin-level.
+        Array.from(team.children).forEach(ch => { if(ch.id !== 'userMgmt') ch.remove(); });
+        const badge = team.querySelector('.um-adminbadge'); if(badge) badge.textContent = 'Agents only';
+        const help = team.querySelector('#userMgmt .field-help'); if(help) help.textContent = 'Onboard new agents, reset their passwords, and open their full profile.';
+        const addBtn = document.getElementById('nuOpen'); if(addBtn) addBtn.textContent = '+ Add agent';
+        const auTitle = document.getElementById('auTitle'); if(auTitle) auTitle.textContent = 'Add an agent';
+      }
+      const nuRole = document.getElementById('nuRole');
+      if(nuRole) Array.from(nuRole.options).forEach(o => { if(o.value !== 'agent') o.remove(); });
+    }
     // If the user was sent here with #team etc, fall back to Profile
     const firstNav = document.querySelector('.set-nav-item');
     const firstSection = document.querySelector('.panel-section');
@@ -2769,8 +2788,10 @@ html[data-mode="dark"] .um-tag.mut{background:rgba(255,255,255,.08);color:#C9CFD
   // ===== Admin-only: user management (create users + reset passwords) =====
   (function userMgmt(){
     var role=''; try{role=localStorage.getItem('ebRole')||'';}catch(e){}
-    if(role!=='tenant_admin' && role!=='super_admin' && role!=='admin' && role!=='dev') return;
+    if(role!=='tenant_admin' && role!=='super_admin' && role!=='admin' && role!=='dev' && role!=='head') return;
     if(!window.__ebAPI) return;
+    // Head Manager: onboards agents only (the API lists and accepts agents only).
+    var IS_HEAD=(role==='head');
     var createBtn=document.getElementById('nuCreate');
     if(!createBtn) return;
     var msg=document.getElementById('nuMsg'), list=document.getElementById('userList');
@@ -2778,7 +2799,7 @@ html[data-mode="dark"] .um-tag.mut{background:rgba(255,255,255,.08);color:#C9CFD
     // IAG has three assignable roles. A user still on a legacy role
     // (lead/manager/tenant_admin) shows that role as the selected option so the
     // dropdown never lies — the admin can move them onto one of these three.
-    var ROLES=['agent','head','super_admin'];
+    var ROLES=IS_HEAD ? ['agent'] : ['agent','head','super_admin'];
     // Only a dev can create/assign the "dev" role — add it to the dropdowns
     // (create + per-user edit) for dev logins only. Admins never see this option.
     if(role==='dev'){
@@ -2848,7 +2869,7 @@ html[data-mode="dark"] .um-tag.mut{background:rgba(255,255,255,.08);color:#C9CFD
             '</div>'+
             '<div class="urow-r">'+
               '<button class="btn ghost" data-active="'+esc(u.id)+'" data-st="'+(suspended?'active':'suspended')+'" type="button">'+(suspended?'Switch to active':'Switch to inactive')+'</button>'+
-              '<select class="u-role" data-id="'+esc(u.id)+'" title="Change role">'+opts+'</select>'+
+              (IS_HEAD ? '' : '<select class="u-role" data-id="'+esc(u.id)+'" title="Change role">'+opts+'</select>')+
               '<button class="btn ghost" data-suspend="'+esc(u.id)+'" data-st="'+(suspended?'active':'suspended')+'" type="button">'+(suspended?'Reactivate':'Suspend')+'</button>'+
             '</div>'+
           '</div>';
@@ -3227,7 +3248,7 @@ html[data-mode="dark"] .um-tag.mut{background:rgba(255,255,255,.08);color:#C9CFD
       var h=HEData||{}, bank=h.bank_info||{}, ec=h.emergency_contact||{}, html='', onSave=null, fs;
       if(sec==='account'){
         fs=[
-          {n:'role',l:'Role',t:'select',opts:[['agent','Agent'],['lead','Team Lead'],['manager','Manager'],['head','Head Manager'],['tenant_admin','Admin'],['super_admin','Super Admin']]},
+          {n:'role',l:'Role',t:'select',opts:IS_HEAD ? [['agent','Agent']] : [['agent','Agent'],['lead','Team Lead'],['manager','Manager'],['head','Head Manager'],['tenant_admin','Admin'],['super_admin','Super Admin']]},
           {n:'status',l:'Status',t:'select',opts:[['active','Active'],['suspended','Suspended']]},
           {n:'date_of_birth',l:'Date of birth',t:'date'},{n:'ssn',l:'SSN'},{n:'phone',l:'Phone'},
           {n:'gender',l:'Gender',t:'select',opts:['Male','Female','Prefer not to say']},
@@ -3556,7 +3577,7 @@ html[data-mode="dark"] .um-tag.mut{background:rgba(255,255,255,.08);color:#C9CFD
       if(!body.email||!body.password){ msg.textContent='Email and password are required.'; msg.style.color='#A3525C'; return; }
       msg.textContent='Creating…'; msg.style.color='';
       window.__ebAPI.post('/admin/users',body).then(function(){
-        toast('User created ✓','accent');
+        toast((IS_HEAD?'Agent':'User')+' created ✓','accent');
         ['nuFirst','nuLast','nuEmail','nuPhone','nuPass'].forEach(function(id){ var e=document.getElementById(id); if(e) e.value=''; });
         closeAdd();
         loadAgentMap().then(loadUsers);

@@ -31,6 +31,8 @@ type PoolBatch = {
   id: string; name: string; total_rows: number; imported: number;
   skipped_duplicates: number; skipped_dnc: number; failed: number; columns: string[];
   in_pool: number; working: number; done: number; appointments: number; sales: number;
+  // Serving order (top = first), pause state, and which list agents get right now.
+  priority: number | null; paused: boolean; paused_at: string | null; serving: boolean;
   created_at: string | null;
 };
 
@@ -262,6 +264,29 @@ export default function LeadsTools() {
     } catch (e) { showToast((e as Error)?.message || "Upload failed", "danger"); }
     finally { setPoolBusy(false); await loadPool(); }
   }, [poolConfirm, loadPool, showToast]);
+  // Serving order + pause. Lists are handed out strictly top to bottom; a paused
+  // list's waiting leads are out of the pool until it is resumed.
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [overId, setOverId] = useState<string | null>(null);
+  const saveOrder = useCallback(async (ids: string[]) => {
+    setPoolBatches(prev => ids.map(id => prev.find(b => b.id === id)!).filter(Boolean));  // optimistic
+    try { await api("/sms/pool/batches/order", { method: "PUT", body: JSON.stringify({ batch_ids: ids }) }); showToast("List order saved — the top list is handed out first", "accent"); }
+    catch (e) { showToast((e as Error)?.message || "Could not reorder", "danger"); }
+    await loadPool();
+  }, [loadPool, showToast]);
+  const moveBatch = useCallback((id: string, to: number) => {
+    const ids = poolBatches.map(b => b.id).filter(x => x !== id);
+    ids.splice(Math.max(0, Math.min(to, ids.length)), 0, id);
+    if (ids.join() !== poolBatches.map(b => b.id).join()) saveOrder(ids);
+  }, [poolBatches, saveOrder]);
+  const togglePause = useCallback(async (b: PoolBatch) => {
+    try {
+      await api(`/sms/pool/batches/${b.id}/pause`, { method: "POST", body: JSON.stringify({ paused: !b.paused }) });
+      showToast(b.paused ? `${b.name} resumed — its leads are back in the pool` : `${b.name} paused — its leads are out of the pool`, "accent");
+    } catch (e) { showToast((e as Error)?.message || "Could not change the list", "danger"); }
+    await loadPool();
+  }, [loadPool, showToast]);
+
   const removePool = useCallback(async (id: string) => {
     if (!window.confirm("Remove this list from the agent pool? Leads still waiting are pulled out; anything an agent already took stays.")) return;
     try { const r = await api<{ removed?: number }>("/sms/pool/batches/" + id, { method: "DELETE" }); showToast(`Removed ${r?.removed || 0} waiting leads from the pool`, "accent"); }
@@ -485,7 +510,14 @@ export default function LeadsTools() {
           <div className="py-2 text-[0.85rem] text-ink-faint">No lists in the pool yet — upload a CSV to hand leads straight to agents.</div>
         ) : (
           <div className="mt-2.5 space-y-2.5">
-            {poolBatches.map(b => {
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg bg-black/[0.03] px-3 py-2 text-xs text-ink-muted">
+              <span><b className="text-ink">Top list is handed out first</b>, one list at a time. Drag <span className="font-bold text-ink">⠿</span> or use ↑ ↓ to change the order.</span>
+              <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-success" /> Serving now</span>
+              <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-accent" /> Waiting its turn</span>
+              <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-pending" /> Paused — out of the pool</span>
+              <span className="text-ink-faint">Customers who replied to a campaign always come before every list.</span>
+            </div>
+            {poolBatches.map((b, idx) => {
               const skipped = b.skipped_duplicates + b.skipped_dnc + b.failed;
               const when = b.created_at ? new Date(b.created_at).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "";
               const stat = (label: string, val: number, cls = "text-ink", title?: string) => (
@@ -494,18 +526,62 @@ export default function LeadsTools() {
                   <span className={`text-[1.05rem] font-bold tabular-nums ${cls}`}>{val || 0}</span>
                 </div>
               );
+              // One look tells the state: green ring + "Serving now" = agents get this
+              // list right now; amber stripes + dimmed = paused (out of the pool);
+              // plain accent rank = waiting its turn; grey = every lead handed out.
+              const state = b.paused ? "paused" : b.serving ? "serving" : b.in_pool > 0 ? "waiting" : "done";
+              const shell = {
+                serving: "border-2 border-success bg-success/[0.06] shadow-[0_0_0_4px_rgba(79,130,104,0.14)]",
+                waiting: "border border-hairline-soft bg-white/40",
+                paused: "border-2 border-dashed border-pending/70 bg-[repeating-linear-gradient(135deg,rgba(156,120,66,0.09)_0_10px,transparent_10px_20px)]",
+                done: "border border-hairline-soft bg-black/[0.02] opacity-70",
+              }[state];
+              const rankCls = {
+                serving: "bg-success text-white", waiting: "bg-accent text-white",
+                paused: "bg-pending/20 text-pending", done: "bg-black/10 text-ink-muted",
+              }[state];
               return (
-                <div key={b.id} className="rounded-xl border border-hairline-soft bg-white/40 p-4">
+                <div key={b.id}
+                  draggable
+                  onDragStart={(e) => { setDragId(b.id); e.dataTransfer.effectAllowed = "move"; }}
+                  onDragOver={(e) => { if (dragId && dragId !== b.id) { e.preventDefault(); setOverId(b.id); } }}
+                  onDragLeave={() => setOverId(o => (o === b.id ? null : o))}
+                  onDrop={(e) => { e.preventDefault(); if (dragId && dragId !== b.id) moveBatch(dragId, idx); setDragId(null); setOverId(null); }}
+                  onDragEnd={() => { setDragId(null); setOverId(null); }}
+                  className={`relative rounded-xl p-4 transition-all ${shell} ${dragId === b.id ? "scale-[0.99] opacity-50" : ""} ${overId === b.id ? "ring-2 ring-accent ring-offset-2" : ""}`}>
                   <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div>
-                      <div className="text-[0.95rem] font-bold text-ink">{b.name}</div>
-                      <div className="text-xs text-ink-faint">Uploaded {when}</div>
+                    <div className="flex min-w-0 items-center gap-3">
+                      <span className="cursor-grab select-none text-lg leading-none text-ink-faint active:cursor-grabbing" title="Drag to change the order">⠿</span>
+                      <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-extrabold tabular-nums ${rankCls}`} title={`Position ${idx + 1} in the serving order`}>{idx + 1}</span>
+                      <div className="min-w-0">
+                        <div className={`truncate text-[0.95rem] font-bold ${b.paused ? "text-ink-muted line-through decoration-pending/60" : "text-ink"}`}>{b.name}</div>
+                        <div className="text-xs text-ink-faint">Uploaded {when}</div>
+                      </div>
                     </div>
-                    {b.in_pool > 0
-                      ? <span className="rounded-full bg-success/15 px-2.5 py-0.5 text-xs font-bold text-success">{b.in_pool} waiting</span>
-                      : <span className="rounded-full bg-black/5 px-2.5 py-0.5 text-xs font-bold text-ink-muted">All handed out</span>}
+                    <div className="flex flex-wrap items-center gap-2">
+                      {state === "serving" && (
+                        <span className="inline-flex items-center gap-1.5 rounded-full bg-success px-3 py-1 text-xs font-bold text-white">
+                          <span className="relative flex h-2 w-2"><span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-white opacity-75" /><span className="relative inline-flex h-2 w-2 rounded-full bg-white" /></span>
+                          Serving now · {b.in_pool} waiting
+                        </span>
+                      )}
+                      {state === "waiting" && <span className="rounded-full bg-accent/12 px-3 py-1 text-xs font-bold text-accent">Up next · {b.in_pool} waiting</span>}
+                      {state === "paused" && <span className="rounded-full bg-pending px-3 py-1 text-xs font-bold text-white">⏸ Paused · {b.in_pool} held out of pool</span>}
+                      {state === "done" && <span className="rounded-full bg-black/5 px-3 py-1 text-xs font-bold text-ink-muted">All handed out</span>}
+                      <div className="flex overflow-hidden rounded-lg border border-hairline">
+                        <button type="button" disabled={idx === 0} onClick={() => moveBatch(b.id, idx - 1)} className="h-8 w-8 text-sm font-bold text-ink-muted hover:bg-black/5 hover:text-ink disabled:opacity-30" title="Move up (served sooner)" aria-label="Move up">↑</button>
+                        <button type="button" disabled={idx === poolBatches.length - 1} onClick={() => moveBatch(b.id, idx + 1)} className="h-8 w-8 border-l border-hairline text-sm font-bold text-ink-muted hover:bg-black/5 hover:text-ink disabled:opacity-30" title="Move down (served later)" aria-label="Move down">↓</button>
+                      </div>
+                      <button type="button" onClick={() => togglePause(b)}
+                        className={b.paused
+                          ? "h-8 rounded-lg bg-success px-3.5 text-[0.8rem] font-semibold text-white hover:opacity-90"
+                          : "h-8 rounded-lg border-[1.5px] border-pending px-3.5 text-[0.8rem] font-semibold text-pending hover:bg-pending/10"}
+                        title={b.paused ? "Put this list's waiting leads back in the pool" : "Take this list's waiting leads out of the pool (nothing is deleted)"}>
+                        {b.paused ? "▶ Resume" : "⏸ Pause"}
+                      </button>
+                    </div>
                   </div>
-                  <div className="my-3 flex flex-wrap items-center gap-5 border-y border-hairline-soft py-2.5">
+                  <div className={`my-3 flex flex-wrap items-center gap-5 border-y border-hairline-soft py-2.5 ${b.paused ? "opacity-60" : ""}`}>
                     {stat("Rows", b.total_rows)}
                     {stat("Added", b.imported, "text-success")}
                     {stat("In pool", b.in_pool)}
@@ -513,7 +589,7 @@ export default function LeadsTools() {
                     {stat("Done", b.done)}
                     {stat("Appts", b.appointments, "text-success")}
                     {stat("Sales", b.sales, "text-success")}
-                    {stat("Skipped", skipped, skipped ? "text-danger" : "text-ink-faint", `${b.skipped_duplicates} already in pool / duplicate · ${b.skipped_dnc} Do-Not-Call · ${b.failed} no usable name/phone`)}
+                    {stat("Skipped", skipped, skipped ? "text-danger" : "text-ink-faint", `${b.skipped_duplicates} already in pool, already worked or duplicate · ${b.skipped_dnc} Do-Not-Call · ${b.failed} no usable name/phone`)}
                   </div>
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div className="min-w-0 flex-1 text-xs text-ink-muted">
@@ -536,8 +612,8 @@ export default function LeadsTools() {
             <div className="mb-3 break-all text-xs text-ink-muted">{poolConfirm.file.name} · {(poolConfirm.file.size / 1024).toFixed(poolConfirm.file.size < 10240 ? 1 : 0)} KB</div>
             <ul className="mb-4 ml-4 list-disc space-y-1 text-sm text-ink-soft">
               <li><b>No text messages will be sent.</b></li>
-              <li>Agents get these leads one at a time, after anyone who has replied to a campaign.</li>
-              <li>Numbers on the Do-Not-Call list and numbers already in the pool are skipped.</li>
+              <li>Agents get these leads one at a time, after anyone who has replied to a campaign. The list joins at the <b>bottom</b> of the order — move it up or pause others to serve it sooner.</li>
+              <li>Numbers on the Do-Not-Call list, numbers already in the pool and customers an agent already worked are skipped.</li>
               <li>You can remove the whole list from the pool later in one click.</li>
             </ul>
             <div className="flex justify-end gap-2">

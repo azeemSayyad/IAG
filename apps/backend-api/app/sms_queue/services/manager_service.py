@@ -14,11 +14,18 @@ from app.models.sms import (
     SmsLead,
     SmsMessage,
     SmsPollLog,
+    SmsPoolBatch,
     SmsQueueAgent,
 )
 from app.models.user import User
 
 ONLINE_STATUSES = ("AVAILABLE", "ON_CALL", "AWAY")
+
+
+def _pool_query(db: Session, tenant_id: str):
+    # Lazy import: queue_service is the one definition of "the pool".
+    from app.sms_queue.services.queue_service import pool_query
+    return pool_query(db, tenant_id)
 PRIORITY_RANK = {"HOT": 0, "WARM": 1, "NORMAL": 2}
 # Leads still "alive" in the human lane — every one was a positive ("yes") reply.
 YES_OPEN_STATUSES = ("QUEUED", "ASSIGNED", "IN_PROGRESS")
@@ -160,7 +167,7 @@ def get_overview(db: Session, tenant_id: str) -> dict:
             "available": by_status.get("AVAILABLE", 0),
             "on_call": by_status.get("ON_CALL", 0),
             "away": by_status.get("AWAY", 0),
-            "queued": _count("QUEUED"),
+            "queued": _pool_query(db, tenant_id).count(),
             "assigned": _count("ASSIGNED"),
             "in_progress": _count("IN_PROGRESS"),
             "parked": _count("PARKED"),
@@ -182,11 +189,7 @@ def get_pool_counts(db: Session, tenant_id: str) -> dict:
 
     now = datetime.now(timezone.utc)
     cutoff = now - timedelta(minutes=15)
-    queued = (
-        db.query(SmsLead)
-        .filter(SmsLead.tenant_id == tenant_id, SmsLead.status == "QUEUED")
-        .all()
-    )
+    queued = _pool_query(db, tenant_id).all()
     # "Fresh" = last ACTIVITY (a reply bumps updated_at), not first-seen — so a lead
     # that just replied counts as fresh even if it entered the pool days ago.
     fresh = sum(1 for l in queued if (l.updated_at or l.created_at) and (l.updated_at or l.created_at) >= cutoff)
@@ -210,17 +213,21 @@ def get_pool_counts(db: Session, tenant_id: str) -> dict:
 
 
 def get_queued(db: Session, tenant_id: str, limit: int = 100) -> dict:
-    rows = (
-        db.query(SmsLead)
-        .filter(SmsLead.tenant_id == tenant_id, SmsLead.status == "QUEUED")
-        .all()
-    )
-    # Pool is ordered by LAST ACTIVITY, newest first (top of the UI) — a lead that
-    # just replied jumps to the top with a correct "x min ago", even if it first
-    # entered the pool days earlier. Serving order is unchanged (oldest-first /
-    # FIFO) in queue_service._next_queued_lead.
-    rows.sort(key=lambda l: (l.updated_at or l.created_at), reverse=True)
-    rows = rows[:limit]
+    from app.sms_queue.services.queue_service import pool_order
+
+    rows = _pool_query(db, tenant_id).all()
+    # Shown in SERVING order, so the list on top of the SMS Manager is the list
+    # agents are being handed: replies first (latest activity first, so a lead
+    # that just replied shows a correct "x min ago" at the top), then the uploaded
+    # lists in their drag order. Paused lists are not in the pool at all.
+    replies = sorted((l for l in rows if (l.source or "REPLY") == "REPLY"),
+                     key=lambda l: (l.updated_at or l.created_at), reverse=True)
+    lists = pool_order(db, tenant_id, [l for l in rows if (l.source or "REPLY") != "REPLY"])
+    rows = (replies + lists)[:limit]
+    names = {
+        bid: name for bid, name in db.query(SmsPoolBatch.id, SmsPoolBatch.name)
+        .filter(SmsPoolBatch.tenant_id == tenant_id).all()
+    }
     return {
         "items": [
             {
@@ -229,6 +236,7 @@ def get_queued(db: Session, tenant_id: str, limit: int = 100) -> dict:
                 "customer_name": l.customer_name,
                 "priority": l.priority,
                 "source": l.source or "REPLY",
+                "batch_name": names.get(l.batch_id) if l.batch_id else None,
                 "last_message": l.last_message,
                 "message_count": l.message_count,
                 "created_at": l.created_at.isoformat() if l.created_at else None,
