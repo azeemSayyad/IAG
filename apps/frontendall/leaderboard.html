@@ -255,6 +255,8 @@ html[data-mode="dark"] .comp-bar{background:rgba(255,255,255,0.10)}
         <button type="button" class="lb-seg" data-range="today">Today</button>
         <button type="button" class="lb-seg" data-range="yesterday">Yesterday</button>
         <button type="button" class="lb-seg" data-range="this_week">This week</button>
+        <button type="button" class="lb-seg" data-range="this_month">This month</button>
+        <button type="button" class="lb-seg" data-range="all">All time</button>
         <button type="button" class="lb-seg" data-range="custom" id="customBtn">Custom</button>
       </div>
       <div class="custom-pop" id="customPop" hidden>
@@ -385,7 +387,8 @@ html[data-mode="dark"] .comp-bar{background:rgba(255,255,255,0.10)}
   }
 
   function setLabel(from,to){
-    var txt = (from===to) ? prettyDate(from) : (prettyDate(from)+' → '+prettyDate(to));
+    var txt = (from==='2000-01-01') ? 'All time'   // the shared "All time" epoch
+      : (from===to) ? prettyDate(from) : (prettyDate(from)+' → '+prettyDate(to));
     $('#dateLbl').textContent = txt + ' · Eastern';
   }
 

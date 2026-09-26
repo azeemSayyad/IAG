@@ -68,6 +68,8 @@ const PRESETS: { key: PresetKey; label: string }[] = [
   { key: "today", label: "Today" },
   { key: "yesterday", label: "Yesterday" },
   { key: "this_week", label: "This week" },
+  { key: "this_month", label: "This month" },
+  { key: "all", label: "All time" },
 ];
 // Resolve a preset to a {from, to} pair (YYYY-MM-DD, Eastern).
 function presetRange(key: PresetKey): { from: string; to: string } {

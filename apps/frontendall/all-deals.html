@@ -270,6 +270,8 @@ html[data-mode="dark"] #recPlayer{background:#1C2029;border-color:rgba(255,255,2
         <button type="button" class="seg-btn active" data-range="today">Today</button>
         <button type="button" class="seg-btn" data-range="yesterday">Yesterday</button>
         <button type="button" class="seg-btn" data-range="week">This week</button>
+        <button type="button" class="seg-btn" data-range="month">This month</button>
+        <button type="button" class="seg-btn" data-range="all">All time</button>
         <button type="button" class="seg-btn" data-range="custom" id="customBtn">Custom</button>
       </div>
       <div class="custom-pop" id="customPop" hidden>
@@ -777,7 +779,8 @@ html[data-mode="dark"] #recPlayer{background:#1C2029;border-color:rgba(255,255,2
   }
 
   function setLabel(from,to){
-    var txt = (from===to) ? prettyDate(from) : (prettyDate(from)+' → '+prettyDate(to));
+    var txt = (from==='2000-01-01') ? 'All time'   // the shared "All time" epoch
+      : (from===to) ? prettyDate(from) : (prettyDate(from)+' → '+prettyDate(to));
     $('#dateLbl').textContent = txt + ' · Eastern';
   }
 
