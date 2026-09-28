@@ -8,7 +8,7 @@
 <link rel="apple-touch-icon" href="assets/apple-touch-icon.png"/>
 <script src="brand.js?v=2"></script>
 <script src="i18n-dict.js?v=2"></script>
-<script src="prefs-extras.js?v=41"></script>
+<script src="prefs-extras.js?v=42"></script>
 <script src="coach.js" defer></script>
 <script src="tour.js" defer></script>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
@@ -475,6 +475,145 @@ html[data-mode="dark"] .sb-brand-logo{background:#FFFFFF;border-radius:8px;paddi
   <script src="services/api.js?v=11"></script>
   <script src="services/call-now-popup.js?v=1"></script>
   <script src="services/error-boundary.js?v=24"></script>
+<style id="annDrawerStyle">
+/* ===== Announcements drawer (admins) ===== */
+.ann-open{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 12px;border-radius:999px;border:none;cursor:pointer;
+  font:inherit;font-size:.78rem;font-weight:700;color:#fff;background:linear-gradient(135deg,var(--accent),var(--accent-2,var(--accent)));
+  box-shadow:0 4px 12px rgba(var(--accent-rgb),.28);transition:transform .15s ease,box-shadow .15s ease}
+.ann-open:hover{transform:translateY(-1px);box-shadow:0 6px 16px rgba(var(--accent-rgb),.36)}
+.ann-open svg{width:14px;height:14px}
+.ann-open[hidden]{display:none}
+.annd-back{position:fixed;inset:0;z-index:9000;background:rgba(15,23,42,.38);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);
+  opacity:0;transition:opacity .25s ease}
+.annd-back.show{opacity:1}
+.annd{position:fixed;top:0;right:0;bottom:0;z-index:9001;width:min(480px,100vw);display:flex;flex-direction:column;background:#fff;
+  border-left:1px solid var(--border);box-shadow:-24px 0 60px rgba(15,23,42,.22);transform:translateX(102%);visibility:hidden;
+  transition:transform .32s cubic-bezier(.2,.8,.2,1),visibility 0s linear .32s}
+.annd.show{transform:none;visibility:visible;transition:transform .32s cubic-bezier(.2,.8,.2,1)}
+.annd-head{position:relative;display:flex;align-items:center;gap:12px;padding:20px 20px 16px;
+  background:linear-gradient(135deg,rgba(var(--accent-rgb),.12),rgba(var(--accent-rgb),0) 75%);border-bottom:1px solid var(--border)}
+.annd-head::before{content:'';position:absolute;left:0;right:0;top:0;height:3px;background:linear-gradient(90deg,var(--accent),var(--accent-2,var(--accent)))}
+.annd-ic{flex:none;width:42px;height:42px;border-radius:12px;display:flex;align-items:center;justify-content:center;color:#fff;
+  background:linear-gradient(135deg,var(--accent),var(--accent-2,var(--accent)));box-shadow:0 6px 16px rgba(var(--accent-rgb),.32)}
+.annd-ic svg{width:21px;height:21px}
+.annd-htxt{min-width:0;flex:1}
+.annd-title{font-size:1.0625rem;font-weight:800;color:var(--text-strong,var(--text));letter-spacing:-.01em}
+.annd-sub{font-size:.78rem;color:var(--text-muted);margin-top:2px;line-height:1.35}
+.annd-x{flex:none;width:34px;height:34px;border-radius:10px;border:1px solid var(--border);background:rgba(255,255,255,.7);color:var(--text-muted);cursor:pointer;display:flex;align-items:center;justify-content:center}
+.annd-x:hover{color:var(--text);border-color:var(--border-hover,var(--border))}
+.annd-x svg{width:16px;height:16px}
+.annd-scroll{flex:1;overflow:auto;overscroll-behavior:contain}
+.annd-sec{padding:18px 20px}
+.annd-sec+.annd-sec{border-top:1px solid var(--border)}
+.annd-lbl{display:block;font-size:.6875rem;font-weight:800;text-transform:uppercase;letter-spacing:.07em;color:var(--text-faint);margin:0 0 8px}
+.annd-lbl:not(:first-child){margin-top:18px}
+.annd-ta{position:relative}
+.annd-ta textarea{width:100%;box-sizing:border-box;min-height:120px;resize:vertical;padding:12px 14px 26px;border:1px solid var(--border);border-radius:12px;
+  background:transparent;color:var(--text);font:inherit;font-size:.9375rem;line-height:1.55;transition:border-color .15s,box-shadow .15s}
+.annd-ta textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 4px rgba(var(--accent-rgb),.14)}
+.annd-chars{position:absolute;right:12px;bottom:9px;font-size:.6875rem;font-weight:600;color:var(--text-faint);font-variant-numeric:tabular-nums;pointer-events:none}
+.annd-chars.warn{color:var(--down,#DC2626)}
+.annd-seg{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.annd-seg button{display:flex;flex-direction:column;align-items:flex-start;gap:3px;padding:10px 12px;border-radius:12px;border:1.5px solid var(--border);
+  background:transparent;color:var(--text);font:inherit;cursor:pointer;text-align:left;transition:border-color .15s,background .15s,box-shadow .15s}
+.annd-seg button:hover{border-color:rgba(var(--accent-rgb),.45)}
+.annd-seg button.on{border-color:var(--accent);background:rgba(var(--accent-rgb),.08);box-shadow:0 0 0 3px rgba(var(--accent-rgb),.12)}
+.annd-seg-t{font-size:.8125rem;font-weight:700}
+.annd-seg-n{font-size:.72rem;font-weight:600;color:var(--text-faint);font-variant-numeric:tabular-nums}
+.annd-seg button.on .annd-seg-n{color:var(--accent)}
+.annd-pick{margin-top:12px;border:1px solid var(--border);border-radius:12px;overflow:hidden}
+.annd-pick[hidden]{display:none}
+.annd-search{display:flex;align-items:center;gap:8px;padding:0 12px;border-bottom:1px solid var(--border)}
+.annd-search svg{width:15px;height:15px;color:var(--text-faint);flex:none}
+.annd-search input{flex:1;min-width:0;height:40px;border:none;background:transparent;color:var(--text);font:inherit;font-size:.8125rem}
+.annd-search input:focus{outline:none}
+.annd-chips{display:flex;flex-wrap:wrap;gap:6px;padding:8px 10px 0}
+.annd-chips:empty{display:none}
+.annd-chips[hidden]{display:none}
+.annd-chip{display:inline-flex;align-items:center;gap:5px;padding:3px 4px 3px 10px;border-radius:999px;font-size:.72rem;font-weight:700;
+  color:var(--accent);background:rgba(var(--accent-rgb),.10);border:1px solid rgba(var(--accent-rgb),.22)}
+.annd-chip button{width:18px;height:18px;border-radius:50%;border:none;background:transparent;color:inherit;cursor:pointer;font-size:.8rem;line-height:1}
+.annd-chip button:hover{background:rgba(var(--accent-rgb),.18)}
+.annd-people{max-height:240px;overflow:auto;padding:6px 0}
+.annd-person{display:flex;align-items:center;gap:10px;padding:7px 12px;cursor:pointer}
+.annd-person:hover{background:rgba(var(--accent-rgb),.06)}
+.annd-person input{accent-color:var(--accent);width:16px;height:16px;flex:none;cursor:pointer}
+.annd-av{flex:none;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.68rem;font-weight:800;
+  color:var(--accent);background:rgba(var(--accent-rgb),.12)}
+.annd-pn{min-width:0;flex:1}
+.annd-pn b{display:block;font-size:.8125rem;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.annd-pn small{display:block;font-size:.7rem;color:var(--text-faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.annd-role{flex:none;font-size:.66rem;font-weight:700;padding:2px 8px;border-radius:999px;color:var(--text-muted);background:rgba(var(--n95-rgb,241,245,249),.9);border:1px solid var(--border)}
+.annd-pick-tools[hidden]{display:none}
+.annd-person.ro{cursor:default}
+.annd-person.ro:hover{background:transparent}
+.annd-pick-tools{display:flex;justify-content:space-between;padding:8px 12px;border-top:1px solid var(--border)}
+.annd-pick-tools button{border:none;background:none;padding:0;font:inherit;font-size:.75rem;font-weight:700;color:var(--accent);cursor:pointer}
+.annd-pick-tools button:hover{text-decoration:underline}
+.annd-empty{padding:14px 4px;font-size:.8125rem;color:var(--text-faint);text-align:center}
+.annd-rhead{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;font-size:.6875rem;font-weight:800;text-transform:uppercase;letter-spacing:.07em;color:var(--text-faint)}
+.annd-rhead button{width:28px;height:28px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--text-muted);cursor:pointer;display:flex;align-items:center;justify-content:center}
+.annd-rhead button svg{width:14px;height:14px}
+.annd-rhead button.spin svg{animation:ebspin .7s linear infinite}
+.annr{padding:12px 14px;border:1px solid var(--border);border-radius:12px;background:rgba(var(--n98-rgb,248,250,252),.6)}
+.annr+.annr{margin-top:10px}
+.annr-body{font-size:.8438rem;line-height:1.5;color:var(--text);white-space:pre-wrap;word-wrap:break-word;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.annr.open .annr-body{display:block}
+.annr-meta{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:8px;font-size:.72rem;color:var(--text-faint)}
+.annr-aud{font-weight:700;color:var(--text-muted);padding:1px 8px;border-radius:999px;background:rgba(var(--accent-rgb),.08)}
+.annr-prog{display:flex;align-items:center;gap:10px;margin-top:10px}
+.annr-bar{flex:1;height:6px;border-radius:999px;background:rgba(var(--accent-rgb),.12);overflow:hidden}
+.annr-bar i{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,var(--accent),var(--accent-2,var(--accent)));transition:width .4s ease}
+.annr.done .annr-bar i{background:var(--up,#16A34A)}
+.annr-stat{flex:none;font-size:.75rem;font-weight:700;color:var(--text-muted);font-variant-numeric:tabular-nums}
+.annr.done .annr-stat{color:var(--up,#16A34A)}
+.annr-who{margin-top:8px;border:none;background:none;padding:0;font:inherit;font-size:.75rem;font-weight:700;color:var(--accent);cursor:pointer}
+.annr-rc{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
+.annr-rc[hidden]{display:none}
+.annr-col h5{margin:0 0 6px;font-size:.66rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em}
+.annr-col.ok h5{color:var(--up,#16A34A)}
+.annr-col.wait h5{color:var(--pending,#B45309)}
+.annr-col ul{list-style:none;margin:0;padding:0;max-height:180px;overflow:auto}
+.annr-col li{display:flex;justify-content:space-between;gap:6px;padding:4px 0;font-size:.75rem;color:var(--text);border-bottom:1px dashed var(--border)}
+.annr-col li:last-child{border-bottom:none}
+.annr-col li small{color:var(--text-faint);white-space:nowrap}
+.annd-foot{display:flex;align-items:center;gap:12px;padding:14px 20px;border-top:1px solid var(--border);background:rgba(var(--n98-rgb,248,250,252),.85)}
+.annd-reach{flex:1;min-width:0;font-size:.78rem;color:var(--text-muted);line-height:1.35}
+.annd-reach b{color:var(--text)}
+.annd-reach.ok{color:var(--up,#16A34A);font-weight:700}
+.annd-reach.err{color:var(--down,#DC2626);font-weight:700}
+.annd-send{flex:none;display:inline-flex;align-items:center;gap:8px;height:44px;padding:0 20px;border:none;border-radius:12px;cursor:pointer;
+  font:inherit;font-size:.875rem;font-weight:800;color:#fff;background:linear-gradient(135deg,var(--accent),var(--accent-2,var(--accent)));
+  box-shadow:0 8px 20px rgba(var(--accent-rgb),.30);transition:transform .15s ease,box-shadow .15s ease,opacity .2s}
+.annd-send:hover{transform:translateY(-1px);box-shadow:0 12px 26px rgba(var(--accent-rgb),.38)}
+.annd-send[disabled]{opacity:.5;cursor:not-allowed;transform:none;box-shadow:none}
+.annd-send svg{width:17px;height:17px}
+@media(max-width:520px){.annd-seg{grid-template-columns:1fr}.annr-rc{grid-template-columns:1fr}}
+html[data-mode="dark"] .annd{background:#141820;border-left-color:rgba(255,255,255,.08)}
+html[data-mode="dark"] .annd-head{border-bottom-color:rgba(255,255,255,.08);background:linear-gradient(135deg,rgba(var(--accent-rgb),.22),rgba(255,255,255,0) 75%)}
+html[data-mode="dark"] .annd-title{color:#EEF1F5}
+html[data-mode="dark"] .annd-sub,html[data-mode="dark"] .annd-reach{color:#8B95A5}
+html[data-mode="dark"] .annd-x{background:rgba(255,255,255,.05);border-color:rgba(255,255,255,.12);color:#AEB6C2}
+html[data-mode="dark"] .annd-sec+.annd-sec,html[data-mode="dark"] .annd-foot{border-top-color:rgba(255,255,255,.08)}
+html[data-mode="dark"] .annd-ta textarea,html[data-mode="dark"] .annd-seg button,html[data-mode="dark"] .annd-pick,
+html[data-mode="dark"] .annd-rhead button,html[data-mode="dark"] .annr{border-color:rgba(255,255,255,.12)}
+html[data-mode="dark"] .annd-ta textarea,html[data-mode="dark"] .annd-search input{color:#EEF1F5}
+html[data-mode="dark"] .annd-search input{background:transparent !important;border:none !important;box-shadow:none !important}
+html[data-mode="dark"] .annd-seg button{color:#E3E7ED}
+html[data-mode="dark"] .annd-seg button.on{background:rgba(var(--accent-rgb),.20);border-color:var(--accent)}
+html[data-mode="dark"] .annd-seg button.on .annd-seg-n{color:#9CC3FF}
+html[data-mode="dark"] .annd-search,html[data-mode="dark"] .annd-pick-tools{border-color:rgba(255,255,255,.10)}
+html[data-mode="dark"] .annd-pn b,html[data-mode="dark"] .annr-body,html[data-mode="dark"] .annr-col li,html[data-mode="dark"] .annd-reach b{color:#E3E7ED}
+html[data-mode="dark"] .annd-role{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.12);color:#AEB6C2}
+html[data-mode="dark"] .annd-person:hover{background:rgba(255,255,255,.05)}
+html[data-mode="dark"] .annd-av,html[data-mode="dark"] .annd-chip{color:#9CC3FF;background:rgba(var(--accent-rgb),.22);border-color:rgba(var(--accent-rgb),.35)}
+html[data-mode="dark"] .annd-pick-tools button,html[data-mode="dark"] .annr-who{color:#9CC3FF}
+html[data-mode="dark"] .annr{background:rgba(255,255,255,.03)}
+html[data-mode="dark"] .annr-aud{background:rgba(255,255,255,.07);color:#C5CCD6}
+html[data-mode="dark"] .annr-col li{border-bottom-color:rgba(255,255,255,.08)}
+html[data-mode="dark"] .annd-foot{background:rgba(255,255,255,.02)}
+@media (prefers-reduced-motion:reduce){.annd,.annd.show,.annd-back{transition:none}}
+</style>
 </head>
 <body>
 
@@ -576,6 +715,7 @@ html[data-mode="dark"] .sb-brand-logo{background:#FFFFFF;border-radius:8px;paddi
     <div class="panel-head">
       <div class="panel-title-row">
         <div class="panel-title">Inbox <span class="unread-pill" id="inboxUnreadPill" style="display:none" title="Unread messages">0</span></div>
+        <button class="ann-open" id="annOpen" type="button" hidden title="Send an announcement that pops up on people's screens"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 11 18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></svg><span>Announce</span></button>
       </div>
     </div>
     <div class="list-tools">
@@ -606,6 +746,62 @@ html[data-mode="dark"] .sb-brand-logo{background:#FFFFFF;border-radius:8px;paddi
       </div>
     </div>
   </div>
+
+  <!-- Announcements drawer — admins only (the API enforces it too). Sends a popup
+       that blocks the recipients' screen on any page until they press Received. -->
+  <div class="annd-back" id="annBack" hidden></div>
+  <aside class="annd" id="annDrawer" role="dialog" aria-modal="true" aria-labelledby="annDTitle" aria-hidden="true">
+    <div class="annd-head">
+      <div class="annd-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 11 18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></svg></div>
+      <div class="annd-htxt">
+        <div class="annd-title" id="annDTitle">New announcement</div>
+      </div>
+      <button class="annd-x" id="annClose" type="button" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+    </div>
+    <div class="annd-scroll">
+      <section class="annd-sec">
+        <label class="annd-lbl" for="annText">Message</label>
+        <div class="annd-ta">
+          <textarea id="annText" maxlength="1000" rows="5" placeholder="Type your announcement…"></textarea>
+          <span class="annd-chars"><span id="annChars">0</span>/1000</span>
+        </div>
+
+        <label class="annd-lbl">Send to</label>
+        <div class="annd-seg" role="radiogroup" aria-label="Send to">
+          <button type="button" role="radio" data-aud="agents" aria-checked="true" class="on">
+            <span class="annd-seg-t">All agents</span><span class="annd-seg-n" id="annNAgents">—</span></button>
+          <button type="button" role="radio" data-aud="everyone" aria-checked="false">
+            <span class="annd-seg-t">Everyone</span><span class="annd-seg-n" id="annNAll">—</span></button>
+          <button type="button" role="radio" data-aud="custom" aria-checked="false">
+            <span class="annd-seg-t">Select people</span><span class="annd-seg-n" id="annNPicked">0</span></button>
+        </div>
+
+        <div class="annd-pick" id="annPick">
+          <div class="annd-search">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+            <input id="annSearch" type="text" placeholder="Search by name, email or role" autocomplete="off"/>
+          </div>
+          <div class="annd-chips" id="annChips"></div>
+          <div class="annd-people" id="annPeople"></div>
+          <div class="annd-pick-tools" id="annPickTools" hidden>
+            <button type="button" id="annSelShown">Select all shown</button>
+            <button type="button" id="annClearSel">Clear</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="annd-sec annd-recent">
+        <div class="annd-rhead"><span>Recent announcements</span>
+          <button type="button" id="annRefresh" title="Refresh" aria-label="Refresh"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg></button>
+        </div>
+        <div id="annList"><div class="annd-empty">Loading…</div></div>
+      </section>
+    </div>
+    <div class="annd-foot">
+      <div class="annd-reach" id="annReach"></div>
+      <button type="button" class="annd-send" id="annSend"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 11 18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></svg><span>Send announcement</span></button>
+    </div>
+  </aside>
 
   <div class="col-resize col-resize--inner" data-resize="leads" aria-label="Resize inbox column" role="separator">
     <span class="cr-grip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6-6 6 6 6"/><path d="m15 6 6 6-6 6"/></svg></span>
@@ -1796,6 +1992,8 @@ html[data-mode="dark"] .sb-brand-logo{background:#FFFFFF;border-radius:8px;paddi
   // pinned rows' unread live (does NOT trigger the heavy /conversations reload).
   window.addEventListener('launchpad:realtime:inapp_message', function(ev){
     var d = (ev && ev.detail) || {};
+    // Announcement nudges share this event; announcements.js handles them.
+    if(d.kind === 'announcement') return;
     var l = curLead();
     // Group message: same socket event, distinguished by group_id.
     if(d.group_id){
@@ -1981,6 +2179,209 @@ html[data-mode="dark"] .sb-brand-logo{background:#FFFFFF;border-radius:8px;paddi
     if(toggle) toggle.addEventListener('click', function(e){ e.stopPropagation(); setPinned(!pinned); });
     apply();
   })();
+})();
+</script>
+<script>
+/* Announcements drawer — admins send a popup to all agents (default), everyone,
+   or picked people, and watch "N of M received" fill in. The API enforces
+   admin-only too; this gate just keeps the button off other roles' screens. */
+(function(){
+  var ROLE = (localStorage.getItem('ebRole') || '').toLowerCase();
+  if(['super_admin','tenant_admin','admin','dev'].indexOf(ROLE) === -1) return;
+  var $ = function(id){ return document.getElementById(id); };
+  var openBtn=$('annOpen'), drawer=$('annDrawer'), back=$('annBack');
+  if(!openBtn || !drawer || !window.__ebAPI) return;
+  var API = window.__ebAPI;
+  // Lift the drawer out of the inbox layout (its own stacking context) so it
+  // covers the topbar and sidebar instead of sliding in underneath them.
+  document.body.appendChild(back); document.body.appendChild(drawer);
+  openBtn.hidden = false;
+
+  var MAX = 1000, users = [], picked = {}, audience = 'agents', listTimer = null, openRc = {}, sending = false;
+  function esc(s){ var d=document.createElement('div'); d.textContent=s==null?'':String(s); return d.innerHTML; }
+  function initials(n){ var p=String(n||'?').trim().split(/\s+/); return ((p[0]||'')[0]||'')+((p.length>1?p[p.length-1][0]:'')||''); }
+  var ROLE_LABEL = {agent:'Agent',head:'Head Manager',super_admin:'Super Admin',tenant_admin:'Admin',admin:'Admin',manager:'Manager',lead:'Team Lead',dev:'Dev'};
+  function roleLabel(r){ return ROLE_LABEL[r] || r || ''; }
+  function ago(iso){
+    var t=Date.parse(iso||''); if(!t) return '';
+    var s=Math.max(0,(Date.now()-t)/1000);
+    if(s<60) return 'just now'; if(s<3600) return Math.floor(s/60)+' min ago';
+    if(s<86400) return Math.floor(s/3600)+' h ago';
+    return new Date(t).toLocaleDateString([], {month:'short', day:'numeric'});
+  }
+  function fresh(){ if(API.clearCache) API.clearCache(); }
+  function plural(n, one, many){ return n+' '+(n===1?one:many); }
+
+  // ---- open / close ----
+  function open(){
+    back.hidden = false; drawer.setAttribute('aria-hidden','false');
+    requestAnimationFrame(function(){ back.classList.add('show'); drawer.classList.add('show'); });
+    setTimeout(function(){ try{ $('annText').focus(); }catch(_){} }, 260);
+    if(!users.length) loadUsers();
+    loadList();
+    clearInterval(listTimer); listTimer = setInterval(loadList, 15000);   // receipts fill in live
+  }
+  function close(){
+    back.classList.remove('show'); drawer.classList.remove('show'); drawer.setAttribute('aria-hidden','true');
+    clearInterval(listTimer); listTimer = null;
+    setTimeout(function(){ if(!drawer.classList.contains('show')) back.hidden = true; }, 300);
+  }
+  openBtn.addEventListener('click', open);
+  $('annClose').addEventListener('click', close);
+  back.addEventListener('click', close);
+  document.addEventListener('keydown', function(e){ if(e.key==='Escape' && drawer.classList.contains('show')) close(); });
+
+  // ---- people ----
+  function loadUsers(){
+    fresh();
+    API.get('/announcements/users').then(function(r){
+      users = (r && r.users) || [];
+      $('annNAgents').textContent = plural(users.filter(function(u){ return u.role==='agent'; }).length, 'agent', 'agents');
+      $('annNAll').textContent = plural(users.length, 'person', 'people');
+      renderPeople(); reach();
+    }).catch(function(){
+      // Not allowed after all (role changed server-side) — hide the feature.
+      openBtn.hidden = true; close();
+    });
+  }
+  function pickedIds(){ return Object.keys(picked); }
+  function base(){ return audience === 'agents' ? users.filter(function(u){ return u.role==='agent'; }) : users; }
+  function shown(){
+    var q = ($('annSearch').value || '').trim().toLowerCase();
+    return base().filter(function(u){
+      return !q || (u.name+' '+(u.email||'')+' '+roleLabel(u.role)).toLowerCase().indexOf(q) !== -1;
+    });
+  }
+  function renderPeople(){
+    var list = shown(), pick = audience === 'custom';
+    $('annPickTools').hidden = !pick;
+    $('annChips').hidden = !pick;
+    $('annPeople').innerHTML = list.length ? list.map(function(u){
+      return '<label class="annd-person'+(pick?'':' ro')+'">'+
+        (pick ? '<input type="checkbox" data-uid="'+esc(u.id)+'"'+(picked[u.id]?' checked':'')+'/>' : '')+
+        '<span class="annd-av">'+esc(initials(u.name).toUpperCase())+'</span>'+
+        '<span class="annd-pn"><b>'+esc(u.name)+'</b><small>'+esc(u.email||'')+'</small></span>'+
+        '<span class="annd-role">'+esc(roleLabel(u.role))+'</span></label>';
+    }).join('') : '<div class="annd-empty">No one matches.</div>';
+    renderChips();
+  }
+  function renderChips(){
+    var ids = pickedIds();
+    $('annChips').innerHTML = ids.map(function(id){
+      var u = users.find(function(x){ return x.id===id; }); if(!u) return '';
+      return '<span class="annd-chip">'+esc(u.name)+'<button type="button" data-unpick="'+esc(id)+'" aria-label="Remove '+esc(u.name)+'">✕</button></span>';
+    }).join('');
+    $('annNPicked').textContent = ids.length ? (ids.length+' selected') : '0';
+  }
+  $('annPeople').addEventListener('change', function(e){
+    var cb = e.target.closest('input[data-uid]'); if(!cb) return;
+    var id = cb.getAttribute('data-uid');
+    if(cb.checked) picked[id] = true; else delete picked[id];
+    renderChips(); reach();
+  });
+  $('annChips').addEventListener('click', function(e){
+    var b = e.target.closest('[data-unpick]'); if(!b) return;
+    delete picked[b.getAttribute('data-unpick')]; renderPeople(); reach();
+  });
+  $('annSearch').addEventListener('input', renderPeople);
+  $('annSelShown').addEventListener('click', function(){ shown().forEach(function(u){ picked[u.id]=true; }); renderPeople(); reach(); });
+  $('annClearSel').addEventListener('click', function(){ picked = {}; renderPeople(); reach(); });
+
+  // ---- audience ----
+  function setAudience(a){
+    audience = a;
+    Array.prototype.forEach.call(drawer.querySelectorAll('.annd-seg button'), function(b){
+      var on = b.getAttribute('data-aud') === a;
+      b.classList.toggle('on', on); b.setAttribute('aria-checked', on ? 'true' : 'false');
+    });
+    $('annSearch').value = '';
+    renderPeople();
+    if(a === 'custom') setTimeout(function(){ $('annSearch').focus(); }, 30);
+    reach();
+  }
+  drawer.querySelector('.annd-seg').addEventListener('click', function(e){
+    var b = e.target.closest('button[data-aud]'); if(b) setAudience(b.getAttribute('data-aud'));
+  });
+
+  // ---- composer ----
+  var ta = $('annText');
+  ta.addEventListener('input', function(){
+    var n = ta.value.length; $('annChars').textContent = n;
+    $('annChars').parentNode.classList.toggle('warn', n > MAX - 50);
+    reach();
+  });
+  function count(){
+    if(audience === 'custom') return pickedIds().length;
+    if(audience === 'everyone') return users.length;
+    return users.filter(function(u){ return u.role==='agent'; }).length;
+  }
+  function reach(msg, tone){
+    var el = $('annReach'); el.className = 'annd-reach' + (tone ? ' '+tone : '');
+    el.textContent = msg || (audience==='custom' && !count() ? 'Pick at least one person.' : '');
+    $('annSend').disabled = sending || !ta.value.trim() || count() === 0;
+  }
+  $('annSend').addEventListener('click', function(){
+    var body = ta.value.trim(); if(!body || sending) return;
+    var payload = { body: body, audience: audience };
+    if(audience === 'custom') payload.user_ids = pickedIds();
+    sending = true; reach('Sending…');
+    API.post('/announcements', payload).then(function(r){
+      sending = false;
+      ta.value = ''; $('annChars').textContent = '0';
+      picked = {}; renderPeople(); setAudience('agents');
+      reach('Sent ✓ — popping up for '+plural((r && r.recipients) || 0, 'person', 'people')+' now.', 'ok');
+      setTimeout(function(){ if(!sending) reach(); }, 4000);
+      loadList();
+    }).catch(function(e){
+      sending = false;
+      reach((e && e.message) ? ('Could not send — '+e.message) : 'Could not send. Try again.', 'err');
+    });
+  });
+
+  // ---- recent + receipts ----
+  function loadList(){
+    var rb = $('annRefresh'); rb.classList.add('spin');
+    fresh();
+    API.get('/announcements').then(function(r){
+      rb.classList.remove('spin');
+      var list = (r && r.announcements) || [];
+      if(!list.length){ $('annList').innerHTML = '<div class="annd-empty">No announcements sent yet.</div>'; return; }
+      $('annList').innerHTML = list.map(function(a){
+        var total = a.recipients || 0, got = a.received || 0, pct = total ? Math.round(got/total*100) : 0, done = total && got >= total;
+        return '<div class="annr'+(done?' done':'')+(openRc[a.id]?' open':'')+'" data-id="'+esc(a.id)+'">'+
+          '<div class="annr-body">'+esc(a.body)+'</div>'+
+          '<div class="annr-meta"><span class="annr-aud">'+esc(a.audience_label)+'</span><span>'+esc(ago(a.created_at))+'</span>'+
+            (a.sender_name ? '<span>· by '+esc(a.sender_name)+'</span>' : '')+'</div>'+
+          '<div class="annr-prog"><div class="annr-bar"><i style="width:'+pct+'%"></i></div>'+
+            '<span class="annr-stat">'+(done ? 'All '+total+' received ✓' : got+' of '+total+' received')+'</span></div>'+
+          (total ? '<button type="button" class="annr-who" data-who="'+esc(a.id)+'">'+(openRc[a.id]?'Hide':'See who')+' ▾</button>' : '')+
+          '<div class="annr-rc" id="rc-'+esc(a.id)+'"'+(openRc[a.id]?'':' hidden')+'></div>'+
+        '</div>';
+      }).join('');
+      Object.keys(openRc).forEach(loadReceipts);
+    }).catch(function(){ rb.classList.remove('spin'); $('annList').innerHTML = '<div class="annd-empty">Could not load announcements.</div>'; });
+  }
+  function loadReceipts(id){
+    var box = document.getElementById('rc-'+id); if(!box) return;
+    API.get('/announcements/'+encodeURIComponent(id)+'/receipts').then(function(r){
+      var ok = (r && r.received) || [], wait = (r && r.pending) || [];
+      function li(p, when){ return '<li><span>'+esc(p.name)+'</span><small>'+esc(when || roleLabel(p.role))+'</small></li>'; }
+      box.innerHTML =
+        '<div class="annr-col ok"><h5>Received · '+ok.length+'</h5><ul>'+(ok.map(function(p){ return li(p, ago(p.acked_at)); }).join('') || '<li><small>No one yet</small></li>')+'</ul></div>'+
+        '<div class="annr-col wait"><h5>Not yet · '+wait.length+'</h5><ul>'+(wait.map(function(p){ return li(p); }).join('') || '<li><small>Everyone has it ✓</small></li>')+'</ul></div>';
+    }).catch(function(){ box.innerHTML = '<div class="annd-empty">Could not load receipts.</div>'; });
+  }
+  $('annList').addEventListener('click', function(e){
+    var b = e.target.closest('[data-who]'); if(!b) return;
+    var id = b.getAttribute('data-who'), card = b.closest('.annr'), box = document.getElementById('rc-'+id);
+    if(openRc[id]){ delete openRc[id]; box.hidden = true; card.classList.remove('open'); b.textContent = 'See who ▾'; }
+    else { openRc[id] = true; box.hidden = false; card.classList.add('open'); b.textContent = 'Hide ▾'; box.innerHTML = '<div class="annd-empty">Loading…</div>'; loadReceipts(id); }
+  });
+  $('annRefresh').addEventListener('click', loadList);
+
+  reach();
+  // Deep link: inbox.html?announce=1 opens the drawer (used from Notifications).
+  try { if(new URLSearchParams(location.search).get('announce') === '1') open(); } catch(_){}
 })();
 </script>
 </body>

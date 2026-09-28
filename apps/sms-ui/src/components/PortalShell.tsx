@@ -345,6 +345,14 @@ export default function PortalShell() {
     };
     refresh();
     const s = getSocket();
+    // Hand announcement nudges to the shared popup (public/announcements.js),
+    // which listens for the same window event the portal's api.js dispatches.
+    const relay = (data: unknown) => {
+      if ((data as { kind?: string } | null)?.kind === "announcement") {
+        window.dispatchEvent(new CustomEvent("launchpad:realtime:inapp_message", { detail: data }));
+      }
+    };
+    s.on("inapp_message", relay);
     s.on("inapp_message", refreshSoon);
     s.on("inapp_read", refreshSoon);
     s.on("connect", refreshSoon);
@@ -354,6 +362,7 @@ export default function PortalShell() {
       alive = false;
       if (timer) window.clearTimeout(timer);
       window.clearInterval(iv);
+      s.off("inapp_message", relay);
       s.off("inapp_message", refreshSoon);
       s.off("inapp_read", refreshSoon);
       s.off("connect", refreshSoon);

@@ -31,7 +31,7 @@
   // announcements) on every portal page. One shared file, served at the root.
   if(!document.getElementById('annScript')){
     var _ann = document.createElement('script');
-    _ann.id = 'annScript'; _ann.src = '/announcements.js?v=2'; _ann.defer = true;
+    _ann.id = 'annScript'; _ann.src = '/announcements.js?v=3'; _ann.defer = true;
     (document.head || document.documentElement).appendChild(_ann);
   }
 

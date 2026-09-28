@@ -8,7 +8,7 @@
 <link rel="apple-touch-icon" href="assets/apple-touch-icon.png"/>
 <script src="brand.js?v=2"></script>
 <script src="i18n-dict.js?v=2"></script>
-<script src="prefs-extras.js?v=41"></script>
+<script src="prefs-extras.js?v=42"></script>
 <script src="coach.js" defer></script>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
@@ -101,25 +101,6 @@ html[data-mode="dark"] .sb-brand-logo{background:#FFFFFF;border-radius:8px;paddi
 .split > .card:not(.detail){height:100%}
 
 /* Detail drawer — slides in from the right (full-screen on phone) */
-.ann-modal-bg{position:fixed;inset:0;background:rgba(26,31,42,0.45);z-index:60}
-.ann-modal-bg[hidden]{display:none}
-.ann-modal{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:61;width:min(420px,92vw);background:#FFFFFF;border:1px solid var(--border);border-radius:14px;box-shadow:0 24px 64px rgba(26,31,42,0.28);padding:20px;display:flex;flex-direction:column;gap:16px}
-.ann-modal[hidden]{display:none}
-.ann-modal-title{font-size:1rem;font-weight:700;color:var(--text-strong)}
-.ann-modal-row{display:flex;flex-direction:column;gap:6px}
-.ann-modal-row label{font-size:.6875rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted)}
-.ann-modal-row select{height:40px;padding:0 12px;border:1px solid var(--border,#CBD5E1);border-radius:9px;font:inherit;font-size:.875rem;background:#fff;color:var(--text)}
-.ann-select{width:100%;height:40px;padding:0 12px;border:1px solid var(--border,#CBD5E1);border-radius:9px;font:inherit;font-size:.875rem;background:#fff;color:var(--text);cursor:pointer}
-.ann-chips{display:flex;flex-wrap:wrap;gap:8px}
-.ann-chips:empty{display:none}
-.ann-chip{display:inline-flex;align-items:center;gap:7px;padding:5px 7px 5px 11px;border-radius:999px;background:rgba(var(--accent-rgb),.12);color:#7C5E2F;font-size:.8125rem;font-weight:600}
-.ann-chip button{display:inline-flex;align-items:center;justify-content:center;width:17px;height:17px;border:none;background:rgba(124,94,47,.18);border-radius:50%;color:inherit;cursor:pointer;padding:0;font-size:10px;line-height:1}
-.ann-chip button:hover{background:rgba(124,94,47,.34)}
-.ann-modal-hint{font-size:.75rem;color:var(--text-muted)}
-html[data-mode="dark"] .ann-select{background:rgba(255,255,255,0.06);color:#E8EAEE;border-color:rgba(255,255,255,0.12)}
-.ann-modal-foot{display:flex;justify-content:flex-end;gap:10px}
-html[data-mode="dark"] .ann-modal{background:#161A22;border-color:rgba(255,255,255,0.10)}
-html[data-mode="dark"] .ann-modal-row select{background:rgba(255,255,255,0.06);color:#E8EAEE;border-color:rgba(255,255,255,0.12)}
 .detail-backdrop{position:fixed;inset:0;background:rgba(26,31,42,0.32);opacity:0;pointer-events:none;transition:opacity 260ms var(--ease);z-index:54}
 .detail-backdrop.open{opacity:1;pointer-events:auto}
 
@@ -449,38 +430,15 @@ html[data-mode="dark"] .ann-modal-row select{background:rgba(255,255,255,0.06);c
     </div>
   </div>
 
-  <!-- Admin: push a blocking announcement to all agents or one agent (agents must
-       acknowledge before their UI unblocks). Hidden for non-admins. -->
-  <section class="card" id="announceCard" style="display:none;margin-bottom:16px;padding:0;overflow:hidden">
-    <button type="button" id="annToggle" aria-expanded="false" style="width:100%;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 20px;background:transparent;border:none;cursor:pointer;text-align:left;font:inherit">
+  <!-- Admin: announcements are sent from the Inbox drawer (all agents, everyone
+       or picked people, with read receipts). This card just points there. -->
+  <section class="card" id="announceCard" style="display:none;margin-bottom:16px;padding:16px 20px">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap">
       <span>
         <span style="display:block;font-size:1rem;font-weight:700;color:var(--text-strong)">📣 Announcements</span>
-        <span style="display:block;margin-top:4px;font-size:.8125rem;color:var(--text-muted)">Push a message agents must see and acknowledge (their screen blurs until they confirm) before they can keep working.</span>
+        <span style="display:block;margin-top:4px;font-size:.8125rem;color:var(--text-muted)">Send a message that pops up on people's screens until they press Received — and see who has read it.</span>
       </span>
-      <svg id="annChev" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;color:var(--text-muted);transition:transform .2s ease"><path d="m6 9 6 6 6-6"/></svg>
-    </button>
-    <div id="annBodyWrap" hidden style="padding:0 20px 18px">
-      <textarea id="annBody" rows="3" maxlength="1000" placeholder="e.g. Team — finish your callbacks before lunch, then push for more sales today!" style="width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid var(--border,#CBD5E1);border-radius:10px;font:inherit;font-size:.9rem;color:var(--text-strong);background:var(--surface-1,#fff);resize:vertical"></textarea>
-      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:10px">
-        <button id="annStart" type="button" style="height:38px;padding:0 18px;border:none;border-radius:9px;background:var(--accent);color:#fff;font:700 .85rem inherit;cursor:pointer">Send announcement</button>
-        <span id="annStatus" style="font-size:.8rem;color:var(--text-muted)"></span>
-      </div>
-    </div>
-  </section>
-
-  <!-- Announcement send popup (opened from "Send announcement") -->
-  <div class="ann-modal-bg" id="annModalBg" hidden></div>
-  <section class="ann-modal" id="annModal" hidden role="dialog" aria-modal="true" aria-label="Send announcement">
-    <div class="ann-modal-title">Send announcement</div>
-    <div class="ann-modal-row">
-      <label for="annTargetSelect">Send to <span id="annTargetCount" style="color:var(--text-muted);font-weight:600">· all agents</span></label>
-      <select id="annTargetSelect" class="ann-select"><option value="">Add an agent…</option></select>
-      <div class="ann-chips" id="annChips"></div>
-      <div class="ann-modal-hint" id="annModalHint">Leave empty to send to all agents, or add up to 15 specific agents.</div>
-    </div>
-    <div class="ann-modal-foot">
-      <button class="bulk-btn" type="button" id="annCancel">Cancel</button>
-      <button type="button" id="annSend" style="height:38px;padding:0 18px;border:none;border-radius:9px;background:var(--accent);color:#fff;font:700 .85rem inherit;cursor:pointer">Confirm &amp; send</button>
+      <a href="inbox.html?announce=1" style="display:inline-flex;align-items:center;height:38px;padding:0 18px;border-radius:10px;background:var(--accent);color:#fff;font-weight:700;font-size:.85rem;text-decoration:none;white-space:nowrap">Open in Inbox →</a>
     </div>
   </section>
 
@@ -818,17 +776,6 @@ html[data-mode="dark"] .ann-modal-row select{background:rgba(255,255,255,0.06);c
     renderList();
   }));
 
-  // Announcements card — collapsible, collapsed by default; opens only on click.
-  { const annToggle=$('#annToggle'), annWrap=$('#annBodyWrap'), annChev=$('#annChev');
-    if(annToggle && annWrap){
-      annToggle.addEventListener('click', ()=>{
-        const open = annWrap.hidden;
-        annWrap.hidden = !open;
-        annToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
-        if(annChev) annChev.style.transform = open ? 'rotate(180deg)' : '';
-      });
-    }
-  }
 
   // Mark all read — persists across reloads. Per-user notifications are marked
   // read on the server; audit rows have no server read-state, so we remember a
@@ -1031,94 +978,10 @@ html[data-mode="dark"] .ann-modal-row select{background:rgba(255,255,255,0.06);c
 })();
 </script>
 <script>
-/* Admin Announcements section (compose + list). Hidden + inert for non-admins;
-   the backend also enforces admin-only on create/list. */
+/* Admins see the Announcements card, which links to the Inbox drawer. */
 (function(){
-  var IS_ADMIN = ['admin','tenant_admin','super_admin'].indexOf(localStorage.getItem('ebRole')||'') !== -1;
-  if(!IS_ADMIN) return;
+  if(['admin','tenant_admin','super_admin','dev'].indexOf(localStorage.getItem('ebRole')||'') === -1) return;
   var card = document.getElementById('announceCard'); if(card) card.style.display='';
-  var $ = function(s){ return document.querySelector(s); };
-  function esc(s){ var d=document.createElement('div'); d.textContent=s==null?'':String(s); return d.innerHTML; }
-  function api(){ return window.__ebAPI; }
-  var ANN_MAX = 15;   // max specific agents per announcement
-  var annAgents = [];    // {agent_id, name}
-  var annSelected = [];  // chosen agent_id[]
-  function annNameFor(id){ var a=annAgents.find(function(x){ return x.agent_id===id; }); return a?a.name:id; }
-  function annHint(msg){ var h=$('#annModalHint'); if(h) h.textContent = msg || 'Leave empty to send to all agents, or add up to '+ANN_MAX+' specific agents.'; }
-  function annRenderSelect(){
-    var sel=$('#annTargetSelect'); if(!sel) return;
-    sel.innerHTML='<option value="">Add an agent…</option>' + annAgents
-      .filter(function(a){ return annSelected.indexOf(a.agent_id)===-1; })
-      .map(function(a){ return '<option value="'+esc(a.agent_id)+'">'+esc(a.name)+'</option>'; }).join('');
-    sel.value='';
-  }
-  function annRenderChips(){
-    var box=$('#annChips'); if(box) box.innerHTML = annSelected.map(function(id){
-      return '<span class="ann-chip">'+esc(annNameFor(id))+'<button type="button" data-rm="'+esc(id)+'" aria-label="Remove">✕</button></span>';
-    }).join('');
-    var cnt=$('#annTargetCount'); if(cnt) cnt.textContent = annSelected.length ? ('· '+annSelected.length+' selected') : '· all agents';
-  }
-  function loadAgents(){
-    if(!api()) return;
-    api().get('/announcements/agents').then(function(r){
-      if(!r||!r.agents) return;
-      // Hide retired/old agents (name tagged "[OLD]").
-      annAgents = r.agents.filter(function(a){ return !/\[\s*old\s*\]/i.test(a.name||''); })
-                          .map(function(a){ return { agent_id:a.agent_id, name:a.name }; });
-      annRenderSelect(); annRenderChips();
-    }).catch(function(){});
-  }
-  { const sel=$('#annTargetSelect'); if(sel) sel.addEventListener('change', function(){
-      var id=sel.value; if(!id){ return; }
-      if(annSelected.length>=ANN_MAX){ annHint('You can add up to '+ANN_MAX+' agents.'); sel.value=''; return; }
-      if(annSelected.indexOf(id)===-1) annSelected.push(id);
-      annHint(); annRenderSelect(); annRenderChips();
-    }); }
-  { const box=$('#annChips'); if(box) box.addEventListener('click', function(e){
-      var btn=e.target.closest('[data-rm]'); if(!btn) return;
-      var id=btn.getAttribute('data-rm');
-      annSelected = annSelected.filter(function(x){ return x!==id; });
-      annHint(); annRenderSelect(); annRenderChips();
-    }); }
-  function loadList(){
-    if(!api()) return;
-    api().get('/announcements?_='+Date.now()).then(function(r){
-      var box=$('#annList'); if(!box) return;
-      var list=(r&&r.announcements)||[];
-      box.innerHTML = list.length ? list.map(function(a){
-        return '<div style="padding:10px 12px;border:1px solid #E2E8F0;border-radius:9px;background:#F8FAFC">'
-          +'<div style="font-size:.88rem;color:#0F172A;white-space:pre-wrap">'+esc(a.body)+'</div>'
-          +'<div style="font-size:.72rem;color:#64748B;margin-top:5px">To '+esc(a.target_name||'All agents')+' · acknowledged by '+(a.acks||0)+'</div>'
-          +'</div>';
-      }).join('') : '<div style="font-size:.82rem;color:#94A3B8">No announcements yet.</div>';
-    }).catch(function(){});
-  }
-  // "Send announcement" opens a popup to choose the audience and confirm.
-  function openAnnModal(){ var bg=$('#annModalBg'), m=$('#annModal'); if(bg) bg.hidden=false; if(m) m.hidden=false; }
-  function closeAnnModal(){ var bg=$('#annModalBg'), m=$('#annModal'); if(bg) bg.hidden=true; if(m) m.hidden=true; }
-  { const startBtn=$('#annStart'); if(startBtn) startBtn.addEventListener('click', function(){
-      var body=(($('#annBody')||{}).value||'').trim();
-      if(!body){ $('#annStatus').textContent='Enter a message'; return; }
-      $('#annStatus').textContent=''; openAnnModal();
-    }); }
-  { const cancelBtn=$('#annCancel'); if(cancelBtn) cancelBtn.addEventListener('click', closeAnnModal); }
-  { const bg=$('#annModalBg'); if(bg) bg.addEventListener('click', closeAnnModal); }
-  document.addEventListener('keydown', function(e){ if(e.key==='Escape'){ var m=$('#annModal'); if(m && !m.hidden) closeAnnModal(); } });
-  var sendBtn = $('#annSend');
-  if(sendBtn) sendBtn.addEventListener('click', function(){
-    var body=(($('#annBody')||{}).value||'').trim();
-    if(!body){ $('#annStatus').textContent='Enter a message'; closeAnnModal(); return; }
-    // No agents chosen → send to all; otherwise one post per selected agent.
-    var targets = annSelected.length ? annSelected.slice() : [null];
-    sendBtn.disabled=true; $('#annStatus').textContent='Sending…';
-    Promise.all(targets.map(function(tid){ return api().post('/announcements', { body: body, target_agent_id: tid }); })).then(function(){
-      $('#annBody').value=''; $('#annStatus').textContent = 'Sent ✓ ('+(targets[0]===null?'all agents':targets.length+' agent'+(targets.length===1?'':'s'))+')'; closeAnnModal();
-      annSelected=[]; annRenderSelect(); annRenderChips();
-      setTimeout(function(){ $('#annStatus').textContent=''; }, 2800); loadList();
-    }).catch(function(){ $('#annStatus').textContent='Could not send (admins only)'; })
-    .finally(function(){ sendBtn.disabled=false; });
-  });
-  loadAgents(); loadList();
 })();
 </script>
 </body>
