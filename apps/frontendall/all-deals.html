@@ -64,7 +64,7 @@ h1{font-size:1.625rem;letter-spacing:-.015em;color:var(--strong);font-weight:700
 .btn:hover{background:var(--n96)}.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}.btn.primary:hover{background:var(--accent-hover);border-color:var(--accent-hover)}
 .panel{background:rgba(255,255,255,.78);border:1px solid rgba(255,255,255,.72);border-radius:12px;box-shadow:0 1px 2px rgba(26,31,42,.04),0 6px 18px rgba(var(--accent-hover-rgb),.07)}
 /* Deal summary band (total deals + ACA/Dental/Vision breakdown bar) */
-.deal-summary{display:grid;grid-template-columns:minmax(220px,300px) 1fr;gap:16px;margin-bottom:16px}
+.deal-summary{display:grid;grid-template-columns:minmax(200px,260px) minmax(220px,280px) 1fr;gap:16px;margin-bottom:16px}
 .ds-card{display:flex;flex-direction:column;justify-content:center;padding:20px 24px;border-radius:16px;background:rgba(255,255,255,0.78);border:1px solid rgba(255,255,255,0.72);box-shadow:0 1px 2px rgba(26,31,42,0.04),0 6px 18px rgba(var(--accent-hover-rgb),0.07)}
 .ds-label{font-size:.875rem;color:var(--muted);font-weight:600}
 .ds-num{font-size:3.1rem;font-weight:800;line-height:1;color:var(--strong);margin-top:6px;font-variant-numeric:tabular-nums}
@@ -79,6 +79,20 @@ h1{font-size:1.625rem;letter-spacing:-.015em;color:var(--strong);font-weight:700
 .ds-dot{width:11px;height:11px;border-radius:3px;flex-shrink:0}
 .ds-dot.aca{background:#E0A92E}.ds-dot.dental{background:#F0C879}.ds-dot.vision{background:#F6E6C8}
 .ds-leg b{font-weight:800;color:var(--strong);font-variant-numeric:tabular-nums;margin-left:1px}
+/* Team commission = per-sale pay earned by the approved deals in the range */
+.ds-comm{position:relative}
+.ds-comm .ds-label{padding-right:26px}
+.ds-comm .ds-ic{position:absolute;top:18px;right:20px;width:18px;height:18px;color:var(--up,#2E7D5B)}
+.ds-comm .ds-num{font-size:2.6rem;color:var(--up,#2E7D5B)}
+.ds-comm .ds-sub{font-size:.75rem;color:var(--muted);margin-top:8px}
+.ds-comm .ds-warn{font-size:.75rem;font-weight:600;color:#9A6B1F;margin-top:4px}
+.ds-comm .ds-warn a{color:inherit;text-decoration:underline}
+html[data-mode="dark"] .ds-comm .ds-num,html[data-mode="dark"] .ds-comm .ds-ic{color:#6FCF9B}
+html[data-mode="dark"] .ds-comm .ds-warn{color:#E5B95C}
+/* EAP deals carry a tag beside the carrier (carrier deals are the unmarked default) */
+.src-pill{display:inline-flex;align-items:center;margin-left:6px;border-radius:6px;padding:2px 7px;font-size:.6875rem;font-weight:800;letter-spacing:.03em;background:rgba(46,125,91,.14);color:#23634A;white-space:nowrap}
+html[data-mode="dark"] .src-pill{background:rgba(111,207,155,.16);color:#8FE0B4}
+@media(max-width:1100px){.deal-summary{grid-template-columns:1fr 1fr}.deal-summary .bar-card{grid-column:1/-1}}
 @media(max-width:760px){.deal-summary{grid-template-columns:1fr}}
 .panel{overflow:hidden;margin-bottom:16px}.panel-head{padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:12px}.panel-title{font-weight:700;color:var(--strong)}
 .table-wrap{overflow-x:auto}table{width:100%;border-collapse:collapse;min-width:0;table-layout:auto}th,td{padding:11px 9px;text-align:left;border-bottom:1px solid rgba(26,31,42,.06);font-size:.8125rem;vertical-align:middle}th:first-child,td:first-child{padding-left:14px}th:last-child,td:last-child{padding-right:14px}th{font-size:.6875rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:800;background:rgba(var(--n98-rgb),.72)}td{color:var(--text)}.mono{font-variant-numeric:tabular-nums}.muted{color:var(--muted)}
@@ -289,6 +303,13 @@ html[data-mode="dark"] #recPlayer{background:#1C2029;border-color:rgba(255,255,2
       <div class="ds-label">Total deals · whole team</div>
       <div class="ds-num" id="dsTotal">0</div>
     </div>
+    <div class="ds-card ds-comm">
+      <svg class="ds-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2v20"/><path d="M17 6H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+      <div class="ds-label">Total commission · whole team</div>
+      <div class="ds-num" id="dsComm">$0.00</div>
+      <div class="ds-sub" id="dsCommSub">From approved deals today</div>
+      <div class="ds-warn" id="dsCommWarn" hidden></div>
+    </div>
     <div class="ds-card bar-card">
       <div class="ds-bar" id="dsBar">
         <span class="seg aca" style="width:0%"></span>
@@ -344,6 +365,17 @@ html[data-mode="dark"] #recPlayer{background:#1C2029;border-color:rgba(255,255,2
                   <option value="aca">Has ACA</option>
                   <option value="dental">Has Dental</option>
                   <option value="vision">Has Vision</option>
+                </select>
+                <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+              </div>
+            </div>
+            <div class="mp-field">
+              <label for="fSource">Deal type</label>
+              <div class="filter-sel-wrap">
+                <select class="filter-sel" id="fSource">
+                  <option value="">All deal types</option>
+                  <option value="carrier">Carrier deals</option>
+                  <option value="eap">EAP deals</option>
                 </select>
                 <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
               </div>
@@ -416,9 +448,10 @@ html[data-mode="dark"] #recPlayer{background:#1C2029;border-color:rgba(255,255,2
 (function(){
   const $ = (s,r=document)=>r.querySelector(s);
   let DEALS = [];
+  let TOTALS = {};   // server totals for the range (approved deals only)
   // Client-side toolbar filters + sort + pagination over the loaded DEALS.
   var PAGE_SIZE = 40, PAGE = 1;
-  var FILTERS = { agent:'', carrier:'', state:'', status:'', coverage:'', rec:'', q:'', sort:'desc' };
+  var FILTERS = { agent:'', carrier:'', state:'', status:'', coverage:'', rec:'', source:'', q:'', sort:'desc' };
   // Edit is admin-only: hide the button for non-admins (the backend enforces it too).
   var IS_ADMIN = ['admin','tenant_admin','super_admin','head','dev'].indexOf(localStorage.getItem('ebRole')||'') !== -1;
 
@@ -442,6 +475,8 @@ html[data-mode="dark"] #recPlayer{background:#1C2029;border-color:rgba(255,255,2
   function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
   function setNum(id,v){ var el=$('#'+id); if(el) el.textContent = (typeof v==='number')?v:(Number(v)||0); }
   function fmtMoney(v){ return (v==null||v==='') ? '—' : '$'+Number(v).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}); }
+  function fmtCents(c){ return '$'+((Number(c)||0)/100).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+  function isEap(d){ return (d.deal_source||'') === 'eap'; }
   function fmtDateET(iso){
     if(!iso) return '—';
     try{ return new Date(iso).toLocaleString('en-US',{timeZone:'America/New_York',month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}); }
@@ -583,14 +618,31 @@ html[data-mode="dark"] #recPlayer{background:#1C2029;border-color:rgba(255,255,2
       bar.children[1].style.width = (dental/tot*100)+'%';
       bar.children[2].style.width = (vision/tot*100)+'%';
     }
+    // Team commission: what the approved deals in this range earn their agents.
+    // Server-computed (same lines as Expenses -> Agent Pay), so it follows the
+    // date filter, not the table filters.
+    var ec=$('#dsComm'); if(ec) ec.textContent = fmtCents(TOTALS.commission_cents);
+    var es=$('#dsCommSub');
+    if(es) es.textContent = 'From approved deals ' + ((FROM===TO && FROM===todayET()) ? 'today' : 'in this range');
+    var ew=$('#dsCommWarn'), un=TOTALS.unrated_sales||0;
+    if(ew){
+      ew.hidden = !un;
+      if(un){
+        var msg = un+' approved '+(un===1?'sale has':'sales have')+' no pay rate yet';
+        // Rates are set by the owner on Expenses -> Agents; only they get the link.
+        ew.innerHTML = (localStorage.getItem('ebRole')==='super_admin' || localStorage.getItem('ebRole')==='dev')
+          ? esc(msg)+' · <a href="/sms/#/expenses">Set rates</a>' : esc(msg);
+      }
+    }
   }
 
-  // "More filters" badge = count of active filters tucked behind the popover (Coverage / State / Recording).
+  // "More filters" badge = count of active filters tucked behind the popover (Coverage / Deal type / State / Recording).
   function updateMoreBadge(){
     var n=0;
     if(FILTERS.coverage) n++;
     if(FILTERS.state) n++;
     if(FILTERS.rec) n++;
+    if(FILTERS.source) n++;
     var b=$('#moreBadge'); if(!b) return;
     if(n>0){ b.textContent=n; b.hidden=false; } else { b.hidden=true; }
   }
@@ -607,12 +659,13 @@ html[data-mode="dark"] #recPlayer{background:#1C2029;border-color:rgba(255,255,2
       if(FILTERS.coverage==='aca' && !((d.aca_count||0)>0)) return false;
       if(FILTERS.coverage==='dental' && !((d.dental_count||0)>0)) return false;
       if(FILTERS.coverage==='vision' && !((d.vision_count||0)>0)) return false;
+      if(FILTERS.source && (isEap(d)?'eap':'carrier') !== FILTERS.source) return false;
       if(FILTERS.rec==='rec' && !d.recording_id) return false;
       if(FILTERS.rec==='norec' && d.recording_id) return false;
       if(q){
         // The phone's bare digits ride along so "5551234567" still finds a row
         // stored as (555) 123-4567 (and vice-versa).
-        var hay = [d.customer_name,d.customer_phone,String(d.customer_phone||'').replace(/\D/g,''),d.carrier,d.agent_name,d.state]
+        var hay = [d.customer_name,d.customer_phone,String(d.customer_phone||'').replace(/\D/g,''),d.carrier,d.agent_name,d.state,isEap(d)?'eap':'']
           .map(function(x){return (x==null?'':String(x)).toLowerCase();}).join(' ');
         if(hay.indexOf(q)===-1) return false;
       }
@@ -687,7 +740,7 @@ html[data-mode="dark"] #recPlayer{background:#1C2029;border-color:rgba(255,255,2
         + '<td class="mono">'+(offset+i+1)+'</td>'
         + '<td><strong>'+esc(d.agent_name||'—')+'</strong></td>'
         + '<td class="lead-cell"><div class="lead-name">'+esc(d.customer_name||'—')+'</div><div class="lead-sub">'+esc(d.customer_phone||'—')+(d.state?' · '+esc(d.state):'')+'</div></td>'
-        + '<td>'+esc(d.carrier||'—')+'</td>'
+        + '<td>'+esc(d.carrier||'—')+(isEap(d)?'<span class="src-pill">EAP</span>':'')+'</td>'
         + '<td class="cov">'+covCell(d)+'</td>'
         + '<td class="status-cell">'+statusSelect(d)+'<div class="status-date">'+dateInline(d.created_at)+'</div></td>'
         + '<td class="rec-cell">'+recCell(d)+'</td>'
@@ -707,9 +760,11 @@ html[data-mode="dark"] #recPlayer{background:#1C2029;border-color:rgba(255,255,2
       ['Customer', d.customer_name||'—'],
       ['Lead number', d.customer_phone||'—'],
       ['State', d.state||'—'],
+      ['Deal type', isEap(d) ? 'EAP deal' : 'Carrier deal'],
       ['Carrier', d.carrier||'—'],
       ['Plan / tier', d.plan_type||'—'],
       ['Premium', fmtMoney(d.premium)],
+      ['Commission', d.commission_cents==null ? '— (not approved)' : fmtCents(d.commission_cents)],
       ['ACA policies', d.aca_count||0],
       ['Dental policies', d.dental_count||0],
       ['Vision policies', d.vision_count||0],
@@ -752,6 +807,12 @@ html[data-mode="dark"] #recPlayer{background:#1C2029;border-color:rgba(255,255,2
       +   efield('Carrier','carrier',d.carrier)
       +   efield('Plan / tier','plan_type',d.plan_type)
       +   efield('Premium','premium',d.premium)
+      +   '<label style="display:block;margin:0">'
+      +     '<span style="display:block;font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:#94A3B8;margin-bottom:5px">Deal type</span>'
+      +     '<select data-ef="deal_source" style="width:100%;box-sizing:border-box;height:40px;padding:0 12px;border:1px solid #CBD5E1;border-radius:9px;font:inherit;font-size:.9rem;background:#fff">'
+      +       '<option value="carrier"'+(isEap(d)?'':' selected')+'>Carrier deal</option>'
+      +       '<option value="eap"'+(isEap(d)?' selected':'')+'>EAP deal</option>'
+      +     '</select></label>'
       + '</div>'
       + '<div style="display:flex;justify-content:flex-end;gap:10px;margin-top:16px">'
       +   '<button id="eCancel" class="btn" type="button">Cancel</button>'
@@ -789,11 +850,12 @@ html[data-mode="dark"] #recPlayer{background:#1C2029;border-color:rgba(255,255,2
       var qs = 'from='+encodeURIComponent(FROM)+'&to='+encodeURIComponent(TO)+'&_='+Date.now();
       var r = await window.__ebAPI.get('/compliance/deals/today-all?'+qs);
       DEALS = (r && r.deals) || [];
+      TOTALS = (r && r.totals) || {};
       rebuildFilterOptions();
       updateSummary();
       applyAndRender();
       setLabel((r && r.from) || FROM, (r && r.to) || TO);
-    }catch(e){ DEALS=[]; rebuildFilterOptions(); updateSummary(); applyAndRender(); }
+    }catch(e){ DEALS=[]; TOTALS={}; rebuildFilterOptions(); updateSummary(); applyAndRender(); }
   }
 
   $('#dealsBody').addEventListener('click', function(e){
@@ -813,6 +875,7 @@ html[data-mode="dark"] #recPlayer{background:#1C2029;border-color:rgba(255,255,2
       sel.className = 'status-sel st-'+next;
       var d = DEALS.find(function(x){ return x.id === id; }); if(d) d.status = next;
       if(window.__ebShowToast) window.__ebShowToast('Status updated to '+cap(next), 'success');
+      load();   // approving / blocking a deal changes the commission total
     }catch(err){
       sel.value = prev; // revert on failure
       if(window.__ebShowToast) window.__ebShowToast('Could not update status (admins only)', 'error');
@@ -863,7 +926,7 @@ html[data-mode="dark"] #recPlayer{background:#1C2029;border-color:rgba(255,255,2
     el.addEventListener('change', function(){ FILTERS[key]=el.value; PAGE=1; applyAndRender(); });
   }
   bindFilter('fAgent','agent'); bindFilter('fCarrier','carrier'); bindFilter('fState','state');
-  bindFilter('fStatus','status'); bindFilter('fCoverage','coverage'); bindFilter('fRec','rec');
+  bindFilter('fStatus','status'); bindFilter('fCoverage','coverage'); bindFilter('fRec','rec'); bindFilter('fSource','source');
   // Sort is a single toggle button (Newest first ⇄ Oldest first).
   var sortBtn=$('#fSortBtn');
   if(sortBtn) sortBtn.addEventListener('click', function(){
@@ -873,8 +936,8 @@ html[data-mode="dark"] #recPlayer{background:#1C2029;border-color:rgba(255,255,2
   setSortUI();
   var clearBtn=$('#fClear');
   if(clearBtn) clearBtn.addEventListener('click', function(){
-    FILTERS={ agent:'', carrier:'', state:'', status:'', coverage:'', rec:'', q:'', sort:'desc' };
-    ['fAgent','fCarrier','fState','fStatus','fCoverage','fRec'].forEach(function(id){ var e=$('#'+id); if(e) e.value=''; });
+    FILTERS={ agent:'', carrier:'', state:'', status:'', coverage:'', rec:'', source:'', q:'', sort:'desc' };
+    ['fAgent','fCarrier','fState','fStatus','fCoverage','fRec','fSource'].forEach(function(id){ var e=$('#'+id); if(e) e.value=''; });
     setSortUI();
     ['#searchBox','#dealSearch'].forEach(function(sel){ var e=$(sel); if(e) e.value=''; });
     PAGE=1; applyAndRender();

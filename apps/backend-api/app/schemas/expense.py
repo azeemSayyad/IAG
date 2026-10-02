@@ -184,12 +184,15 @@ class HoursCreate(BaseModel):
 
 
 class SaleRateSet(BaseModel):
-    """Per-sale pay per product. Always takes effect NOW — never backdated."""
+    """Per-sale pay per product. Takes effect NOW unless `effective_on` names an
+    earlier Eastern day — the owner's explicit choice to also pay sales already
+    logged since then (never before the agent's previous rate started)."""
 
     aca_cents: int = Field(ge=0)
     dental_cents: int = Field(ge=0)
     vision_cents: int = Field(ge=0)
     note: Optional[str] = Field(default=None, max_length=255)
+    effective_on: Optional[date] = None
 
 
 class SaleRateResponse(BaseModel):
@@ -215,6 +218,7 @@ class AgentPayRow(BaseModel):
     sale_rate: Optional[SaleRateResponse] = None
     sales: int = 0
     sale_pay_cents: int = 0
+    unrated_sales: int = 0       # approved sales logged before any sale rate covered them
 
 
 # ── Summary ──────────────────────────────────────────────────────────────────
@@ -245,5 +249,6 @@ class SummaryResponse(BaseModel):
     agent_cost_cents: int        # hourly + per-sale agent pay
     agent_sales: int = 0
     agent_sale_pay_cents: int = 0
+    agent_unrated_sales: int = 0   # approved sales no sale rate covers yet (they pay $0)
     # Same window, immediately preceding — lets the UI show a period-over-period delta.
     previous_total_cents: int

@@ -93,6 +93,9 @@ h1{font-size:1.625rem;letter-spacing:-.015em;color:var(--strong);font-weight:700
 .status-cell .status-date{font-size:.72rem;color:var(--muted);margin-top:7px;white-space:nowrap;font-variant-numeric:tabular-nums}
 .cov .cov-total{font-size:.72rem;font-variant-numeric:tabular-nums;margin-bottom:6px}
 .cov .cov-pills{display:flex;flex-direction:row;flex-wrap:wrap;align-items:center;gap:6px}
+/* EAP deals carry a tag beside the carrier (carrier deals are the unmarked default) */
+.src-pill{display:inline-flex;align-items:center;margin-left:6px;border-radius:6px;padding:2px 7px;font-size:.6875rem;font-weight:800;letter-spacing:.03em;background:rgba(46,125,91,.14);color:#23634A;white-space:nowrap}
+html[data-mode="dark"] .src-pill{background:rgba(111,207,155,.16);color:#8FE0B4}
 .cov-pill{display:inline-flex;align-items:center;border-radius:8px;padding:3px 10px;font-size:.75rem;font-weight:700;white-space:nowrap;background:rgba(224,162,59,.16);color:#7C5E2F;font-variant-numeric:tabular-nums}
 td .dt-d{white-space:nowrap;font-weight:600;color:var(--text)}
 td .dt-t{white-space:nowrap;font-size:.72rem;margin-top:1px}
@@ -592,7 +595,7 @@ html[data-mode="dark"] #recPlayer{background:#1C2029;border-color:rgba(255,255,2
       if(q){
         // The phone's bare digits ride along so "5551234567" still finds a row
         // stored as (555) 123-4567 (and vice-versa).
-        var hay = [d.customer_name,d.customer_phone,String(d.customer_phone||'').replace(/\D/g,''),d.carrier,d.agent_name,d.state]
+        var hay = [d.customer_name,d.customer_phone,String(d.customer_phone||'').replace(/\D/g,''),d.carrier,d.agent_name,d.state,d.deal_source==='eap'?'eap':'']
           .map(function(x){return (x==null?'':String(x)).toLowerCase();}).join(' ');
         if(hay.indexOf(q)===-1) return false;
       }
@@ -665,7 +668,7 @@ html[data-mode="dark"] #recPlayer{background:#1C2029;border-color:rgba(255,255,2
       return '<tr>'
         + '<td class="mono">'+(offset+i+1)+'</td>'
         + '<td class="lead-cell"><div class="lead-name">'+esc(d.customer_name||'—')+'</div><div class="lead-sub">'+esc(d.customer_phone||'—')+(d.state?' · '+esc(d.state):'')+'</div></td>'
-        + '<td>'+esc(d.carrier||'—')+'</td>'
+        + '<td>'+esc(d.carrier||'—')+((d.deal_source==='eap')?'<span class="src-pill">EAP</span>':'')+'</td>'
         + '<td class="cov">'+covCell(d)+'</td>'
         + '<td class="status-cell">'+statusPill(d.status)+'<div class="status-date">'+dateInline(d.created_at)+'</div></td>'
         + '<td class="rec-cell">'+recCell(d)+'</td>'
@@ -684,9 +687,11 @@ html[data-mode="dark"] #recPlayer{background:#1C2029;border-color:rgba(255,255,2
       ['Customer', d.customer_name||'—'],
       ['Lead number', d.customer_phone||'—'],
       ['State', d.state||'—'],
+      ['Deal type', d.deal_source==='eap' ? 'EAP deal' : 'Carrier deal'],
       ['Carrier', d.carrier||'—'],
       ['Plan / tier', d.plan_type||'—'],
       ['Premium', fmtMoney(d.premium)],
+      ['You earned', d.earned_cents==null ? '— (not approved)' : fmtCents(d.earned_cents)],
       ['ACA policies', d.aca_count||0],
       ['Dental policies', d.dental_count||0],
       ['Vision policies', d.vision_count||0],
@@ -762,15 +767,15 @@ html[data-mode="dark"] #recPlayer{background:#1C2029;border-color:rgba(255,255,2
   }
 
   // Per-sale earnings: the selected range + all time. Only this user's own totals.
-  function fmtMoney(c){ return '$'+((Number(c)||0)/100).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+  function fmtCents(c){ return '$'+((Number(c)||0)/100).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); }
   async function loadEarnings(qs){
     try{
       var e = await window.__ebAPI.get('/compliance/deals/my-earnings?'+qs);
       var rg = (e && e.range) || {}, all = (e && e.all_time) || {};
       $('#erLabel').textContent = (FROM===TO && FROM===todayET()) ? 'You earned today' : 'You earned';
-      $('#erRange').textContent = fmtMoney(rg.cents);
+      $('#erRange').textContent = fmtCents(rg.cents);
       $('#erRangeSub').textContent = (rg.sales||0)+' approved sale'+((rg.sales||0)===1?'':'s')+' in this range';
-      $('#erAll').textContent = fmtMoney(all.cents);
+      $('#erAll').textContent = fmtCents(all.cents);
       $('#erAllSales').textContent = (all.sales||0);
     }catch(_){ /* non-fatal: deals still render without the earnings card */ }
   }

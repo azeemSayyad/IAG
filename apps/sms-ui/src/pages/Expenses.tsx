@@ -59,6 +59,8 @@ type AgentRow = {
   hours: string; cost_cents: number;
   // Per-sale pay: derived from APPROVED deals, each at the rate in force when sold.
   sale_rate: SaleRate | null; sales: number; sale_pay_cents: number;
+  // Approved sales no sale rate covered when they were logged — they pay $0.
+  unrated_sales?: number;
 };
 type Summary = {
   range: { from: string; to: string };
@@ -72,6 +74,7 @@ type Summary = {
   agent_cost_cents: number;       // hourly + per-sale
   agent_sales: number;
   agent_sale_pay_cents: number;
+  agent_unrated_sales?: number;    // approved sales with no sale rate (they pay $0)
   previous_total_cents: number;
 };
 type RateRow = {
@@ -125,6 +128,10 @@ function numericInput(v: string): string {
 const BIZ_TZ = "America/New_York";
 function todayISO(): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone: BIZ_TZ }).format(new Date());
+}
+/** The Eastern calendar day (YYYY-MM-DD) an ISO timestamp falls on. */
+function etDay(iso: string): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: BIZ_TZ }).format(new Date(iso));
 }
 function shiftISO(iso: string, days: number): string {
   const [y, m, d] = iso.split("-").map(Number);
@@ -424,7 +431,7 @@ export default function Expenses() {
         })}
       </div>
 
-      {tab === "Overview" && <Overview sum={sum} from={from} to={to} />}
+      {tab === "Overview" && <Overview sum={sum} from={from} to={to} onSetRates={() => setTab("Agents")} />}
       {tab === "Ledger" && (
         <Ledger entries={entries} cats={cats} busy={busy} mutate={mutate} defaultDate={to} />
       )}
@@ -442,7 +449,9 @@ export default function Expenses() {
 
 /* ── Overview ────────────────────────────────────────────────────────────── */
 
-function Overview({ sum, from, to }: { sum: Summary | null; from: string; to: string }) {
+function Overview({ sum, from, to, onSetRates }: {
+  sum: Summary | null; from: string; to: string; onSetRates: () => void;
+}) {
   const accent = brandColor("--accent") || "#2563EB";
   if (!sum) return <div className="glass rounded-2xl p-6 text-sm text-ink-muted">Loading…</div>;
 
@@ -488,7 +497,16 @@ function Overview({ sum, from, to }: { sum: Summary | null; from: string; to: st
         <Stat
           label="Agent pay" icon="⏱️" color="#059669"
           value={money(sum.agent_cost_cents)}
-          hint={`${Number(sum.agent_hours || 0).toLocaleString()} h · ${(sum.agent_sales || 0).toLocaleString()} approved sales`}
+          hint={<>
+            {`${Number(sum.agent_hours || 0).toLocaleString()} h · ${(sum.agent_sales || 0).toLocaleString()} approved ${sum.agent_sales === 1 ? "sale" : "sales"}`}
+            {/* A sale with no rate behind it pays $0 — say so, and where to fix it. */}
+            {!!sum.agent_unrated_sales && (
+              <button type="button" onClick={onSetRates}
+                      className="mt-1 block text-left font-bold text-danger underline decoration-dotted underline-offset-2">
+                {sum.agent_unrated_sales} with no sale rate — set rates
+              </button>
+            )}
+          </>}
         />
       </div>
 
@@ -962,12 +980,14 @@ function Agents({ rows, entries, busy, mutate, defaultDate, catById }: {
   // it drives the rate-in-force preview so the drawer prices a line exactly the
   // way the server will, instead of guessing with today's rate.
   const [history, setHistory] = useState<RateRow[]>([]);
-  // Per-sale rates drawer (ACA / Dental / Vision). Always effective from now.
+  // Per-sale rates drawer (ACA / Dental / Vision). Effective from now, unless the
+  // owner picks an earlier day so sales already logged get paid too.
   const [saleFor, setSaleFor] = useState<AgentRow | null>(null);
   const [saleAca, setSaleAca] = useState("");
   const [saleDental, setSaleDental] = useState("");
   const [saleVision, setSaleVision] = useState("");
   const [saleNote, setSaleNote] = useState("");
+  const [saleFrom, setSaleFrom] = useState("");   // "" = from now; else an Eastern day (YYYY-MM-DD)
   // One amount for every product — the ACA box drives Dental + Vision.
   const [saleSame, setSaleSame] = useState(false);
   const [saleHistory, setSaleHistory] = useState<SaleRate[]>([]);
@@ -1005,7 +1025,7 @@ function Agents({ rows, entries, busy, mutate, defaultDate, catById }: {
   const previewCost = priced ? Math.round(hoursNum * priced.rate_cents_per_hour) : 0;
   const closeRate = () => { setRateFor(null); setRate(""); setRateNote(""); };
   const closeHours = () => { setHoursFor(null); setHours(""); };
-  const closeSale = () => { setSaleFor(null); setSaleNote(""); };
+  const closeSale = () => { setSaleFor(null); setSaleNote(""); setSaleFrom(""); };
   const openSale = (r: AgentRow) => {
     const cur = r.sale_rate;
     const d = (c: number | undefined) => (cur ? ((c || 0) / 100).toFixed(2) : "");
@@ -1013,11 +1033,14 @@ function Agents({ rows, entries, busy, mutate, defaultDate, catById }: {
     setSaleAca(d(cur?.aca_cents)); setSaleDental(d(cur?.dental_cents)); setSaleVision(d(cur?.vision_cents));
     setSaleSame(!cur || (cur.aca_cents === cur.dental_cents && cur.aca_cents === cur.vision_cents));
     setSaleNote("");
+    setSaleFrom("");
   };
   const saleCents = saleSame
     ? { aca: parseMoney(saleAca), dental: parseMoney(saleAca), vision: parseMoney(saleAca) }
     : { aca: parseMoney(saleAca), dental: parseMoney(saleDental), vision: parseMoney(saleVision) };
-  const saleUnchanged = !!saleFor?.sale_rate
+  // Re-saving the same amounts is only a no-op when it starts now; with an
+  // earlier start date it is how sales logged before the rate get paid.
+  const saleUnchanged = !saleFrom && !!saleFor?.sale_rate
     && saleFor.sale_rate.aca_cents === saleCents.aca
     && saleFor.sale_rate.dental_cents === saleCents.dental
     && saleFor.sale_rate.vision_cents === saleCents.vision;
@@ -1041,6 +1064,7 @@ function Agents({ rows, entries, busy, mutate, defaultDate, catById }: {
   });
   const noRateCount = rows.filter(noRate).length;
   const saleCount = rows.filter(onSalePay).length;
+  const unratedSales = rows.reduce((n, r) => n + (r.unrated_sales || 0), 0);
 
   const hourLines = entries.filter((e) => e.agent_id && !e.voided_at);
   const totalCost = rows.reduce((s, r) => s + r.cost_cents + (r.sale_pay_cents || 0), 0);
@@ -1051,7 +1075,10 @@ function Agents({ rows, entries, busy, mutate, defaultDate, catById }: {
         title="Agent pay"
         sub={
           `${money(totalCost)} in this window · showing ${shown.length} of ${rows.length}` +
-          (noRateCount ? ` · ${noRateCount} with no hourly or per-sale rate yet` : "")
+          (noRateCount ? ` · ${noRateCount} with no hourly or per-sale rate yet` : "") +
+          (unratedSales
+            ? ` · ${unratedSales} approved ${unratedSales === 1 ? "sale has" : "sales have"} no sale rate (paying $0) — open Sale rates to fix`
+            : "")
         }
         right={
           <div className="flex flex-wrap items-center gap-2">
@@ -1133,7 +1160,15 @@ function Agents({ rows, entries, busy, mutate, defaultDate, catById }: {
                     </Td>
                     <Td className="text-right tabular-nums">{Number(r.hours || 0).toLocaleString()}</Td>
                     <Td className="text-right tabular-nums">{money(r.cost_cents)}</Td>
-                    <Td className="text-right tabular-nums">{(r.sales || 0).toLocaleString()}</Td>
+                    <Td className="text-right tabular-nums">
+                      {(r.sales || 0).toLocaleString()}
+                      {!!r.unrated_sales && (
+                        <span className="block text-[0.65rem] font-bold text-danger"
+                              title="Logged before a sale rate covered them, so they pay $0. Open Sale rates and start the rate from an earlier date.">
+                          {r.unrated_sales} no rate
+                        </span>
+                      )}
+                    </Td>
                     <Td className="text-right tabular-nums">{money(r.sale_pay_cents || 0)}</Td>
                     <Td className="text-right font-bold tabular-nums text-ink">{money(r.cost_cents + (r.sale_pay_cents || 0))}</Td>
                     <Td className="text-right whitespace-nowrap">
@@ -1313,6 +1348,7 @@ function Agents({ rows, entries, busy, mutate, defaultDate, catById }: {
                 body: JSON.stringify({
                   aca_cents: saleCents.aca, dental_cents: saleCents.dental, vision_cents: saleCents.vision,
                   note: saleNote.trim() || null,
+                  effective_on: saleFrom || null,
                 }),
               })).then(closeSale);
             }}>
@@ -1346,10 +1382,41 @@ function Agents({ rows, entries, busy, mutate, defaultDate, catById }: {
             </Field>
           ))}
         </div>
+        {!!saleFor?.unrated_sales && (
+          <div className="rounded-xl border border-danger/30 bg-danger/10 px-3 py-2.5 text-xs font-semibold text-danger">
+            {saleFor.unrated_sales} approved {saleFor.unrated_sales === 1 ? "sale" : "sales"} in this window
+            {saleFor.unrated_sales === 1 ? " was" : " were"} logged before any sale rate covered
+            {saleFor.unrated_sales === 1 ? " it" : " them"}, so {saleFor.unrated_sales === 1 ? "it pays" : "they pay"} $0.
+            Pick an earlier start date below to pay {saleFor.unrated_sales === 1 ? "it" : "them"}.
+          </div>
+        )}
+        <Field label="Pay these rates from">
+          <div className="grid grid-cols-2 gap-3">
+            <select className={drawerCtl} value={saleFrom ? "date" : "now"}
+                    onChange={(e) => setSaleFrom(e.target.value === "date" ? todayISO() : "")}>
+              <option value="now">Now — new sales only</option>
+              <option value="date">An earlier date…</option>
+            </select>
+            {saleFrom && (
+              <input className={drawerCtl} type="date" value={saleFrom} max={todayISO()}
+                     onChange={(e) => setSaleFrom(e.target.value || todayISO())} />
+            )}
+          </div>
+        </Field>
         <div className="rounded-xl border border-hairline bg-black/5 px-3 py-2.5 text-xs text-ink-muted">
-          Applies to <strong className="text-ink">approved</strong> sales logged from now on. A deal with
-          ACA + Dental pays both rates. Sales already logged keep the rate they were sold at, so a
-          change never raises or cuts past earnings.
+          {!saleFrom ? (
+            <>Applies to <strong className="text-ink">approved</strong> sales logged from now on. A deal with
+            ACA + Dental pays both rates. Sales already logged keep the rate they were sold at, so a
+            change never raises or cuts past earnings.</>
+          ) : saleFor?.sale_rate && saleFrom <= etDay(saleFor.sale_rate.effective_at) ? (
+            <>Pays <strong className="text-ink">approved</strong> sales logged from the start of {saleFrom} (Eastern)
+            up to when the current rate began ({new Date(saleFor.sale_rate.effective_at).toLocaleString()}).
+            The current rate stays in force after that.</>
+          ) : (
+            <>Pays every <strong className="text-ink">approved</strong> sale logged from the start of {saleFrom} (Eastern)
+            onward at these rates — <strong className="text-ink">including sales already logged</strong> since
+            then. A deal with ACA + Dental pays both rates.</>
+          )}
         </div>
         <Field label="Note">
           <input className={drawerCtl} placeholder="Optional — e.g. new commission plan"

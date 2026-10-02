@@ -357,6 +357,43 @@ Rules that keep #2 safe — don't undo them:
   first-template-only lockdown blocks them — CSV_DIRECT leads therefore have no
   chat composer; that is intentional (phone-first) until an exemption is decided.
 
+## Commission (per-sale agent pay) and deal source
+
+"Commission" everywhere in the portal means **per-sale agent pay** — there is no
+separate carrier-commission number. It is DERIVED, never stored:
+`expenses/services.sale_pay_lines` prices every APPROVED deal with the agent's
+`agent_sale_rates` row in force at the deal's `created_at`. Three surfaces read
+those same lines, so they cannot disagree:
+
+1. **Expenses → Agent pay** (`/sms/#/expenses`, owner only) — what the company owes.
+2. **All Deals → "Total commission · whole team"** (`totals.commission_cents` on
+   `/compliance/deals/today-all`, plus `commission_cents` per deal) — follows the
+   page's date filter, so "Today" is the daily counter.
+3. **My Deals → "You earned"** (`/compliance/deals/my-earnings`, plus
+   `earned_cents` per deal on `/deals/my-today`) — the agent's own pay only.
+
+- **A sale with no rate in force pays $0** (`SaleLine.rated = False`). That is
+  what "$0.00 with 1 approved sale" means — it is not a bug in the sum. The
+  count is surfaced as `unrated_sales` / `agent_unrated_sales` and shown as a
+  warning on the Agent pay card, the Agents table and the All Deals card.
+- Rates take effect NOW by default. `SaleRateSet.effective_on` (the drawer's
+  "Pay these rates from → An earlier date") starts the row at the beginning of
+  that Eastern day instead, which is the ONLY way sales logged before a rate
+  existed get paid. Rows are still append-only; a backdated row prices deals
+  from its day until the agent's next rate begins.
+- **`deals.deal_source`** (`carrier` | `eap`, migration 059) is the EAP checkbox
+  in each person card on `add-deal.html` (carrier is the default; added persons
+  follow Person 1 until changed). It is a label only — EAP deals are priced with
+  the same ACA/Dental/Vision rates. It shows as an "EAP" tag beside the carrier
+  on All Deals / My Deals, has a "Deal type" filter under More filters, and
+  admins can correct it in Edit deal. `normalize_deal_source` is deliberately
+  lenient (anything unknown → `carrier`) so a cached old form still logs sales.
+- **Announcements** can be sent by admins AND `head` (`_ADMIN_ROLES` in
+  `app/announcements/router.py`, mirrored by the role gates in `inbox.html` and
+  `notifications.html`).
+- `.localpreview/verify-commission-eap-announce.mjs` checks all of this against
+  the real backend.
+
 ## Verifying UI changes (headless Chrome over CDP)
 
 The `.localpreview/*.mjs` scripts drive a headless Chrome via the DevTools Protocol

@@ -978,9 +978,9 @@ html[data-mode="dark"] .sb-brand-logo{background:#FFFFFF;border-radius:8px;paddi
 })();
 </script>
 <script>
-/* Admins see the Announcements card, which links to the Inbox drawer. */
+/* Admins and head managers see the Announcements card, which links to the Inbox drawer. */
 (function(){
-  if(['admin','tenant_admin','super_admin','dev'].indexOf(localStorage.getItem('ebRole')||'') === -1) return;
+  if(['admin','tenant_admin','super_admin','head','dev'].indexOf(localStorage.getItem('ebRole')||'') === -1) return;
   var card = document.getElementById('announceCard'); if(card) card.style.display='';
 })();
 </script>

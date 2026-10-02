@@ -176,6 +176,10 @@ class SaleLine:
     dental: bool
     vision: bool
     cents: int
+    deal_id: object = None
+    # False when NO sale rate was in force for this agent when the deal was
+    # logged — the sale counts, but it pays $0 until a rate covers that day.
+    rated: bool = True
 
 
 def current_sale_rate(db: Session, tenant_id: str, agent_id) -> Optional[AgentSaleRate]:
@@ -191,7 +195,8 @@ def sale_pay_lines(db: Session, tenant_id: str, start: Optional[datetime] = None
                    end: Optional[datetime] = None, agent_id=None) -> list[SaleLine]:
     """One line per approved deal logged in [start, end) (all time when omitted),
     priced with the agent's sale rate in force at the deal's created_at."""
-    q = db.query(Deal.agent_id, Deal.created_at, Deal.aca_count, Deal.dental_count, Deal.vision_count).filter(
+    q = db.query(Deal.id, Deal.agent_id, Deal.created_at, Deal.aca_count, Deal.dental_count,
+                 Deal.vision_count).filter(
         Deal.tenant_id == tenant_id,
         func.lower(Deal.status).in_(APPROVED_STATUSES),
     )
@@ -205,13 +210,13 @@ def sale_pay_lines(db: Session, tenant_id: str, start: Optional[datetime] = None
         q = q.filter(Deal.created_at < end)
 
     rates: dict = {}
-    for r in rq.order_by(AgentSaleRate.effective_at).all():
+    for r in rq.order_by(AgentSaleRate.effective_at, AgentSaleRate.created_at).all():
         rates.setdefault(r.agent_id, []).append(r)
     starts = {aid: [r.effective_at for r in rs] for aid, rs in rates.items()}
 
     tz = ZoneInfo(settings.AGENT_TZ)
     out = []
-    for aid, created, aca, dental, vision in q.all():
+    for deal_id, aid, created, aca, dental, vision in q.all():
         has_aca, has_dental, has_vision = (aca or 0) > 0, (dental or 0) > 0, (vision or 0) > 0
         cents = 0
         i = bisect_right(starts.get(aid, []), created) - 1
@@ -219,5 +224,6 @@ def sale_pay_lines(db: Session, tenant_id: str, start: Optional[datetime] = None
             r = rates[aid][i]
             cents = ((r.aca_cents if has_aca else 0) + (r.dental_cents if has_dental else 0)
                      + (r.vision_cents if has_vision else 0))
-        out.append(SaleLine(aid, created.astimezone(tz).date(), has_aca, has_dental, has_vision, cents))
+        out.append(SaleLine(aid, created.astimezone(tz).date(), has_aca, has_dental, has_vision,
+                            cents, deal_id=deal_id, rated=i >= 0))
     return out

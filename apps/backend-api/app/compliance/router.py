@@ -36,6 +36,7 @@ from app.schemas.compliance import (
     DealResponse,
     DealSubmitRequest,
     NpnUpdate,
+    normalize_deal_source,
     StateLicenseCreate,
     StateLicenseResponse,
     StateLicenseUpdate,
@@ -699,6 +700,7 @@ async def submit_deal(
         recording_id=request.recording_id,
         recording_ids=request.recording_ids,
         consent_form_ids=request.consent_form_ids,
+        deal_source=request.deal_source,
     )
 
     # Capacity engine: logging a deal frees this agent for the next lead. Mark the
@@ -1035,9 +1037,12 @@ def update_deal(
             deal.premium = Decimal(str(p)) if p not in (None, "") else None
         except Exception:
             pass
+    if body.get("deal_source"):
+        deal.deal_source = normalize_deal_source(body["deal_source"])
     db.commit()
     return {
         "id": str(deal.id),
+        "deal_source": deal.deal_source or "carrier",
         "customer_name": deal.customer_name, "customer_phone": deal.customer_phone,
         "customer_dob": deal.customer_dob, "customer_email": deal.customer_email,
         "customer_address": deal.customer_address, "customer_city": deal.customer_city,
@@ -1127,6 +1132,9 @@ def my_deals_today(
     t_dental = sum(1 for d in approved if (d.dental_count or 0) > 0)
     t_vision = sum(1 for d in approved if (d.vision_count or 0) > 0)
     t_dv = sum(1 for d in approved if (d.dental_count or 0) > 0 or (d.vision_count or 0) > 0)
+    # What the agent earned on each approved deal (their own pay only).
+    from app.expenses.services import sale_pay_lines
+    earned = {l.deal_id: l.cents for l in sale_pay_lines(db, tenant_id, start, end, agent_id=agent.id)}
     items = [{
         "id": str(d.id),
         "customer_name": d.customer_name,
@@ -1135,6 +1143,8 @@ def my_deals_today(
         "carrier": d.carrier,
         "plan_type": d.plan_type,
         "premium": float(d.premium) if d.premium is not None else None,
+        "deal_source": d.deal_source or "carrier",
+        "earned_cents": earned.get(d.id),      # None until the deal is approved
         "aca_count": d.aca_count or 0,
         "dental_count": d.dental_count or 0,
         "vision_count": d.vision_count or 0,
@@ -1232,9 +1242,16 @@ def all_deals_today(
     t_dental = sum(1 for d in approved if (d.dental_count or 0) > 0)
     t_vision = sum(1 for d in approved if (d.vision_count or 0) > 0)
     t_dv = sum(1 for d in approved if (d.dental_count or 0) > 0 or (d.vision_count or 0) > 0)
+    # Commission = the per-sale pay each approved deal earns its agent (the same
+    # lines Expenses -> Agent Pay sums, so the two pages can never disagree).
+    from app.expenses.services import sale_pay_lines
+    pay_lines = sale_pay_lines(db, tenant_id, start, end)
+    commission = {l.deal_id: l.cents for l in pay_lines}
     items = [{
         "id": str(d.id),
         "agent_name": name_map.get(d.agent_id, "—"),
+        "deal_source": d.deal_source or "carrier",
+        "commission_cents": commission.get(d.id),   # None until the deal is approved
         "customer_name": d.customer_name,
         "customer_phone": d.customer_phone,
         # Detail fields so the admin Edit modal can show/edit them (not shown in the table).
@@ -1273,6 +1290,10 @@ def all_deals_today(
             "total_dental_vision": t_dv,
             "agent_count": len(agent_ids),
             "deal_count": len(approved),
+            "total_eap": sum(1 for d in approved if (d.deal_source or "") == "eap"),
+            "commission_cents": sum(l.cents for l in pay_lines),
+            # Approved sales no sale rate covers yet — they count but pay $0.
+            "unrated_sales": sum(1 for l in pay_lines if not l.rated),
         },
         "deals": items,
     }

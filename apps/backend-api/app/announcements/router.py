@@ -27,7 +27,9 @@ from app.realtime.websocket import emit_to_user_room
 
 router = APIRouter(prefix="/announcements", tags=["announcements"])
 
-_ADMIN_ROLES = ("admin", "tenant_admin", "super_admin", "dev")
+# Who may SEND an announcement. Head managers run the floor, so they broadcast
+# to agents the same way the admins do.
+_ADMIN_ROLES = ("admin", "tenant_admin", "super_admin", "head", "dev")
 AUDIENCES = ("agents", "everyone", "custom")
 MAX_BODY = 1000
 
@@ -38,7 +40,7 @@ def _is_admin(u: User) -> bool:
 
 def _require_admin(u: User) -> None:
     if not _is_admin(u):
-        raise HTTPException(status_code=403, detail="Admins only")
+        raise HTTPException(status_code=403, detail="Admins and head managers only")
 
 
 def _name(u: User) -> str:

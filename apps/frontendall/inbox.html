@@ -476,7 +476,7 @@ html[data-mode="dark"] .sb-brand-logo{background:#FFFFFF;border-radius:8px;paddi
   <script src="services/call-now-popup.js?v=1"></script>
   <script src="services/error-boundary.js?v=24"></script>
 <style id="annDrawerStyle">
-/* ===== Announcements drawer (admins) ===== */
+/* ===== Announcements drawer (admins + head managers) ===== */
 .ann-open{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 12px;border-radius:999px;border:none;cursor:pointer;
   font:inherit;font-size:.78rem;font-weight:700;color:#fff;background:linear-gradient(135deg,var(--accent),var(--accent-2,var(--accent)));
   box-shadow:0 4px 12px rgba(var(--accent-rgb),.28);transition:transform .15s ease,box-shadow .15s ease}
@@ -747,7 +747,7 @@ html[data-mode="dark"] .annd-foot{background:rgba(255,255,255,.02)}
     </div>
   </div>
 
-  <!-- Announcements drawer — admins only (the API enforces it too). Sends a popup
+  <!-- Announcements drawer — admins + head managers only (the API enforces it too). Sends a popup
        that blocks the recipients' screen on any page until they press Received. -->
   <div class="annd-back" id="annBack" hidden></div>
   <aside class="annd" id="annDrawer" role="dialog" aria-modal="true" aria-labelledby="annDTitle" aria-hidden="true">
@@ -2182,12 +2182,13 @@ html[data-mode="dark"] .annd-foot{background:rgba(255,255,255,.02)}
 })();
 </script>
 <script>
-/* Announcements drawer — admins send a popup to all agents (default), everyone,
-   or picked people, and watch "N of M received" fill in. The API enforces
-   admin-only too; this gate just keeps the button off other roles' screens. */
+/* Announcements drawer — admins and head managers send a popup to all agents
+   (default), everyone, or picked people, and watch "N of M received" fill in.
+   The API enforces the same roles; this gate just keeps the button off other
+   roles' screens. */
 (function(){
   var ROLE = (localStorage.getItem('ebRole') || '').toLowerCase();
-  if(['super_admin','tenant_admin','admin','dev'].indexOf(ROLE) === -1) return;
+  if(['super_admin','tenant_admin','admin','head','dev'].indexOf(ROLE) === -1) return;
   var $ = function(id){ return document.getElementById(id); };
   var openBtn=$('annOpen'), drawer=$('annDrawer'), back=$('annBack');
   if(!openBtn || !drawer || !window.__ebAPI) return;

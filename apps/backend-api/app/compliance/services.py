@@ -20,7 +20,7 @@ from app.models.compliance import (
     DealApprovalLog,
 )
 from app.models.user import User
-from app.schemas.compliance import normalize_state
+from app.schemas.compliance import normalize_deal_source, normalize_state
 
 
 APPROVED = "APPROVED"
@@ -462,6 +462,7 @@ async def submit_deal_with_approval(
     recording_id: Optional[UUID] = None,
     recording_ids: Optional[list] = None,
     consent_form_ids: Optional[list] = None,
+    deal_source: Optional[str] = None,
 ) -> tuple[Deal, DealApprovalLog]:
     from decimal import Decimal
     products_json = None
@@ -538,6 +539,7 @@ async def submit_deal_with_approval(
         state=state_key(state),
         plan_type=plan_type,
         premium=premium,
+        deal_source=normalize_deal_source(deal_source),
         aca_count=max(0, aca_count or 0),
         dental_count=max(0, dental_count or 0),
         vision_count=max(0, vision_count or 0),

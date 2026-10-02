@@ -499,6 +499,8 @@ def agent_pay(
             continue
         row.sales += 1
         row.sale_pay_cents += line.cents
+        if not line.rated:
+            row.unrated_sales += 1
     return sorted(rows.values(), key=lambda r: (-(r.cost_cents + r.sale_pay_cents), r.agent_name))
 
 
@@ -525,17 +527,29 @@ def set_sale_rates(
     tenant_id: str = Depends(get_tenant_id),
     user: User = Depends(_require_owner),
 ):
-    """Set an agent's per-sale pay (ACA / Dental / Vision). Always a NEW row in
-    force from right now — deals already logged keep the rate they were sold at,
-    so a change can never raise (or cut) past earnings."""
+    """Set an agent's per-sale pay (ACA / Dental / Vision). Always a NEW row, in
+    force from right now by default — deals already logged keep the rate they
+    were sold at, so a change can never raise (or cut) past earnings.
+
+    `effective_on` is the one deliberate exception: the owner starts the rate on
+    an earlier Eastern day so sales logged before it was typed in still get paid
+    (the usual case: the first deals came in before anyone set a rate). The row
+    simply joins the timeline at that day — it prices deals from then until the
+    agent's next rate begins — and the audit trail records the chosen date."""
     if not db.query(Agent).filter(Agent.tenant_id == tenant_id, Agent.id == agent_id).first():
         raise HTTPException(status_code=404, detail="Agent not found")
     before = services.current_sale_rate(db, tenant_id, agent_id)
+    effective_at = datetime.now(timezone.utc)
+    if payload.effective_on is not None:
+        day_start, _end = _day_bounds(payload.effective_on, payload.effective_on)
+        if day_start > effective_at:
+            raise HTTPException(status_code=422, detail="A sale rate cannot start in the future")
+        effective_at = day_start
     rate = AgentSaleRate(
         tenant_id=tenant_id, agent_id=agent_id, created_by=user.id,
         aca_cents=payload.aca_cents, dental_cents=payload.dental_cents,
         vision_cents=payload.vision_cents, note=payload.note,
-        effective_at=datetime.now(timezone.utc),
+        effective_at=effective_at,
     )
     db.add(rate)
     db.commit()
@@ -753,6 +767,7 @@ def summary(
         agent_cost_cents=agent_cost,
         agent_sales=len(sale_lines),
         agent_sale_pay_cents=sale_pay,
+        agent_unrated_sales=sum(1 for l in sale_lines if not l.rated),
         previous_total_cents=previous_total,
     )
 

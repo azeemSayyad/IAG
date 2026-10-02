@@ -22,6 +22,16 @@ def normalize_state(value: str) -> str:
     return state
 
 
+DEAL_SOURCES = ("carrier", "eap")
+
+
+def normalize_deal_source(value) -> str:
+    """'eap' for an EAP deal, otherwise 'carrier' (the default). Lenient on
+    purpose: an older cached form that omits the field still logs its sale."""
+    v = str(value or "").strip().lower()
+    return v if v in DEAL_SOURCES else "carrier"
+
+
 class NpnUpdate(BaseModel):
     npn: str = Field(min_length=1, max_length=50)
 
@@ -174,11 +184,18 @@ class DealSubmitRequest(BaseModel):
     # Signed consent forms uploaded on the same form (deal_recordings ids, kind='consent').
     # Optional — unlike the call recording these do not gate submission.
     consent_form_ids: Optional[List[UUID]] = None
+    # 'carrier' (default) or 'eap' — the EAP checkbox on the Add Deal form.
+    deal_source: Optional[str] = None
 
     @field_validator("state")
     @classmethod
     def valid_state(cls, value: str) -> str:
         return normalize_state(value)
+
+    @field_validator("deal_source")
+    @classmethod
+    def valid_deal_source(cls, value: Optional[str]) -> str:
+        return normalize_deal_source(value)
 
 
 class DealRevalidateRequest(BaseModel):
@@ -208,6 +225,7 @@ class DealResponse(BaseModel):
     aca_count: int = 1
     dental_count: int = 0
     vision_count: int = 0
+    deal_source: str = "carrier"
     status: str
     approval_decision: Optional[str]
     approval_reason: Optional[str]

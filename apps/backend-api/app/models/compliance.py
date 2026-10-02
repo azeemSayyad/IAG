@@ -114,6 +114,9 @@ class Deal(Base):
     state = Column(String(2), nullable=False)
     plan_type = Column(String(120), nullable=True)
     premium = Column(Numeric(12, 2), nullable=True)
+    # 'carrier' (default — e.g. an Anthem sale) or 'eap'. Ticked per person on the
+    # Add Deal form; the carrier / plan fields are filled the same way for both.
+    deal_source = Column(String(20), nullable=False, default="carrier", server_default="carrier")
     # Policy breakdown for one enrollment (ACA master + ancillary dental/vision).
     # Total deals = aca_count + dental_count + vision_count. Defaults model a
     # plain single ACA policy (1/0/0) so existing behavior is unchanged.
