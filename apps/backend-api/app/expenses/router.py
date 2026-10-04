@@ -9,8 +9,11 @@ Shape of the domain (see app/models/expense.py):
   items       standing commitments; posting one CREATES a ledger entry
   entries     the ledger — the only thing ever summed, agent hours included
   rates       append-only hourly rate history
-  sale rates  append-only per-sale (ACA/Dental/Vision) pay; sale pay is DERIVED
-              from approved deals, never posted to the ledger
+  pay rules   ONE company rule set (weekly ACA tiers, dental by household, flat
+              ancillary) + per-agent tier exceptions; sale pay is DERIVED from
+              approved deals (expenses/pay_rules.py), never posted to the ledger
+  sale rates  the older per-agent per-sale rates — they still price deals
+              logged before the pay rules' start date, nothing after
 
 Every write logs to audit_logs (resource_type "expense_*"), and entries are
 voided rather than deleted, so /expenses/audit can reconstruct the whole history.
@@ -24,14 +27,18 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
+from app.core.active_agents import active_agents_query, labelled
 from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.date_ranges import resolve_range
 from app.core.deps import get_current_active_user, get_tenant_id, require_role
-from app.expenses import services
+from app.expenses import pay_rules, services
 from app.models.agent import Agent
 from app.models.audit_log import AuditLog
-from app.models.expense import AgentRate, AgentSaleRate, ExpenseCategory, ExpenseEntry, ExpenseItem
+from app.models.compliance import Deal
+from app.models.expense import (
+    AgentRate, AgentSaleRate, ExpenseCategory, ExpenseEntry, ExpenseItem, PayException, PayRules,
+)
 from app.models.user import User
 from app.schemas.expense import (
     AgentPayRow,
@@ -48,6 +55,12 @@ from app.schemas.expense import (
     ItemUpdate,
     RateResponse,
     RateSet,
+    PayExceptionResponse,
+    PayExceptionSet,
+    PayPlanResponse,
+    PayRulesResponse,
+    PayRulesSet,
+    PayWeek,
     SaleRateResponse,
     SaleRateSet,
     SummaryResponse,
@@ -59,7 +72,8 @@ router = APIRouter(prefix="/expenses", tags=["expenses"])
 # check on purpose); no other role can reach ANY endpoint in this file.
 _require_owner = require_role("super_admin")
 
-AUDIT_RESOURCES = ("expense_entry", "expense_item", "expense_category", "agent_rate", "agent_sale_rate")
+AUDIT_RESOURCES = ("expense_entry", "expense_item", "expense_category", "agent_rate", "agent_sale_rate",
+                   "pay_rules", "pay_exception")
 
 
 # ── helpers ──────────────────────────────────────────────────────────────────
@@ -87,14 +101,17 @@ def _category_map(db: Session, tenant_id: str) -> dict:
 
 
 def _agent_names(db: Session, tenant_id: str) -> dict:
-    """agent_id -> display name (one query, no N+1)."""
+    """agent_id -> display name (one query, no N+1). Used for HISTORY rows
+    (ledger lines, the audit trail), so a disabled agent keeps their records —
+    labelled "(disabled)" — and payroll still adds up."""
     out = {}
-    for aid, fn, ln, email in (
-        db.query(Agent.id, User.first_name, User.last_name, User.email)
+    for aid, fn, ln, email, st, deleted in (
+        db.query(Agent.id, User.first_name, User.last_name, User.email, User.status, User.deleted_at)
         .join(User, Agent.user_id == User.id)
         .filter(Agent.tenant_id == tenant_id).all()
     ):
-        out[aid] = (f"{fn or ''} {ln or ''}".strip() or email or str(aid))
+        out[aid] = labelled(f"{fn or ''} {ln or ''}".strip() or email or str(aid),
+                            st == "active" and deleted is None)
     return out
 
 
@@ -466,11 +483,14 @@ def agent_pay(
     from_d, to_d = _window(from_, to)
     names = _agent_names(db, tenant_id)
     rows: dict = {}
-    for agent in db.query(Agent).filter(Agent.tenant_id == tenant_id).all():
+    # Enabled agents only: a disabled agent leaves the pay table and its counts.
+    # Their past pay is still in the Overview totals and the ledger.
+    for agent, role in active_agents_query(db, tenant_id).add_columns(User.role).all():
         rate = services.current_rate(db, tenant_id, agent.id)
         sale_rate = services.current_sale_rate(db, tenant_id, agent.id)
         rows[agent.id] = AgentPayRow(
             agent_id=agent.id,
+            role=(role or "").lower(),
             agent_name=names.get(agent.id, str(agent.id)),
             current_rate_cents=rate.rate_cents_per_hour if rate else None,
             rate_effective_from=rate.effective_from if rate else None,
@@ -501,6 +521,21 @@ def agent_pay(
         row.sale_pay_cents += line.cents
         if not line.rated:
             row.unrated_sales += 1
+    # This week's tier standing (always the CURRENT week, whatever the window).
+    wk = pay_rules.week_start_of(pay_rules.today_et())
+    wa, wb = pay_rules.week_bounds_utc(wk)
+    versions = pay_rules.rule_versions(db, tenant_id)
+    tiers = pay_rules.rules_for_week(versions, wk, datetime.now(timezone.utc))["aca_tiers"]
+    _lines, weeks = pay_rules.compute(db, tenant_id, wa, wb)
+    for aid, row in rows.items():
+        wp = weeks.get((aid, wk))
+        if wp:
+            row.week_commissions, row.aca_tier = wp.commissions, wp.tier
+            row.aca_rate_cents, row.exception = wp.rate_cents, wp.exception_id is not None
+        else:
+            exc = pay_rules.active_exception(db, tenant_id, aid)
+            idx = min(max(exc.tier - 1, 0), len(tiers) - 1) if exc else 0
+            row.aca_tier, row.aca_rate_cents, row.exception = idx + 1, int(tiers[idx]["cents"]), exc is not None
     return sorted(rows.values(), key=lambda r: (-(r.cost_cents + r.sale_pay_cents), r.agent_name))
 
 
@@ -561,6 +596,138 @@ def set_sale_rates(
             "after": {"aca": rate.aca_cents, "dental": rate.dental_cents, "vision": rate.vision_cents},
             "effective_at": rate.effective_at.isoformat()})
     return rate
+
+
+# ── company pay rules (automatic per-sale pay) ───────────────────────────────
+
+def _rules_out(db: Session, tenant_id: str) -> PayRulesResponse:
+    versions = pay_rules.rule_versions(db, tenant_id)
+    seen = {c for (c,) in db.query(Deal.carrier).filter(Deal.tenant_id == tenant_id).distinct().all() if c}
+    return PayRulesResponse(rules=versions[-1].rules, starts_on=pay_rules.week_start_of(versions[-1].starts_on),
+                            updated_at=versions[-1].created_at, carriers=sorted(seen))
+
+
+@router.get("/pay-rules", response_model=PayRulesResponse)
+def get_pay_rules(
+    db: Session = Depends(get_db),
+    tenant_id: str = Depends(get_tenant_id),
+    _user: User = Depends(_require_owner),
+):
+    """The one set of pay rules every agent follows (seeded on first read)."""
+    return _rules_out(db, tenant_id)
+
+
+@router.put("/pay-rules", response_model=PayRulesResponse)
+def set_pay_rules(
+    payload: PayRulesSet,
+    db: Session = Depends(get_db),
+    tenant_id: str = Depends(get_tenant_id),
+    user: User = Depends(_require_owner),
+):
+    """Save a NEW version of the rules. It prices the week in progress and every
+    week after; weeks that already closed keep the version they closed under."""
+    try:
+        rules = pay_rules.validate_rules(payload.rules)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    last = pay_rules.rule_versions(db, tenant_id)[-1]
+    starts_on = pay_rules.week_start_of(payload.starts_on or last.starts_on)
+    if starts_on > pay_rules.today_et():
+        raise HTTPException(status_code=422, detail="The rules cannot start in a future week")
+    row = PayRules(tenant_id=tenant_id, rules=rules, starts_on=starts_on, created_by=user.id)
+    db.add(row)
+    db.commit()
+    _audit(db, tenant_id, user, "update", "pay_rules", row.id,
+           {"before": last.rules, "after": rules,
+            "starts_on": starts_on.isoformat(), "starts_on_before": last.starts_on.isoformat()})
+    return _rules_out(db, tenant_id)
+
+
+@router.get("/agents/{agent_id}/pay-plan", response_model=PayPlanResponse)
+def agent_pay_plan(
+    agent_id: UUID,
+    weeks: int = Query(8, ge=1, le=26),
+    db: Session = Depends(get_db),
+    tenant_id: str = Depends(get_tenant_id),
+    _user: User = Depends(_require_owner),
+):
+    """One agent's plan: tier + progress this week, any exception, weekly history."""
+    if not db.query(Agent).filter(Agent.tenant_id == tenant_id, Agent.id == agent_id).first():
+        raise HTTPException(status_code=404, detail="Agent not found")
+    versions = pay_rules.rule_versions(db, tenant_id)
+    this_wk = pay_rules.week_start_of(pay_rules.today_et())
+    first_wk = pay_rules.week_start_of(versions[-1].starts_on)
+    history = []
+    wk = this_wk
+    while wk >= first_wk and len(history) < weeks:
+        st = pay_rules.week_status(db, tenant_id, agent_id, wk)
+        history.append(PayWeek(week_start=wk, commissions=st["commissions"], tier=st["tier"],
+                               auto_tier=st["auto_tier"], rate_cents=st["rate_cents"],
+                               exception=st["exception"], aca_cents=st["aca_cents"],
+                               other_cents=st["other_cents"], current=wk == this_wk))
+        wk -= timedelta(days=7)
+    exc = pay_rules.active_exception(db, tenant_id, agent_id)
+    return PayPlanResponse(
+        agent_id=agent_id, agent_name=_agent_names(db, tenant_id).get(agent_id, str(agent_id)),
+        rules=versions[-1].rules, week=pay_rules.week_status(db, tenant_id, agent_id),
+        exception=PayExceptionResponse.model_validate(exc) if exc else None, history=history,
+    )
+
+
+@router.put("/agents/{agent_id}/pay-exception", response_model=PayExceptionResponse,
+            status_code=status.HTTP_201_CREATED)
+def set_pay_exception(
+    agent_id: UUID,
+    payload: PayExceptionSet,
+    db: Session = Depends(get_db),
+    tenant_id: str = Depends(get_tenant_id),
+    user: User = Depends(_require_owner),
+):
+    """Lock one agent's ACA tier. Replaces any exception already active."""
+    if not db.query(Agent).filter(Agent.tenant_id == tenant_id, Agent.id == agent_id).first():
+        raise HTTPException(status_code=404, detail="Agent not found")
+    tiers = pay_rules.rule_versions(db, tenant_id)[-1].rules["aca_tiers"]
+    if payload.tier > len(tiers):
+        raise HTTPException(status_code=422, detail=f"There are only {len(tiers)} tiers")
+    today = pay_rules.today_et()
+    if payload.duration == "week":
+        ends_on = pay_rules.week_start_of(today) + timedelta(days=6)
+    elif payload.duration == "date":
+        if payload.ends_on is None or payload.ends_on < today:
+            raise HTTPException(status_code=422, detail="Pick an end date that is today or later")
+        ends_on = payload.ends_on
+    else:
+        ends_on = None
+    now = datetime.now(timezone.utc)
+    old = pay_rules.active_exception(db, tenant_id, agent_id, now)
+    if old:
+        old.revoked_at, old.revoked_by = now, user.id
+    exc = PayException(tenant_id=tenant_id, agent_id=agent_id, tier=payload.tier, ends_on=ends_on,
+                       reason=payload.reason.strip(), created_by=user.id, created_at=now)
+    db.add(exc)
+    db.commit()
+    db.refresh(exc)
+    _audit(db, tenant_id, user, "create", "pay_exception", exc.id,
+           {"agent_id": str(agent_id), "tier": exc.tier,
+            "ends_on": ends_on.isoformat() if ends_on else None, "reason": exc.reason})
+    return exc
+
+
+@router.delete("/agents/{agent_id}/pay-exception", status_code=status.HTTP_204_NO_CONTENT)
+def clear_pay_exception(
+    agent_id: UUID,
+    db: Session = Depends(get_db),
+    tenant_id: str = Depends(get_tenant_id),
+    user: User = Depends(_require_owner),
+):
+    """Back to automatic: end the agent's active exception now."""
+    now = datetime.now(timezone.utc)
+    exc = pay_rules.active_exception(db, tenant_id, agent_id, now)
+    if exc:
+        exc.revoked_at, exc.revoked_by = now, user.id
+        db.commit()
+        _audit(db, tenant_id, user, "delete", "pay_exception", exc.id,
+               {"agent_id": str(agent_id), "tier": exc.tier})
 
 
 @router.get("/agents/{agent_id}/rates", response_model=list[RateResponse])

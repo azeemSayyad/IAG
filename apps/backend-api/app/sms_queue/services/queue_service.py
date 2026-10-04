@@ -246,6 +246,7 @@ def _available_agents(db: Session, tenant_id: str, exclude_user_id: str | None =
     """
     from sqlalchemy import func
 
+    from app.core.active_agents import active_user_clause
     from app.models.user import User
 
     q = (
@@ -256,6 +257,9 @@ def _available_agents(db: Session, tenant_id: str, exclude_user_id: str | None =
             SmsQueueAgent.status == "AVAILABLE",
             SmsQueueAgent.current_lead_id.is_(None),
             func.lower(func.coalesce(User.role, "")).notin_(ADMIN_ROLES),
+            # A disabled (suspended / removed) user is never routed a lead, even
+            # if their queue row was left AVAILABLE when they were disabled.
+            active_user_clause(),
         )
     )
     if exclude_user_id:

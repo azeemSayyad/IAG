@@ -1,7 +1,7 @@
 import os
 
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, DeclarativeBase
+from sqlalchemy import create_engine, event
+from sqlalchemy.orm import sessionmaker, DeclarativeBase, with_loader_criteria
 
 from app.core.config import settings
 
@@ -33,6 +33,28 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 class Base(DeclarativeBase):
     pass
+
+
+# Option that lets a query see trashed deals (the Trash list and restore need it):
+#   db.query(Deal).execution_options(include_trashed=True)
+INCLUDE_TRASHED = "include_trashed"
+
+
+@event.listens_for(SessionLocal, "do_orm_execute")
+def _hide_trashed_deals(state):
+    """A deal in Trash is invisible to EVERY select, on every session.
+
+    One filter here instead of a `trashed_at IS NULL` on each of the dozens of
+    Deal queries (commissions, weekly tiers, leaderboards, dashboards, coaching):
+    a trashed sale stops counting everywhere at once, and a query written later
+    cannot forget the rule. Only a query that opts in with INCLUDE_TRASHED sees
+    trashed rows."""
+    if not state.is_select or state.execution_options.get(INCLUDE_TRASHED):
+        return
+    from app.models.compliance import Deal   # late import: models import this module
+    state.statement = state.statement.options(
+        with_loader_criteria(Deal, lambda cls: cls.trashed_at.is_(None), include_aliases=True)
+    )
 
 
 def get_db():

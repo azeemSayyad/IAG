@@ -123,6 +123,15 @@ class Deal(Base):
     aca_count = Column(Integer, nullable=False, default=1, server_default="1")
     dental_count = Column(Integer, nullable=False, default=0, server_default="0")
     vision_count = Column(Integer, nullable=False, default=0, server_default="0")
+    ancillary_count = Column(Integer, nullable=False, default=0, server_default="0")
+    # Groups the person-deals logged in ONE Log Sale submission. Pay rules count
+    # commissions per application (NULL on older rows = its own application).
+    application_id = Column(UUID(as_uuid=True), nullable=True, index=True)
+    # Trash (All Deals -> admin delete). Set = the sale is in Trash: it is hidden
+    # from EVERY Deal query by core/database.py, so it stops counting toward
+    # commissions and the weekly tier until an admin restores it. Never hard-deleted.
+    trashed_at = Column(DateTime(timezone=True), nullable=True, index=True)
+    trashed_by = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
     # Full per-product plan detail for THIS person's deal: a list of
     # {product, carrier, tier, plan_name, premium, effective_date, decision}.
     # The aca/dental/vision counts above stay as the 0/1 flags the dashboards sum.

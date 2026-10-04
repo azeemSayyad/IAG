@@ -7,8 +7,9 @@ from fastapi.responses import RedirectResponse, Response
 from sqlalchemy.orm import Session
 
 from app.compliance import services
+from app.core.active_agents import active_agents_query, disabled_agent_ids, labelled
 from app.core.audit import log_audit_event
-from app.core.database import get_db
+from app.core.database import INCLUDE_TRASHED, get_db
 from app.core.date_ranges import resolve_range, APPROVED_STATUSES
 from app.core.agent_profile import ensure_agent_profile
 from app.core.deps import get_current_active_user, get_tenant_id, require_compliance_manage, require_compliance_read
@@ -100,7 +101,8 @@ def list_compliance_agents(
     current_user: User = Depends(require_compliance_read),
 ):
     from sqlalchemy import func
-    agents = db.query(Agent).filter(Agent.tenant_id == tenant_id).all()
+    # Enabled agents only — this feeds the agent pickers and admin agent lists.
+    agents = active_agents_query(db, tenant_id).all()
     if current_user.role == "agent":
         own = _current_agent(db, current_user)
         agents = [own] if own else []
@@ -701,6 +703,7 @@ async def submit_deal(
         recording_ids=request.recording_ids,
         consent_form_ids=request.consent_form_ids,
         deal_source=request.deal_source,
+        application_id=request.application_id,
     )
 
     # Capacity engine: logging a deal frees this agent for the next lead. Mark the
@@ -1053,6 +1056,107 @@ def update_deal(
     }
 
 
+# ── Trash (All Deals -> admin delete) ────────────────────────────────────────
+# A sale is never hard-deleted. Trashing sets deals.trashed_at, which hides it
+# from every Deal query (core/database.py) — so it stops counting toward the
+# agent's commissions and weekly tier at once — and restoring clears it.
+
+_TRASH_ROLES = ("admin", "tenant_admin", "super_admin", "dev")
+
+
+def _require_trash_admin(user: User) -> None:
+    if (user.role or "").lower() not in _TRASH_ROLES:
+        raise HTTPException(status_code=403, detail="Admins only")
+
+
+def _any_deal(db: Session, tenant_id: str, deal_id: UUID) -> Deal:
+    """The deal whether or not it is in Trash."""
+    deal = (db.query(Deal).execution_options(**{INCLUDE_TRASHED: True})
+            .filter(Deal.tenant_id == tenant_id, Deal.id == deal_id).first())
+    if not deal:
+        raise HTTPException(status_code=404, detail="Deal not found")
+    return deal
+
+
+@router.post("/deals/{deal_id}/trash")
+def trash_deal(
+    deal_id: UUID,
+    db: Session = Depends(get_db),
+    tenant_id: str = Depends(get_tenant_id),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Admin-only: move a sale to Trash."""
+    from datetime import datetime, timezone
+    _require_trash_admin(current_user)
+    deal = _any_deal(db, tenant_id, deal_id)
+    if deal.trashed_at is None:
+        deal.trashed_at, deal.trashed_by = datetime.now(timezone.utc), current_user.id
+        db.commit()
+        log_audit_event(tenant_id, "deal_trashed", "deal", str(deal.id), str(current_user.id),
+                        details={"customer_name": deal.customer_name, "carrier": deal.carrier,
+                                 "agent_id": str(deal.agent_id)}, db=db)
+    return {"id": str(deal.id), "trashed_at": deal.trashed_at.isoformat()}
+
+
+@router.post("/deals/{deal_id}/restore")
+def restore_deal(
+    deal_id: UUID,
+    db: Session = Depends(get_db),
+    tenant_id: str = Depends(get_tenant_id),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Admin-only: bring a sale back from Trash; it counts again immediately."""
+    _require_trash_admin(current_user)
+    deal = _any_deal(db, tenant_id, deal_id)
+    if deal.trashed_at is not None:
+        deal.trashed_at, deal.trashed_by = None, None
+        db.commit()
+        log_audit_event(tenant_id, "deal_restored", "deal", str(deal.id), str(current_user.id),
+                        details={"customer_name": deal.customer_name, "carrier": deal.carrier,
+                                 "agent_id": str(deal.agent_id)}, db=db)
+    return {"id": str(deal.id), "trashed_at": None}
+
+
+@router.get("/deals/trash")
+def list_trashed_deals(
+    db: Session = Depends(get_db),
+    tenant_id: str = Depends(get_tenant_id),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Admin-only: everything in Trash, most recently trashed first, with who
+    trashed it and when."""
+    _require_trash_admin(current_user)
+    deals = (db.query(Deal).execution_options(**{INCLUDE_TRASHED: True})
+             .filter(Deal.tenant_id == tenant_id, Deal.trashed_at.isnot(None))
+             .order_by(Deal.trashed_at.desc()).limit(500).all())
+    agent_names = {}
+    aids = {d.agent_id for d in deals}
+    if aids:
+        for aid, fn, ln in (db.query(Agent.id, User.first_name, User.last_name)
+                            .join(User, Agent.user_id == User.id).filter(Agent.id.in_(aids)).all()):
+            agent_names[aid] = f"{fn or ''} {ln or ''}".strip() or "Unknown agent"
+    by = {}
+    uids = {d.trashed_by for d in deals if d.trashed_by}
+    if uids:
+        for u in db.query(User).filter(User.id.in_(uids)).all():
+            by[u.id] = f"{u.first_name or ''} {u.last_name or ''}".strip() or u.email
+    return {"total": len(deals), "deals": [{
+        "id": str(d.id),
+        "agent_name": agent_names.get(d.agent_id, "—"),
+        "customer_name": d.customer_name,
+        "customer_phone": d.customer_phone,
+        "state": d.state,
+        "carrier": d.carrier,
+        "deal_source": d.deal_source or "carrier",
+        "aca_count": d.aca_count or 0, "ancillary_count": d.ancillary_count or 0,
+        "dental_count": d.dental_count or 0, "vision_count": d.vision_count or 0,
+        "status": d.status,
+        "created_at": d.created_at.isoformat() if d.created_at else None,
+        "trashed_at": d.trashed_at.isoformat(),
+        "trashed_by_name": by.get(d.trashed_by, "—"),
+    } for d in deals]}
+
+
 @router.get("/deals", response_model=dict)
 def list_deals(
     decision: Optional[str] = None,
@@ -1080,8 +1184,8 @@ def my_earnings(
     current_user: User = Depends(require_compliance_read),
 ):
     """Per-sale pay the SIGNED-IN user has earned: for the selected Eastern range
-    and all time. Approved deals only, each priced at the rate in force when it
-    was logged. Only the user's own totals — never rates or anyone else's pay."""
+    and all time, plus their tier standing this week. Approved deals only, priced
+    by the company pay rules. Only the user's own totals — never anyone else's pay."""
     from app.expenses.services import sale_pay_lines
 
     agent = _current_agent(db, current_user)
@@ -1092,10 +1196,13 @@ def my_earnings(
 
     if not agent:
         zero = {"cents": 0, "sales": 0}
-        return {"from": from_label, "to": to_label, "range": zero, "all_time": zero}
+        return {"from": from_label, "to": to_label, "range": zero, "all_time": zero, "week": None}
+    from app.expenses import pay_rules
     all_lines = sale_pay_lines(db, tenant_id, agent_id=agent.id)
     in_range = [l for l in all_lines if from_label <= l.sold_on.isoformat() <= to_label]
-    return {"from": from_label, "to": to_label, "range": _sum(in_range), "all_time": _sum(all_lines)}
+    return {"from": from_label, "to": to_label, "range": _sum(in_range), "all_time": _sum(all_lines),
+            # The agent's own ACA tier standing for the week in progress.
+            "week": pay_rules.week_status(db, tenant_id, agent.id)}
 
 
 @router.get("/deals/my-today")
@@ -1131,6 +1238,7 @@ def my_deals_today(
     t_aca = sum(1 for d in approved if (d.aca_count or 0) > 0)
     t_dental = sum(1 for d in approved if (d.dental_count or 0) > 0)
     t_vision = sum(1 for d in approved if (d.vision_count or 0) > 0)
+    t_ancillary = sum(1 for d in approved if (d.ancillary_count or 0) > 0)
     t_dv = sum(1 for d in approved if (d.dental_count or 0) > 0 or (d.vision_count or 0) > 0)
     # What the agent earned on each approved deal (their own pay only).
     from app.expenses.services import sale_pay_lines
@@ -1148,7 +1256,8 @@ def my_deals_today(
         "aca_count": d.aca_count or 0,
         "dental_count": d.dental_count or 0,
         "vision_count": d.vision_count or 0,
-        "total": (d.aca_count or 0) + (d.dental_count or 0) + (d.vision_count or 0),
+        "ancillary_count": d.ancillary_count or 0,
+        "total": (d.aca_count or 0) + (d.dental_count or 0) + (d.vision_count or 0) + (d.ancillary_count or 0),
         "status": d.status,
         "approval_decision": d.approval_decision,
         "created_at": d.created_at.isoformat() if d.created_at else None,
@@ -1162,6 +1271,7 @@ def my_deals_today(
             "total_aca": t_aca,
             "total_dental": t_dental,
             "total_vision": t_vision,
+            "total_ancillary": t_ancillary,
             "total_dental_vision": t_dv,
         },
         "deals": items,
@@ -1201,12 +1311,14 @@ def all_deals_today(
     agent_ids = {d.agent_id for d in deals if d.agent_id}
     name_map = {}
     if agent_ids:
-        for aid, fn, ln in (
-            db.query(Agent.id, User.first_name, User.last_name)
+        for aid, fn, ln, st, deleted in (
+            db.query(Agent.id, User.first_name, User.last_name, User.status, User.deleted_at)
             .join(User, Agent.user_id == User.id)
             .filter(Agent.id.in_(agent_ids)).all()
         ):
-            name_map[aid] = (f"{fn or ''} {ln or ''}".strip() or "Unknown agent")
+            # History stays: a disabled agent's deals remain, labelled.
+            name_map[aid] = labelled(f"{fn or ''} {ln or ''}".strip() or "Unknown agent",
+                                     st == "active" and deleted is None)
 
     # Resolve recording_id -> filename (one query, no N+1) so the admin All Deals
     # table can offer a per-deal download/play of the call recording.
@@ -1241,6 +1353,7 @@ def all_deals_today(
     t_aca = sum(1 for d in approved if (d.aca_count or 0) > 0)
     t_dental = sum(1 for d in approved if (d.dental_count or 0) > 0)
     t_vision = sum(1 for d in approved if (d.vision_count or 0) > 0)
+    t_ancillary = sum(1 for d in approved if (d.ancillary_count or 0) > 0)
     t_dv = sum(1 for d in approved if (d.dental_count or 0) > 0 or (d.vision_count or 0) > 0)
     # Commission = the per-sale pay each approved deal earns its agent (the same
     # lines Expenses -> Agent Pay sums, so the two pages can never disagree).
@@ -1268,7 +1381,8 @@ def all_deals_today(
         "aca_count": d.aca_count or 0,
         "dental_count": d.dental_count or 0,
         "vision_count": d.vision_count or 0,
-        "total": (d.aca_count or 0) + (d.dental_count or 0) + (d.vision_count or 0),
+        "ancillary_count": d.ancillary_count or 0,
+        "total": (d.aca_count or 0) + (d.dental_count or 0) + (d.vision_count or 0) + (d.ancillary_count or 0),
         "status": d.status,
         "approval_decision": d.approval_decision,
         "recording_id": str(d.recording_id) if d.recording_id else None,
@@ -1287,9 +1401,12 @@ def all_deals_today(
             "total_aca": t_aca,
             "total_dental": t_dental,
             "total_vision": t_vision,
+            "total_ancillary": t_ancillary,
             "total_dental_vision": t_dv,
             "agent_count": len(agent_ids),
             "deal_count": len(approved),
+            "trash_count": (db.query(Deal).execution_options(**{INCLUDE_TRASHED: True})
+                            .filter(Deal.tenant_id == tenant_id, Deal.trashed_at.isnot(None)).count()),
             "total_eap": sum(1 for d in approved if (d.deal_source or "") == "eap"),
             "commission_cents": sum(l.cents for l in pay_lines),
             # Approved sales no sale rate covers yet — they count but pay $0.
@@ -1361,8 +1478,11 @@ def deals_leaderboard(
         ):
             name_map[aid] = (f"{fn or ''} {ln or ''}".strip() or "Unknown agent")
 
+    # A ranking is of the CURRENT team: disabled agents drop off the board (and
+    # out of its totals); their deals stay on All Deals.
+    gone = disabled_agent_ids(db, tenant_id)
     board = []
-    for aid in (set(name_map) | set(sums)):
+    for aid in (set(name_map) | set(sums)) - gone:
         s = sums.get(aid, {"aca": 0, "dental": 0, "vision": 0, "dv": 0, "deals": 0})
         board.append({
             "agent_id": str(aid),

@@ -69,6 +69,8 @@ h1{font-size:1.625rem;letter-spacing:-.015em;color:var(--strong);font-weight:700
 .ds-earn .ds-num{font-size:2.4rem}
 .ds-earn .ds-all{margin-top:10px;padding-top:10px;border-top:1px solid var(--border);font-size:.8125rem;color:var(--muted);display:flex;justify-content:space-between;gap:10px}
 .ds-earn .ds-all b{color:var(--strong);font-weight:800;font-variant-numeric:tabular-nums}
+.ds-earn .ds-tier{font-weight:700;color:var(--strong)}
+html[data-mode="dark"] .ds-earn .ds-tier{color:#E8EAEE}
 .ds-earn .ds-sub{font-size:.75rem;color:var(--muted);margin-top:6px;font-variant-numeric:tabular-nums}
 .ds-card{display:flex;flex-direction:column;justify-content:center;padding:20px 24px;border-radius:16px;background:rgba(255,255,255,0.78);border:1px solid rgba(255,255,255,0.72);box-shadow:0 1px 2px rgba(26,31,42,0.04),0 6px 18px rgba(var(--accent-hover-rgb),0.07)}
 .ds-label{font-size:.875rem;color:var(--muted);font-weight:600}
@@ -77,12 +79,13 @@ h1{font-size:1.625rem;letter-spacing:-.015em;color:var(--strong);font-weight:700
 .ds-bar{display:flex;height:26px;border-radius:8px;overflow:hidden;background:rgba(26,31,42,0.06)}
 .ds-bar .seg{height:100%;transition:width .4s ease}
 .ds-bar .seg.aca{background:#E0A92E}
+.ds-bar .seg.ancillary{background:#C7902A}
 .ds-bar .seg.dental{background:#F0C879}
 .ds-bar .seg.vision{background:#F6E6C8}
 .ds-legend{display:flex;flex-wrap:wrap;gap:26px}
 .ds-leg{display:inline-flex;align-items:center;gap:8px;font-size:.875rem;color:var(--text)}
 .ds-dot{width:11px;height:11px;border-radius:3px;flex-shrink:0}
-.ds-dot.aca{background:#E0A92E}.ds-dot.dental{background:#F0C879}.ds-dot.vision{background:#F6E6C8}
+.ds-dot.aca{background:#E0A92E}.ds-dot.ancillary{background:#C7902A}.ds-dot.dental{background:#F0C879}.ds-dot.vision{background:#F6E6C8}
 .ds-leg b{font-weight:800;color:var(--strong);font-variant-numeric:tabular-nums;margin-left:1px}
 @media(max-width:760px){.deal-summary{grid-template-columns:1fr}}
 .panel{overflow:hidden;margin-bottom:16px}.panel-head{padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:12px}.panel-title{font-weight:700;color:var(--strong)}
@@ -301,11 +304,13 @@ html[data-mode="dark"] #recPlayer{background:#1C2029;border-color:rgba(255,255,2
     <div class="ds-card bar-card">
       <div class="ds-bar" id="dsBar">
         <span class="seg aca" style="width:0%"></span>
+        <span class="seg ancillary" style="width:0%"></span>
         <span class="seg dental" style="width:0%"></span>
         <span class="seg vision" style="width:0%"></span>
       </div>
       <div class="ds-legend">
         <span class="ds-leg"><span class="ds-dot aca"></span>ACA <b id="dsAca">0</b></span>
+        <span class="ds-leg"><span class="ds-dot ancillary"></span>Ancillary <b id="dsAnc">0</b></span>
         <span class="ds-leg"><span class="ds-dot dental"></span>Dental <b id="dsDental">0</b></span>
         <span class="ds-leg"><span class="ds-dot vision"></span>Vision <b id="dsVision">0</b></span>
       </div>
@@ -314,6 +319,7 @@ html[data-mode="dark"] #recPlayer{background:#1C2029;border-color:rgba(255,255,2
       <div class="ds-label" id="erLabel">You earned</div>
       <div class="ds-num" id="erRange">$0.00</div>
       <div class="ds-sub" id="erRangeSub">0 approved sales</div>
+      <div class="ds-sub ds-tier" id="erTier" hidden></div>
       <div class="ds-all"><span>All time</span><span><b id="erAll">$0.00</b> · <span id="erAllSales">0</span> sales</span></div>
     </div>
   </div>
@@ -353,6 +359,7 @@ html[data-mode="dark"] #recPlayer{background:#1C2029;border-color:rgba(255,255,2
                 <select class="filter-sel" id="fCoverage">
                   <option value="">All coverage</option>
                   <option value="aca">Has ACA</option>
+                  <option value="ancillary">Has Ancillary</option>
                   <option value="dental">Has Dental</option>
                   <option value="vision">Has Vision</option>
                 </select>
@@ -460,11 +467,11 @@ html[data-mode="dark"] #recPlayer{background:#1C2029;border-color:rgba(255,255,2
   // Coverage cell: total count on top, then a pill per present coverage type
   // (ACA / Dental / Vision). When a type has more than 1, the count is shown in the pill.
   function covCell(d){
-    var aca=d.aca_count||0, dental=d.dental_count||0, vision=d.vision_count||0;
-    var total = (d.total!=null) ? d.total : (aca+dental+vision);
+    var aca=d.aca_count||0, dental=d.dental_count||0, vision=d.vision_count||0, anc=d.ancillary_count||0;
+    var total = (d.total!=null) ? d.total : (aca+dental+vision+anc);
     var pills=[];
     function pill(label,n){ if(n>0) pills.push('<span class="cov-pill">'+label+(n>1?' ('+n+')':'')+'</span>'); }
-    pill('ACA',aca); pill('Dental',dental); pill('Vision',vision);
+    pill('ACA',aca); pill('Ancillary',anc); pill('Dental',dental); pill('Vision',vision);
     var body = pills.length ? '<div class="cov-pills">'+pills.join('')+'</div>' : '<span class="muted">—</span>';
     return '<div class="cov-total muted">'+total+' total</div>'+body;
   }
@@ -553,18 +560,20 @@ html[data-mode="dark"] #recPlayer{background:#1C2029;border-color:rgba(255,255,2
 
   // Summary band: total deal count (whole team, this period) + ACA/Dental/Vision split.
   function updateSummary(){
-    var aca=0, dental=0, vision=0;
-    DEALS.forEach(function(d){ aca+=(d.aca_count||0); dental+=(d.dental_count||0); vision+=(d.vision_count||0); });
-    var tot = aca+dental+vision || 1;
+    var aca=0, dental=0, vision=0, anc=0;
+    DEALS.forEach(function(d){ aca+=(d.aca_count||0); dental+=(d.dental_count||0); vision+=(d.vision_count||0); anc+=(d.ancillary_count||0); });
+    var tot = aca+dental+vision+anc || 1;
     var st=$('#dsTotal'); if(st) st.textContent = DEALS.length;
     var ea=$('#dsAca'); if(ea) ea.textContent = aca;
+    var en=$('#dsAnc'); if(en) en.textContent = anc;
     var ed=$('#dsDental'); if(ed) ed.textContent = dental;
     var ev=$('#dsVision'); if(ev) ev.textContent = vision;
     var bar=$('#dsBar');
     if(bar){
       bar.children[0].style.width = (aca/tot*100)+'%';
-      bar.children[1].style.width = (dental/tot*100)+'%';
-      bar.children[2].style.width = (vision/tot*100)+'%';
+      bar.children[1].style.width = (anc/tot*100)+'%';
+      bar.children[2].style.width = (dental/tot*100)+'%';
+      bar.children[3].style.width = (vision/tot*100)+'%';
     }
   }
 
@@ -588,6 +597,7 @@ html[data-mode="dark"] #recPlayer{background:#1C2029;border-color:rgba(255,255,2
       if(FILTERS.state && (d.state||'') !== FILTERS.state) return false;
       if(FILTERS.status && (d.status||'').toLowerCase() !== FILTERS.status) return false;
       if(FILTERS.coverage==='aca' && !((d.aca_count||0)>0)) return false;
+      if(FILTERS.coverage==='ancillary' && !((d.ancillary_count||0)>0)) return false;
       if(FILTERS.coverage==='dental' && !((d.dental_count||0)>0)) return false;
       if(FILTERS.coverage==='vision' && !((d.vision_count||0)>0)) return false;
       if(FILTERS.rec==='rec' && !d.recording_id) return false;
@@ -693,6 +703,7 @@ html[data-mode="dark"] #recPlayer{background:#1C2029;border-color:rgba(255,255,2
       ['Premium', fmtMoney(d.premium)],
       ['You earned', d.earned_cents==null ? '— (not approved)' : fmtCents(d.earned_cents)],
       ['ACA policies', d.aca_count||0],
+      ['Ancillary policies', d.ancillary_count||0],
       ['Dental policies', d.dental_count||0],
       ['Vision policies', d.vision_count||0],
       ['Total deals', d.total||0],
@@ -776,6 +787,15 @@ html[data-mode="dark"] #recPlayer{background:#1C2029;border-color:rgba(255,255,2
       $('#erRange').textContent = fmtCents(rg.cents);
       $('#erRangeSub').textContent = (rg.sales||0)+' approved sale'+((rg.sales||0)===1?'':'s')+' in this range';
       $('#erAll').textContent = fmtCents(all.cents);
+      // This week's ACA tier: the count resets every Monday, and reaching the
+      // next tier reprices every ACA commission already made this week.
+      var wk = e && e.week, et = $('#erTier');
+      if(et){
+        et.hidden = !wk;
+        if(wk) et.textContent = 'Tier '+wk.tier+' · '+fmtCents(wk.rate_cents).replace(/\.00$/,'')+' per ACA · '
+          + wk.commissions+' this week'
+          + (wk.exception ? ' · tier set by admin' : (wk.to_next!=null ? ' · '+wk.to_next+' more to Tier '+wk.next_tier : ''));
+      }
       $('#erAllSales').textContent = (all.sales||0);
     }catch(_){ /* non-fatal: deals still render without the earnings card */ }
   }

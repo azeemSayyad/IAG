@@ -463,9 +463,11 @@ async def submit_deal_with_approval(
     recording_ids: Optional[list] = None,
     consent_form_ids: Optional[list] = None,
     deal_source: Optional[str] = None,
+    application_id: Optional[UUID] = None,
 ) -> tuple[Deal, DealApprovalLog]:
     from decimal import Decimal
     products_json = None
+    ancillary_count = 0
     if products:
         # Multi-product (per-person) mode: compliance is checked for EACH product's
         # carrier; the person's deal is approved only if every product passes. The
@@ -496,6 +498,7 @@ async def submit_deal_with_approval(
         aca_count = 1 if "aca" in names else 0
         dental_count = 1 if "dental" in names else 0
         vision_count = 1 if "vision" in names else 0
+        ancillary_count = 1 if "ancillary" in names else 0
         # Primary product (ACA first) fills the dashboards' single carrier column;
         # premium is the person's total across their products.
         primary = next((p for p in products if (p.get("product") or "").strip().lower() == "aca"), products[0])
@@ -543,6 +546,8 @@ async def submit_deal_with_approval(
         aca_count=max(0, aca_count or 0),
         dental_count=max(0, dental_count or 0),
         vision_count=max(0, vision_count or 0),
+        ancillary_count=ancillary_count,
+        application_id=application_id,
         products=products_json,
         recording_id=_primary_rec,
         recording_ids=([str(r) for r in _rec_ids] or None),

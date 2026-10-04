@@ -13,6 +13,7 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from app.core.active_agents import disabled_agent_ids
 from app.models.agent import Agent
 from app.models.appointment import Appointment
 from app.models.compliance import Deal
@@ -84,6 +85,8 @@ def get_overview(db: Session, tenant_id: str, from_iso: str | None = None, to_is
         .group_by(Deal.agent_id)
         .all()
     )
+    # The agent ranking / donut is the CURRENT team — disabled agents drop out.
+    gone = disabled_agent_ids(db, tenant_id)
     agents = [
         {
             "agent_name": agent_names.get(str(aid), "Unassigned"),
@@ -91,6 +94,7 @@ def get_overview(db: Session, tenant_id: str, from_iso: str | None = None, to_is
             "members": int(mem or 0),
         }
         for aid, cnt, mem in agent_rows
+        if aid not in gone
     ]
     agents.sort(key=lambda x: (x["members"], x["deals"]), reverse=True)
 

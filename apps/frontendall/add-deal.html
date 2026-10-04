@@ -52,6 +52,9 @@
   .prod-head input{width:18px;height:18px;accent-color:#16A34A;cursor:pointer}
   .prod-name{font-weight:700;color:#0F172A;font-size:.92rem}
   .prod-sub{font-size:.78rem;color:#64748B;margin-left:auto}
+  /* NEW tag — shown beside a product for NEW_DAYS after its `added` date, then gone */
+  .prod-new{display:inline-flex;align-items:center;padding:2px 8px;border-radius:6px;background:rgba(var(--accent-rgb),.12);color:var(--accent);font-size:.62rem;font-weight:800;letter-spacing:.06em}
+  html[data-mode="dark"] .prod-new{background:rgba(255,255,255,.12);color:#C9D6FF}
   .prod-body{display:none;grid-template-columns:repeat(2,1fr);gap:12px;padding:0 14px 16px}
   .prod.on .prod-body{display:grid}
   .prod.on{background:rgba(22,163,74,.04);border-color:rgba(22,163,74,.25)}
@@ -234,7 +237,21 @@
 (function(){
   const $ = (s,r=document)=>r.querySelector(s);
   const $$ = (s,r=document)=>Array.from(r.querySelectorAll(s));
-  const PRODUCTS = ['ACA','Dental','Vision'];
+  // Every product on the form, in display order. `added` is the day a product was
+  // introduced: it carries a NEW tag for NEW_DAYS after that date and the tag then
+  // disappears on its own. A future product only needs a row here (with its date).
+  const PRODUCT_LIST = [
+    { name:'ACA' },
+    { name:'Ancillary', added:'2026-10-04' },
+    { name:'Dental' },
+    { name:'Vision' }
+  ];
+  const NEW_DAYS = 30;
+  function isNewProduct(p){
+    if(!p.added) return false;
+    const days = (Date.now() - new Date(p.added+'T00:00:00').getTime()) / 86400000;
+    return days >= 0 && days < NEW_DAYS;
+  }
   const HH_FIELDS = ['phone','address','apartment','city','zip'];   // household fields shared across persons (Person 1 -> all, editable)
   const wrap = $('#peopleWrap');
 
@@ -264,11 +281,13 @@
 
   function buildProducts(card){
     const host = card.querySelector('.prods');
-    PRODUCTS.forEach(name=>{
+    PRODUCT_LIST.forEach(prod=>{
+      const name = prod.name;
       const node = $('#prodTpl').content.firstElementChild.cloneNode(true);
       node.querySelector('.prod-name').textContent = name;
+      if(isNewProduct(prod)) node.querySelector('.prod-name').insertAdjacentHTML('afterend','<span class="prod-new">NEW</span>');
       const cb = node.querySelector('input[data-prod]'); cb.dataset.prod = name;
-      // Dental / Vision are just a "sold" yes/no checkbox — no plan fields at all.
+      // Ancillary / Dental / Vision are just a "sold" yes/no checkbox — no plan fields at all.
       // ACA keeps Carrier + Plan type.
       if(name !== 'ACA'){ const body = node.querySelector('.prod-body'); if(body) body.remove(); }
       node.querySelector('.prod-head').addEventListener('click', (e)=>{
@@ -748,10 +767,14 @@
     try{ agentId = await resolveAgent(); }
     catch(e){ flash(e.message); btn.innerHTML=_logHTML; btn.disabled=false; return; }
 
+    // One id for the whole submission: pay rules count commissions per APPLICATION
+    // (everyone logged together), not per person.
+    const applicationId = (window.crypto && crypto.randomUUID) ? crypto.randomUUID()
+      : 'xxxxxxxx-xxxx-4xxx-8xxx-xxxxxxxxxxxx'.replace(/x/g, ()=>Math.floor(Math.random()*16).toString(16));
     const rows=[];
     for(let i=0;i<people.length;i++){
       const p=people[i];
-      const body={ agent_id:agentId, customer_name:[p.first,p.last].filter(Boolean).join(' '),
+      const body={ agent_id:agentId, application_id:applicationId, customer_name:[p.first,p.last].filter(Boolean).join(' '),
         customer_phone:p.phone||'', customer_dob:p.dob||null,
         customer_address:[p.address, p.apartment].filter(Boolean).join(', ')||null, customer_city:p.city||null,
         customer_zip:p.zip||null, customer_gender:p.gender||null,

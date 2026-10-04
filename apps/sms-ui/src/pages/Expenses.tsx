@@ -4,7 +4,8 @@
  *   Overview   headline spend, period delta, monthly run-rate, trend + category split
  *   Ledger     every dated charge — add, edit, void
  *   Recurring  standing commitments (Railway, salaries) and posting them
- *   Agents     hourly rate per agent + logging hours, which prices into the ledger
+ *   Agents     company pay rules (automatic per-sale pay) + each agent's pay plan,
+ *              hourly rate per agent + logging hours, which prices into the ledger
  *   Audit      every change, from the app's existing audit_logs
  *
  * Money is integer CENTS end to end (see app/models/expense.py). This file is the
@@ -54,13 +55,33 @@ type SaleRate = {
   effective_at: string; note: string | null;
 };
 type AgentRow = {
-  agent_id: string; agent_name: string;
+  agent_id: string; agent_name: string; role?: string;
   current_rate_cents: number | null; rate_effective_from: string | null;
   hours: string; cost_cents: number;
   // Per-sale pay: derived from APPROVED deals, each at the rate in force when sold.
   sale_rate: SaleRate | null; sales: number; sale_pay_cents: number;
   // Approved sales no sale rate covered when they were logged — they pay $0.
   unrated_sales?: number;
+  // This week under the company pay rules.
+  week_commissions?: number; aca_tier?: number; aca_rate_cents?: number; exception?: boolean;
+};
+type PayTier = { min: number; cents: number };
+type PayRuleSet = {
+  aca_tiers: PayTier[]; work_days: number;
+  dental_small_cents: number; dental_large_cents: number; dental_large_min: number;
+  ancillary_cents: number; vision_cents: number | null;   // null = not offered yet
+  per_member_carriers: string[];                          // carrier keys counted per member
+};
+type PayRulesResp = { rules: PayRuleSet; starts_on: string; updated_at: string; carriers: string[] };
+type PayWeekStatus = {
+  week_start: string; commissions: number; auto_tier: number; tier: number; rate_cents: number;
+  exception: boolean; aca_cents: number; other_cents: number;
+  next_tier: number | null; next_at: number | null; next_rate_cents: number | null; to_next: number | null;
+};
+type PayPlan = {
+  agent_id: string; agent_name: string; rules: PayRuleSet; week: PayWeekStatus;
+  exception: { id: string; tier: number; ends_on: string | null; reason: string } | null;
+  history: (PayWeekStatus & { current: boolean })[];
 };
 type Summary = {
   range: { from: string; to: string };
@@ -503,7 +524,7 @@ function Overview({ sum, from, to, onSetRates }: {
             {!!sum.agent_unrated_sales && (
               <button type="button" onClick={onSetRates}
                       className="mt-1 block text-left font-bold text-danger underline decoration-dotted underline-offset-2">
-                {sum.agent_unrated_sales} with no sale rate — set rates
+                {sum.agent_unrated_sales} logged before the pay rules started — see pay rules
               </button>
             )}
           </>}
@@ -980,28 +1001,16 @@ function Agents({ rows, entries, busy, mutate, defaultDate, catById }: {
   // it drives the rate-in-force preview so the drawer prices a line exactly the
   // way the server will, instead of guessing with today's rate.
   const [history, setHistory] = useState<RateRow[]>([]);
-  // Per-sale rates drawer (ACA / Dental / Vision). Effective from now, unless the
-  // owner picks an earlier day so sales already logged get paid too.
-  const [saleFor, setSaleFor] = useState<AgentRow | null>(null);
-  const [saleAca, setSaleAca] = useState("");
-  const [saleDental, setSaleDental] = useState("");
-  const [saleVision, setSaleVision] = useState("");
-  const [saleNote, setSaleNote] = useState("");
-  const [saleFrom, setSaleFrom] = useState("");   // "" = from now; else an Eastern day (YYYY-MM-DD)
-  // One amount for every product — the ACA box drives Dental + Vision.
-  const [saleSame, setSaleSame] = useState(false);
-  const [saleHistory, setSaleHistory] = useState<SaleRate[]>([]);
+  // Per-sale pay is automatic (company pay rules); the drawer shows one agent's
+  // plan and is where an exception is set.
+  const [planFor, setPlanFor] = useState<AgentRow | null>(null);
+  const [payRules, setPayRules] = useState<PayRulesResp | null>(null);
+  const loadRules = useCallback(() => {
+    api<PayRulesResp>("/expenses/pay-rules").then(setPayRules).catch(() => {});
+  }, []);
+  useEffect(() => { loadRules(); }, [loadRules]);
 
   useEffect(() => { setWorkDate(defaultDate); }, [defaultDate]);
-
-  useEffect(() => {
-    if (!saleFor) { setSaleHistory([]); return; }
-    let live = true;
-    api<SaleRate[]>(`/expenses/agents/${saleFor.agent_id}/sale-rates`)
-      .then((r) => { if (live) setSaleHistory(Array.isArray(r) ? r : []); })
-      .catch(() => { if (live) setSaleHistory([]); });
-    return () => { live = false; };
-  }, [saleFor]);
 
   const openFor = rateFor || hoursFor;
   useEffect(() => {
@@ -1025,45 +1034,25 @@ function Agents({ rows, entries, busy, mutate, defaultDate, catById }: {
   const previewCost = priced ? Math.round(hoursNum * priced.rate_cents_per_hour) : 0;
   const closeRate = () => { setRateFor(null); setRate(""); setRateNote(""); };
   const closeHours = () => { setHoursFor(null); setHours(""); };
-  const closeSale = () => { setSaleFor(null); setSaleNote(""); setSaleFrom(""); };
-  const openSale = (r: AgentRow) => {
-    const cur = r.sale_rate;
-    const d = (c: number | undefined) => (cur ? ((c || 0) / 100).toFixed(2) : "");
-    setSaleFor(r);
-    setSaleAca(d(cur?.aca_cents)); setSaleDental(d(cur?.dental_cents)); setSaleVision(d(cur?.vision_cents));
-    setSaleSame(!cur || (cur.aca_cents === cur.dental_cents && cur.aca_cents === cur.vision_cents));
-    setSaleNote("");
-    setSaleFrom("");
-  };
-  const saleCents = saleSame
-    ? { aca: parseMoney(saleAca), dental: parseMoney(saleAca), vision: parseMoney(saleAca) }
-    : { aca: parseMoney(saleAca), dental: parseMoney(saleDental), vision: parseMoney(saleVision) };
-  // Re-saving the same amounts is only a no-op when it starts now; with an
-  // earlier start date it is how sales logged before the rate get paid.
-  const saleUnchanged = !saleFrom && !!saleFor?.sale_rate
-    && saleFor.sale_rate.aca_cents === saleCents.aca
-    && saleFor.sale_rate.dental_cents === saleCents.dental
-    && saleFor.sale_rate.vision_cents === saleCents.vision;
 
   // Finding someone is the whole job on this tab: an agent is already listed the
   // moment they exist, so "putting them on hourly pay" just means locating their
   // row and setting a rate. Search by name + a payroll filter do that.
   const [q, setQ] = useState("");
-  const [only, setOnly] = useState<"all" | "paid" | "sale" | "norate">("all");
-
-  const onSalePay = (r: AgentRow) =>
-    !!r.sale_rate && (r.sale_rate.aca_cents + r.sale_rate.dental_cents + r.sale_rate.vision_cents) > 0;
-  const noRate = (r: AgentRow) => r.current_rate_cents == null && !onSalePay(r);
+  // Every user owns a profile (admins log their own deals too), but the pay table
+  // is about the sales team — so it opens on agents and "All users" is one click away.
+  const [only, setOnly] = useState<"agents" | "all" | "paid" | "exception">("agents");
+  const isAgent = (r: AgentRow) => r.role === "agent";
 
   const shown = rows.filter((r) => {
     if (q && !r.agent_name.toLowerCase().includes(q.trim().toLowerCase())) return false;
+    if (only === "agents" && !isAgent(r)) return false;
     if (only === "paid" && r.current_rate_cents == null) return false;
-    if (only === "sale" && !onSalePay(r)) return false;
-    if (only === "norate" && !noRate(r)) return false;
+    if (only === "exception" && !r.exception) return false;
     return true;
   });
-  const noRateCount = rows.filter(noRate).length;
-  const saleCount = rows.filter(onSalePay).length;
+  const exceptionCount = rows.filter((r) => r.exception).length;
+  const agentCount = rows.filter(isAgent).length;
   const unratedSales = rows.reduce((n, r) => n + (r.unrated_sales || 0), 0);
 
   const hourLines = entries.filter((e) => e.agent_id && !e.voided_at);
@@ -1071,13 +1060,22 @@ function Agents({ rows, entries, busy, mutate, defaultDate, catById }: {
 
   return (
     <div className="space-y-4">
+      <CompanyPayRules
+        data={payRules} busy={busy}
+        onSave={(rules, startsOn) => {
+          let ok = false;
+          return mutate(async () => {
+            await api("/expenses/pay-rules", { method: "PUT", body: JSON.stringify({ rules, starts_on: startsOn }) });
+            ok = true;
+          }).then(() => { if (ok) loadRules(); return ok; });
+        }}
+      />
       <Panel
         title="Agent pay"
         sub={
           `${money(totalCost)} in this window · showing ${shown.length} of ${rows.length}` +
-          (noRateCount ? ` · ${noRateCount} with no hourly or per-sale rate yet` : "") +
           (unratedSales
-            ? ` · ${unratedSales} approved ${unratedSales === 1 ? "sale has" : "sales have"} no sale rate (paying $0) — open Sale rates to fix`
+            ? ` · ${unratedSales} approved ${unratedSales === 1 ? "sale was" : "sales were"} logged before the pay rules started (paying $0) — move the start date in Edit rules`
             : "")
         }
         right={
@@ -1099,10 +1097,10 @@ function Agents({ rows, entries, busy, mutate, defaultDate, catById }: {
               )}
             </div>
             {([
-              ["all", `All ${rows.length}`],
+              ["agents", `All agents ${agentCount}`],
+              ["all", `All users ${rows.length}`],
               ["paid", "On hourly pay"],
-              ["sale", `On sale pay ${saleCount}`],
-              ["norate", `Needs a rate ${noRateCount}`],
+              ["exception", `Tier exceptions ${exceptionCount}`],
             ] as const).map(([k, label]) => (
               <button
                 key={k}
@@ -1121,14 +1119,14 @@ function Agents({ rows, entries, busy, mutate, defaultDate, catById }: {
           <Empty>
             No agent matches {q ? <>“{q}”</> : "this filter"}.{" "}
             <button className="font-semibold text-accent underline"
-                    onClick={() => { setQ(""); setOnly("all"); }}>Show all {rows.length}</button>
+                    onClick={() => { setQ(""); setOnly("all"); }}>Show all {rows.length} users</button>
           </Empty>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full min-w-[980px] text-left text-xs">
               <thead className="text-ink-faint">
                 <tr className="border-b border-hairline-soft">
-                  <Th>Agent</Th><Th>Hourly rate</Th><Th>Per-sale rate</Th>
+                  <Th>Agent</Th><Th>Hourly rate</Th><Th>ACA tier this week</Th>
                   <Th className="text-right">Hours</Th><Th className="text-right">Hour pay</Th>
                   <Th className="text-right">Sales</Th><Th className="text-right">Sale pay</Th>
                   <Th className="text-right">Total</Th>
@@ -1146,16 +1144,16 @@ function Agents({ rows, entries, busy, mutate, defaultDate, catById }: {
                           <span className="text-ink-faint"> from {r.rate_effective_from}</span>
                         </span>
                       ) : (
-                        <span className="font-semibold text-danger">No rate set</span>
+                        <span className="text-ink-faint">Not hourly</span>
                       )}
                     </Td>
                     <Td>
-                      {onSalePay(r) && r.sale_rate ? (
-                        <span className="tabular-nums" title={`Since ${new Date(r.sale_rate.effective_at).toLocaleString()}`}>
-                          ACA {money(r.sale_rate.aca_cents)} · Den {money(r.sale_rate.dental_cents)} · Vis {money(r.sale_rate.vision_cents)}
-                        </span>
-                      ) : (
-                        <span className="text-ink-faint">Not set</span>
+                      <span className="tabular-nums">
+                        <strong className="text-ink">Tier {r.aca_tier ?? 1}</strong> · {dollars(r.aca_rate_cents)}
+                        <span className="text-ink-faint"> · {r.week_commissions ?? 0} this week</span>
+                      </span>
+                      {r.exception && (
+                        <span className="ml-1.5 rounded bg-amber-500/15 px-1.5 py-0.5 text-[0.6rem] font-bold uppercase text-amber-800 dark:text-amber-300">Exception</span>
                       )}
                     </Td>
                     <Td className="text-right tabular-nums">{Number(r.hours || 0).toLocaleString()}</Td>
@@ -1164,7 +1162,7 @@ function Agents({ rows, entries, busy, mutate, defaultDate, catById }: {
                       {(r.sales || 0).toLocaleString()}
                       {!!r.unrated_sales && (
                         <span className="block text-[0.65rem] font-bold text-danger"
-                              title="Logged before a sale rate covered them, so they pay $0. Open Sale rates and start the rate from an earlier date.">
+                              title="Logged before the pay rules started and with no per-agent rate, so they pay $0. Move the rules' start date earlier in Edit rules.">
                           {r.unrated_sales} no rate
                         </span>
                       )}
@@ -1177,8 +1175,8 @@ function Agents({ rows, entries, busy, mutate, defaultDate, catById }: {
                         setRate(r.current_rate_cents != null ? (r.current_rate_cents / 100).toFixed(2) : "");
                         setRateFrom(todayISO());
                         setRateNote("");
-                      }}>Set rate</button>{" "}
-                      <button className={btnGhost} onClick={() => openSale(r)}>Sale rates</button>{" "}
+                      }}>Hourly rate</button>{" "}
+                      <button className={btnGhost} onClick={() => setPlanFor(r)}>Pay plan</button>{" "}
                       <button className={btnCls} disabled={busy || r.current_rate_cents == null}
                               title={r.current_rate_cents == null ? "Set an hourly rate first" : "Log hours worked"}
                               onClick={() => { setHoursFor(r); setHours(""); }}
@@ -1325,123 +1323,8 @@ function Agents({ rows, entries, busy, mutate, defaultDate, catById }: {
         )}
       </Drawer>
 
-      {/* ── Per-sale rates ────────────────────────────────────────────────── */}
-      <Drawer
-        open={!!saleFor}
-        title="Set per-sale rates"
-        sub={saleFor ? (
-          <span className="inline-flex flex-wrap items-center gap-1.5">
-            <SubjectChip name={saleFor.agent_name} color="#C026D3" />
-            <span>paid for every approved sale</span>
-          </span>
-        ) : ""}
-        icon="🏷️"
-        tone="#C026D3"
-        onClose={closeSale}
-        footer={
-          <>
-            <button className={btnGhost} onClick={closeSale}>Cancel</button>
-            <button className={btnCls} disabled={busy || saleUnchanged} onClick={() => {
-              if (!saleFor) return;
-              mutate(() => api(`/expenses/agents/${saleFor.agent_id}/sale-rates`, {
-                method: "PUT",
-                body: JSON.stringify({
-                  aca_cents: saleCents.aca, dental_cents: saleCents.dental, vision_cents: saleCents.vision,
-                  note: saleNote.trim() || null,
-                  effective_on: saleFrom || null,
-                }),
-              })).then(closeSale);
-            }}>
-              {busy ? "Saving…" : "Save rates"}
-            </button>
-          </>
-        }
-      >
-        <label className="flex cursor-pointer items-center gap-2 text-xs font-semibold text-ink">
-          <input type="checkbox" className="h-4 w-4 accent-accent" checked={saleSame}
-                 onChange={(e) => {
-                   setSaleSame(e.target.checked);
-                   if (!e.target.checked) { setSaleDental(saleAca); setSaleVision(saleAca); }
-                 }} />
-          Same rate for ACA, Dental &amp; Vision
-        </label>
-        <div className="grid grid-cols-3 gap-3">
-          {([
-            ["ACA", saleAca, setSaleAca],
-            ["Dental", saleSame ? saleAca : saleDental, setSaleDental],
-            ["Vision", saleSame ? saleAca : saleVision, setSaleVision],
-          ] as const).map(([label, v, set], i) => (
-            <Field key={label} label={saleSame && i === 0 ? "Every product, per sale" : `${label} per sale`}>
-              <div className="relative">
-                <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-bold text-ink-faint">$</span>
-                <input className={`${drawerCtl} pl-7 font-bold tabular-nums ${saleSame && i > 0 ? "opacity-50" : ""}`}
-                       inputMode="decimal" placeholder="0.00" value={v}
-                       disabled={saleSame && i > 0}
-                       onChange={(e) => set(numericInput(e.target.value))} />
-              </div>
-            </Field>
-          ))}
-        </div>
-        {!!saleFor?.unrated_sales && (
-          <div className="rounded-xl border border-danger/30 bg-danger/10 px-3 py-2.5 text-xs font-semibold text-danger">
-            {saleFor.unrated_sales} approved {saleFor.unrated_sales === 1 ? "sale" : "sales"} in this window
-            {saleFor.unrated_sales === 1 ? " was" : " were"} logged before any sale rate covered
-            {saleFor.unrated_sales === 1 ? " it" : " them"}, so {saleFor.unrated_sales === 1 ? "it pays" : "they pay"} $0.
-            Pick an earlier start date below to pay {saleFor.unrated_sales === 1 ? "it" : "them"}.
-          </div>
-        )}
-        <Field label="Pay these rates from">
-          <div className="grid grid-cols-2 gap-3">
-            <select className={drawerCtl} value={saleFrom ? "date" : "now"}
-                    onChange={(e) => setSaleFrom(e.target.value === "date" ? todayISO() : "")}>
-              <option value="now">Now — new sales only</option>
-              <option value="date">An earlier date…</option>
-            </select>
-            {saleFrom && (
-              <input className={drawerCtl} type="date" value={saleFrom} max={todayISO()}
-                     onChange={(e) => setSaleFrom(e.target.value || todayISO())} />
-            )}
-          </div>
-        </Field>
-        <div className="rounded-xl border border-hairline bg-black/5 px-3 py-2.5 text-xs text-ink-muted">
-          {!saleFrom ? (
-            <>Applies to <strong className="text-ink">approved</strong> sales logged from now on. A deal with
-            ACA + Dental pays both rates. Sales already logged keep the rate they were sold at, so a
-            change never raises or cuts past earnings.</>
-          ) : saleFor?.sale_rate && saleFrom <= etDay(saleFor.sale_rate.effective_at) ? (
-            <>Pays <strong className="text-ink">approved</strong> sales logged from the start of {saleFrom} (Eastern)
-            up to when the current rate began ({new Date(saleFor.sale_rate.effective_at).toLocaleString()}).
-            The current rate stays in force after that.</>
-          ) : (
-            <>Pays every <strong className="text-ink">approved</strong> sale logged from the start of {saleFrom} (Eastern)
-            onward at these rates — <strong className="text-ink">including sales already logged</strong> since
-            then. A deal with ACA + Dental pays both rates.</>
-          )}
-        </div>
-        <Field label="Note">
-          <input className={drawerCtl} placeholder="Optional — e.g. new commission plan"
-                 value={saleNote} onChange={(e) => setSaleNote(e.target.value)} />
-        </Field>
-
-        {saleHistory.length > 0 && (
-          <Field label="Rate history" plain>
-            <div className="divide-y divide-hairline-soft overflow-hidden rounded-xl border border-hairline">
-              {saleHistory.map((h, i) => (
-                <div key={h.id} className="flex items-center justify-between gap-3 px-3 py-2 text-xs">
-                  <span className="text-ink-muted">
-                    since {new Date(h.effective_at).toLocaleString()}
-                    {i === 0 && <span className="ml-2 text-[0.65rem] font-bold text-success">CURRENT</span>}
-                    {h.note && <span className="ml-2 text-ink-faint">· {h.note}</span>}
-                  </span>
-                  <strong className="tabular-nums text-ink">
-                    {money(h.aca_cents)} · {money(h.dental_cents)} · {money(h.vision_cents)}
-                  </strong>
-                </div>
-              ))}
-            </div>
-          </Field>
-        )}
-      </Drawer>
+      {/* ── Pay plan (tier, progress, exception) ──────────────────────────── */}
+      <PayPlanDrawer agent={planFor} busy={busy} mutate={mutate} onClose={() => setPlanFor(null)} />
 
       <Panel title="Hours logged" sub="Every agent line in this window, with the rate it was priced at.">
         {hourLines.length === 0 ? (
@@ -1489,6 +1372,8 @@ const RESOURCE_LABEL: Record<string, string> = {
   expense_category: "Category",
   agent_rate: "Agent rate",
   agent_sale_rate: "Per-sale rate",
+  pay_rules: "Pay rules",
+  pay_exception: "Tier exception",
 };
 const ACTION_COLOR: Record<string, string> = {
   create: "#059669", update: "#2563EB", post: "#C026D3", void: "#E11D48",
@@ -1499,6 +1384,422 @@ const ACTION_COLOR: Record<string, string> = {
  *  question; `{"unit_rate_cents":1200}` makes you decode it. Anything that
  *  doesn't match a known shape falls back to compact key: value pairs, never
  *  raw JSON. */
+/* ── Company pay rules + per-agent pay plan ──────────────────────────────── */
+/* One rule set pays every agent (see app/expenses/pay_rules.py). Nothing here
+ * computes pay — the server does; this only shows the rules and edits them. */
+
+// Carriers offered on the Log Sale form; the per-member picker also lists any
+// carrier the server has seen on a deal or that the rules already name.
+const FORM_CARRIERS = ["Health First", "Ambetter", "Oscar", "BCBS", "CareSource", "UHC", "WellPoint",
+  "Anthem", "Christus", "Select Health"];
+const carrierKey = (c: string) => c.trim().toLowerCase().split(/\s+/).join(" ");
+const dollars = (cents: number | null | undefined) => money(cents).replace(/\.00$/, "");
+
+/** "Under 16" / "16–25" / "26+" and "Up to 79" / "80–129" / "130+" for tier i. */
+function tierSpans(tiers: PayTier[], i: number, workDays: number) {
+  const wd = Math.max(workDays || 5, 1);
+  const lo = tiers[i].min, next = tiers[i + 1]?.min;
+  const dLo = Math.ceil(lo / wd), dNext = next != null ? Math.ceil(next / wd) : null;
+  return {
+    daily: i === 0 ? (dNext != null ? `Under ${dNext}` : "Any") : dNext != null ? `${dLo}–${dNext - 1}` : `${dLo}+`,
+    weekly: i === 0 ? (next != null ? `Up to ${next - 1}` : "Any") : next != null ? `${lo}–${next - 1}` : `${lo}+`,
+  };
+}
+
+function CompanyPayRules({ data, busy, onSave }: {
+  data: PayRulesResp | null; busy: boolean;
+  onSave: (rules: PayRuleSet, startsOn: string) => Promise<boolean>;
+}) {
+  const [open, setOpen] = useState(false);
+  const [tiers, setTiers] = useState<{ min: string; pay: string }[]>([]);
+  const [workDays, setWorkDays] = useState("5");
+  const [dSmall, setDSmall] = useState("");
+  const [dLarge, setDLarge] = useState("");
+  const [dMin, setDMin] = useState("3");
+  const [anc, setAnc] = useState("");
+  const [visionOn, setVisionOn] = useState(false);
+  const [vision, setVision] = useState("");
+  const [perMember, setPerMember] = useState<string[]>([]);
+  const [startsOn, setStartsOn] = useState("");
+
+  if (!data) return <Panel title="Company pay rules" sub="Loading…"><Empty>Loading the pay rules…</Empty></Panel>;
+  const r = data.rules;
+  const d2 = (c: number | null | undefined) => (c == null ? "" : (c / 100).toFixed(2));
+  const startEdit = () => {
+    setTiers(r.aca_tiers.map((t) => ({ min: String(t.min), pay: d2(t.cents) })));
+    setWorkDays(String(r.work_days)); setDSmall(d2(r.dental_small_cents)); setDLarge(d2(r.dental_large_cents));
+    setDMin(String(r.dental_large_min)); setAnc(d2(r.ancillary_cents));
+    setVisionOn(r.vision_cents != null); setVision(d2(r.vision_cents));
+    setPerMember(r.per_member_carriers); setStartsOn(data.starts_on);
+    setOpen(true);
+  };
+  // key -> display name; the FIRST spelling wins so "Anthem" is not replaced by
+  // the lowercase key the rules store.
+  const byKey = new Map<string, string>();
+  [...FORM_CARRIERS, ...data.carriers, ...r.per_member_carriers].forEach((c) => {
+    const k = carrierKey(c);
+    if (k && k !== "—" && !byKey.has(k)) byKey.set(k, c);
+  });
+  const carriers = Array.from(byKey.entries());
+  const perMemberNames = carriers.filter(([k]) => r.per_member_carriers.includes(k)).map(([, label]) => label);
+  const moneyInput = (v: string, set: (s: string) => void, disabled = false) => (
+    <div className="relative">
+      <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-bold text-ink-faint">$</span>
+      <input className={`${drawerCtl} pl-7 font-bold tabular-nums ${disabled ? "opacity-50" : ""}`} inputMode="decimal"
+             placeholder="0.00" value={v} disabled={disabled} onChange={(e) => set(numericInput(e.target.value))} />
+    </div>
+  );
+  const save = () => onSave({
+    aca_tiers: tiers.map((t, i) => ({ min: i === 0 ? 0 : parseInt(t.min, 10) || 0, cents: parseMoney(t.pay) })),
+    work_days: parseInt(workDays, 10) || 5,
+    dental_small_cents: parseMoney(dSmall), dental_large_cents: parseMoney(dLarge),
+    dental_large_min: parseInt(dMin, 10) || 3,
+    ancillary_cents: parseMoney(anc),
+    vision_cents: visionOn ? parseMoney(vision) : null,
+    per_member_carriers: perMember,
+  }, startsOn).then((ok) => { if (ok) setOpen(false); });
+
+  return (
+    <>
+      <Panel
+        title="Company pay rules"
+        sub="Applies to every agent automatically, including new ones"
+        right={<button className={btnGhost} onClick={startEdit}>Edit rules</button>}
+      >
+        <div className="grid gap-4 lg:grid-cols-2">
+          <div>
+            <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
+              <span className="text-sm font-bold text-ink">ACA — tiers by weekly total</span>
+              <span className="text-[0.7rem] text-ink-faint">Resets every Monday · weekend deals count</span>
+            </div>
+            <div className="overflow-hidden rounded-xl border border-hairline">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-black/5 text-[0.65rem] uppercase tracking-wide text-ink-faint">
+                  <tr><Th>Tier</Th><Th>Daily avg</Th><Th>Weekly total</Th><Th className="text-right">Per commission</Th></tr>
+                </thead>
+                <tbody>
+                  {r.aca_tiers.map((t, i) => {
+                    const s = tierSpans(r.aca_tiers, i, r.work_days);
+                    return (
+                      <tr key={i} className="border-t border-hairline-soft">
+                        <Td><span className="font-semibold text-ink">Tier {i + 1}</span></Td>
+                        <Td>{s.daily}</Td><Td>{s.weekly}</Td>
+                        <Td className="text-right font-extrabold tabular-nums text-ink">{dollars(t.cents)}</Td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            <p className="mt-2 text-[0.7rem] leading-relaxed text-ink-muted">
+              Daily average is based on a {r.work_days}-day week. When an agent unlocks a new tier, every ACA
+              commission that week is repriced at the new rate.{" "}
+              {perMemberNames.length ? <>{perMemberNames.join(", ")} {perMemberNames.length === 1 ? "counts" : "count"} each
+              member as a commission; </> : <>Every application counts as 1 commission; </>}
+              an application marked EAP always counts as 1.
+            </p>
+          </div>
+          <div className="space-y-3">
+            <div>
+              <div className="mb-1.5 flex items-baseline justify-between">
+                <span className="text-sm font-bold text-ink">Dental — by household size</span>
+                <span className="text-[0.7rem] text-ink-faint">Read from the sale</span>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="rounded-xl border border-hairline px-3 py-2">
+                  <div className="text-[0.7rem] text-ink-muted">
+                    {r.dental_large_min - 1 <= 1 ? "1 person" : `1–${r.dental_large_min - 1} people`}
+                  </div>
+                  <div className="text-lg font-extrabold tabular-nums text-ink">{dollars(r.dental_small_cents)}</div>
+                </div>
+                <div className="rounded-xl border border-hairline px-3 py-2">
+                  <div className="text-[0.7rem] text-ink-muted">Family of {r.dental_large_min}+</div>
+                  <div className="text-lg font-extrabold tabular-nums text-ink">{dollars(r.dental_large_cents)}</div>
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center justify-between rounded-xl border border-hairline px-3 py-2">
+              <div>
+                <div className="text-sm font-bold text-ink">Ancillaries</div>
+                <div className="text-[0.7rem] text-ink-muted">Flat rate on every sale, any household size</div>
+              </div>
+              <div className="text-lg font-extrabold tabular-nums text-ink">{dollars(r.ancillary_cents)}</div>
+            </div>
+            <div className={`flex items-center justify-between rounded-xl border px-3 py-2 ${
+              r.vision_cents == null ? "border-dashed border-hairline" : "border-hairline"}`}>
+              <div>
+                <div className="flex items-center gap-2 text-sm font-bold text-ink">
+                  Vision
+                  {r.vision_cents == null && (
+                    <span className="rounded bg-black/10 px-1.5 py-0.5 text-[0.6rem] font-bold uppercase tracking-wide text-ink-muted">Not offered yet</span>
+                  )}
+                </div>
+                <div className="text-[0.7rem] text-ink-muted">{r.vision_cents == null ? "No rate set" : "Per vision sale"}</div>
+              </div>
+              <div className="text-lg font-extrabold tabular-nums text-ink">{r.vision_cents == null ? "—" : dollars(r.vision_cents)}</div>
+            </div>
+            <div className="rounded-xl border border-accent/20 bg-accent/5 px-3 py-2 text-[0.7rem] leading-relaxed text-ink-muted">
+              <strong className="text-ink">How a deal pays.</strong> ACA at the agent’s tier + dental by household
+              + {dollars(r.ancillary_cents)} per ancillary. Pays approved sales logged from{" "}
+              <strong className="text-ink">{data.starts_on}</strong>; earlier sales keep their old per-agent rate.
+            </div>
+          </div>
+        </div>
+      </Panel>
+
+      <Drawer
+        open={open} title="Edit company pay rules" icon="📐" tone="#2563EB" onClose={() => setOpen(false)}
+        sub="One set of rules for every agent. Saving reprices the week in progress; weeks already closed never change."
+        footer={<>
+          <button className={btnGhost} onClick={() => setOpen(false)}>Cancel</button>
+          <button className={btnCls} disabled={busy} onClick={save}>{busy ? "Saving…" : "Save rules"}</button>
+        </>}
+      >
+        <Field label="ACA tiers — weekly total to unlock, and pay per commission" plain>
+          <div className="space-y-2">
+            {tiers.map((t, i) => (
+              <div key={i} className="grid grid-cols-[4.5rem_1fr_1fr_2rem] items-center gap-2">
+                <span className="text-xs font-bold text-ink">Tier {i + 1}</span>
+                <input className={`${drawerCtl} tabular-nums ${i === 0 ? "opacity-50" : ""}`} inputMode="numeric"
+                       aria-label={`Tier ${i + 1} weekly total`} disabled={i === 0} value={i === 0 ? "0" : t.min}
+                       onChange={(e) => setTiers(tiers.map((x, j) => j === i ? { ...x, min: e.target.value.replace(/\D/g, "") } : x))} />
+                {moneyInput(t.pay, (v) => setTiers(tiers.map((x, j) => j === i ? { ...x, pay: v } : x)))}
+                {i > 0 && i === tiers.length - 1 ? (
+                  <button className="text-ink-faint hover:text-danger" aria-label={`Remove tier ${i + 1}`}
+                          onClick={() => setTiers(tiers.slice(0, -1))}>×</button>
+                ) : <span />}
+              </div>
+            ))}
+            {tiers.length < 8 && (
+              <button className={btnGhost} onClick={() => setTiers([...tiers, { min: "", pay: "" }])}>+ Add a tier</button>
+            )}
+          </div>
+        </Field>
+        <Field label="Working days in a week" hint="Only used for the daily average shown beside each tier.">
+          <input className={drawerCtl} inputMode="numeric" value={workDays}
+                 onChange={(e) => setWorkDays(e.target.value.replace(/\D/g, ""))} />
+        </Field>
+        <div className="grid grid-cols-3 gap-3">
+          <Field label="Dental — small household">{moneyInput(dSmall, setDSmall)}</Field>
+          <Field label="Dental — large household">{moneyInput(dLarge, setDLarge)}</Field>
+          <Field label="Large starts at (people)">
+            <input className={drawerCtl} inputMode="numeric" value={dMin}
+                   onChange={(e) => setDMin(e.target.value.replace(/\D/g, ""))} />
+          </Field>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Ancillary — per sale">{moneyInput(anc, setAnc)}</Field>
+          <Field label="Vision — per sale">
+            {moneyInput(visionOn ? vision : "", setVision, !visionOn)}
+          </Field>
+        </div>
+        <label className="flex cursor-pointer items-center gap-2 text-xs font-semibold text-ink">
+          <input type="checkbox" className="h-4 w-4 accent-accent" checked={visionOn}
+                 onChange={(e) => setVisionOn(e.target.checked)} />
+          Vision is offered (leave off to keep it in the system with no rate)
+        </label>
+        <Field label="Count each member as a commission" plain
+               hint="On for a carrier = an application with 3 members adds 3 commissions. EAP applications always count as 1.">
+          <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
+            {carriers.map(([k, label]) => (
+              <label key={k} className="flex cursor-pointer items-center gap-2 text-xs text-ink">
+                <input type="checkbox" className="h-4 w-4 accent-accent" checked={perMember.includes(k)}
+                       onChange={(e) => setPerMember(e.target.checked ? [...perMember, k] : perMember.filter((x) => x !== k))} />
+                {label}
+              </label>
+            ))}
+          </div>
+        </Field>
+        <Field label="Rules pay sales logged from"
+               hint="Snaps to the Monday of that week. Move it earlier to pay older sales by these rules instead of the old per-agent rates.">
+          <input className={drawerCtl} type="date" value={startsOn} max={todayISO()}
+                 onChange={(e) => setStartsOn(e.target.value || data.starts_on)} />
+        </Field>
+      </Drawer>
+    </>
+  );
+}
+
+function PayPlanDrawer({ agent, busy, mutate, onClose }: {
+  agent: AgentRow | null; busy: boolean;
+  mutate: (fn: () => Promise<unknown>) => Promise<void>;
+  onClose: () => void;
+}) {
+  const [plan, setPlan] = useState<PayPlan | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [tier, setTier] = useState("1");
+  const [duration, setDuration] = useState<"week" | "date" | "none">("week");
+  const [endsOn, setEndsOn] = useState(todayISO());
+  const [reason, setReason] = useState("");
+  const agentId = agent?.agent_id;
+
+  const load = useCallback(() => {
+    if (!agentId) { setPlan(null); return; }
+    api<PayPlan>(`/expenses/agents/${agentId}/pay-plan`).then(setPlan).catch(() => setPlan(null));
+  }, [agentId]);
+  useEffect(() => { setPlan(null); setEditing(false); setReason(""); load(); }, [load]);
+
+  const r = plan?.rules, w = plan?.week, exc = plan?.exception;
+  const pct = !w || !r ? 0 : w.next_at
+    ? Math.min(100, Math.round((w.commissions / w.next_at) * 100)) : 100;
+  const weekLabel = (iso: string) => new Date(`${iso}T12:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+
+  return (
+    <Drawer
+      open={!!agent} title="Pay plan" icon="🏷️" tone="#2563EB" onClose={onClose}
+      sub={agent ? (
+        <span className="inline-flex flex-wrap items-center gap-1.5">
+          <SubjectChip name={agent.agent_name} color="#C026D3" />
+          <span>paid for every approved sale</span>
+        </span>
+      ) : ""}
+      footer={<button className={btnGhost} onClick={onClose}>Close</button>}
+    >
+      {!plan || !r || !w ? (
+        <div className="text-xs text-ink-muted">Loading…</div>
+      ) : (
+        <>
+          {exc ? (
+            <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2.5 text-xs font-bold text-amber-800 dark:text-amber-300">
+              Exception active — ACA locked to Tier {exc.tier}
+              <div className="mt-0.5 font-medium">
+                {exc.ends_on ? `Until ${exc.ends_on}` : "No end date"} · {exc.reason}
+              </div>
+            </div>
+          ) : (
+            <div className="rounded-xl border border-success/30 bg-success/10 px-3 py-2.5 text-xs font-bold text-success">
+              ✓ Automatic — follows company pay rules
+            </div>
+          )}
+
+          <div className="rounded-xl border border-accent/20 bg-accent/5 p-3">
+            <div className="flex items-baseline justify-between text-[0.65rem] font-bold uppercase tracking-wide text-ink-faint">
+              <span>ACA tier this week</span><span className="normal-case font-medium">resets every Monday</span>
+            </div>
+            <div className="mt-1 flex items-baseline justify-between">
+              <span className="text-2xl font-extrabold text-ink">Tier {w.tier}</span>
+              <span className="text-sm text-ink-muted"><strong className="text-lg font-extrabold text-accent">{dollars(w.rate_cents)}</strong> / ACA sale</span>
+            </div>
+            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-black/10">
+              <div className="h-full rounded-full bg-accent" style={{ width: `${pct}%` }} />
+            </div>
+            <p className="mt-2 text-xs text-ink-muted">
+              {w.commissions} {w.commissions === 1 ? "commission" : "commissions"} this week
+              {exc
+                ? <>. The tier is locked by the exception{w.auto_tier !== w.tier && <> — the count alone would earn Tier {w.auto_tier}</>}.</>
+                : w.to_next != null
+                  ? <> · {w.to_next} more to reach Tier {w.next_tier} ({dollars(w.next_rate_cents)}). Unlocking it reprices every deal this week.</>
+                  : <> · top tier reached.</>}
+            </p>
+            <div className="mt-2 grid gap-2" style={{ gridTemplateColumns: `repeat(${Math.min(r.aca_tiers.length, 4)}, minmax(0, 1fr))` }}>
+              {r.aca_tiers.map((t, i) => {
+                const s = tierSpans(r.aca_tiers, i, r.work_days);
+                return (
+                  <div key={i} className={`rounded-lg border px-2 py-1.5 ${i + 1 === w.tier ? "border-accent bg-white/60 dark:bg-white/10" : "border-hairline"}`}>
+                    <div className="text-[0.65rem] text-ink-muted">Tier {i + 1}</div>
+                    <div className="text-sm font-extrabold tabular-nums text-ink">{dollars(t.cents)}</div>
+                    <div className="text-[0.65rem] text-ink-faint">{s.weekly}/wk</div>
+                    <div className="text-[0.65rem] text-ink-faint">{s.daily.toLowerCase()}/day</div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <Field label="Other products · set automatically" plain>
+            <div className="divide-y divide-hairline-soft overflow-hidden rounded-xl border border-hairline text-xs">
+              <div className="flex items-center justify-between px-3 py-2">
+                <span><strong className="text-ink">Dental</strong><span className="block text-ink-faint">Family of {r.dental_large_min}+ pays {dollars(r.dental_large_cents)}, picked up from the sale</span></span>
+                <strong className="tabular-nums text-ink">{dollars(r.dental_small_cents)} / {dollars(r.dental_large_cents)}</strong>
+              </div>
+              <div className="flex items-center justify-between px-3 py-2">
+                <span><strong className="text-ink">Ancillaries</strong><span className="block text-ink-faint">Flat rate on every sale</span></span>
+                <strong className="tabular-nums text-ink">{dollars(r.ancillary_cents)}</strong>
+              </div>
+              <div className="flex items-center justify-between px-3 py-2">
+                <span><strong className="text-ink">Vision</strong><span className="block text-ink-faint">{r.vision_cents == null ? "Not offered yet" : "Per vision sale"}</span></span>
+                <strong className="tabular-nums text-ink">{r.vision_cents == null ? "—" : dollars(r.vision_cents)}</strong>
+              </div>
+            </div>
+          </Field>
+
+          {!editing ? (
+            <div className="flex flex-wrap gap-2">
+              <button className={`${btnGhost} flex-1`} onClick={() => { setEditing(true); setTier(String(exc?.tier ?? w.tier)); }}>
+                ✎ {exc ? "Change the exception" : "Set an exception"}
+              </button>
+              {exc && (
+                <button className={btnGhost} disabled={busy}
+                        onClick={() => mutate(() => api(`/expenses/agents/${agentId}/pay-exception`, { method: "DELETE" })).then(load)}>
+                  Back to automatic
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-3 rounded-xl border border-hairline p-3">
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="ACA tier">
+                  <select className={drawerCtl} value={tier} onChange={(e) => setTier(e.target.value)}>
+                    {r.aca_tiers.map((t, i) => (
+                      <option key={i} value={i + 1}>Always Tier {i + 1} ({dollars(t.cents)})</option>
+                    ))}
+                  </select>
+                </Field>
+                <Field label="How long">
+                  <select className={drawerCtl} value={duration}
+                          onChange={(e) => setDuration(e.target.value as "week" | "date" | "none")}>
+                    <option value="week">Until the end of this week</option>
+                    <option value="date">Until a specific date</option>
+                    <option value="none">No end date</option>
+                  </select>
+                </Field>
+              </div>
+              {duration === "date" && (
+                <Field label="Last day it applies">
+                  <input className={drawerCtl} type="date" min={todayISO()} value={endsOn}
+                         onChange={(e) => setEndsOn(e.target.value || todayISO())} />
+                </Field>
+              )}
+              <Field label="Reason" required>
+                <input className={drawerCtl} placeholder="Required — e.g. guaranteed Tier 2 during training"
+                       value={reason} onChange={(e) => setReason(e.target.value)} />
+              </Field>
+              <div className="flex justify-end gap-2">
+                <button className={btnGhost} onClick={() => setEditing(false)}>Cancel</button>
+                <button className={btnCls} disabled={busy || reason.trim().length < 3}
+                        onClick={() => mutate(() => api(`/expenses/agents/${agentId}/pay-exception`, {
+                          method: "PUT",
+                          body: JSON.stringify({
+                            tier: parseInt(tier, 10), duration,
+                            ends_on: duration === "date" ? endsOn : null, reason: reason.trim(),
+                          }),
+                        })).then(() => { setEditing(false); setReason(""); load(); })}>
+                  {busy ? "Saving…" : "Save exception"}
+                </button>
+              </div>
+            </div>
+          )}
+
+          <Field label="Tier history" plain>
+            <div className="divide-y divide-hairline-soft overflow-hidden rounded-xl border border-hairline">
+              {plan.history.map((h) => (
+                <div key={h.week_start} className="flex items-center justify-between gap-3 px-3 py-2 text-xs">
+                  <span className="text-ink-muted">
+                    Week of {weekLabel(h.week_start)}
+                    {h.current && <span className="ml-2 text-[0.65rem] font-bold text-success">CURRENT</span>}
+                    <span className="ml-2 text-ink-faint">{h.commissions} · {money(h.aca_cents + h.other_cents)}</span>
+                  </span>
+                  <strong className="text-ink">Tier {h.tier} · {h.exception ? "exception" : "auto"}</strong>
+                </div>
+              ))}
+            </div>
+          </Field>
+        </>
+      )}
+    </Drawer>
+  );
+}
+
 function auditDetail(r: AuditRow, nameOf: (id?: unknown) => string): ReactNode {
   const d = (r.details || {}) as Record<string, unknown>;
   const c = (v: unknown) => money(Number(v) || 0);
@@ -1522,6 +1823,19 @@ function auditDetail(r: AuditRow, nameOf: (id?: unknown) => string): ReactNode {
     const trio = (x: Record<string, unknown>) =>
       `ACA ${c(x.aca)} · Dental ${c(x.dental)} · Vision ${c(x.vision)}`;
     return <><B>{nameOf(d.agent_id)}</B> — {b && <>{trio(b)} → </>}<B>{trio(a)}</B> per sale</>;
+  }
+
+  if (r.resource_type === "pay_rules") {
+    const tiers = (((d.after || {}) as Record<string, unknown>).aca_tiers || []) as { min: number; cents: number }[];
+    return <>Company pay rules saved — ACA{" "}
+      <B>{tiers.map((t, i) => `T${i + 1} ${c(t.cents)}${i ? ` from ${t.min}` : ""}`).join(" · ")}</B>
+      {d.starts_on !== d.starts_on_before && <> · now pays sales from <B>{String(d.starts_on)}</B></>}</>;
+  }
+
+  if (r.resource_type === "pay_exception") {
+    if (r.action === "delete") return <><B>{nameOf(d.agent_id)}</B> — back to automatic (was Tier {String(d.tier)})</>;
+    return <><B>{nameOf(d.agent_id)}</B> — ACA locked to <B>Tier {String(d.tier)}</B>{" "}
+      {d.ends_on ? <>until {String(d.ends_on)}</> : <>with no end date</>} · {String(d.reason || "")}</>;
   }
 
   if (d.kind === "agent_hours") {

@@ -337,6 +337,18 @@ class UpdateUserRequest(BaseModel):
     status: Optional[str] = None   # active | suspended
 
 
+def _leave_sms_queue(db: Session, user: User) -> None:
+    """A disabled user goes OFFLINE in the SMS queue immediately, and any lead
+    they were only OFFERED (not yet accepted) returns to the pool for someone else."""
+    from app.models.sms import SmsLead, SmsQueueAgent
+    row = db.query(SmsQueueAgent).filter(SmsQueueAgent.user_id == user.id).first()
+    if row:
+        row.status, row.queue_position, row.current_lead_id = "OFFLINE", None, None
+    db.query(SmsLead).filter(
+        SmsLead.assigned_agent_id == user.id, SmsLead.status == "ASSIGNED"
+    ).update({SmsLead.status: "QUEUED", SmsLead.assigned_agent_id: None}, synchronize_session=False)
+
+
 @router.get("/users")
 def list_users(
     db: Session = Depends(get_db),
@@ -492,6 +504,8 @@ def update_user(
         # Suspended users stop receiving leads. Re-activating a user must NOT make
         # an admin routable — sync_profile_status re-derives it from the role.
         sync_profile_status(db, user)
+        if st != "active":
+            _leave_sms_queue(db, user)
 
     db.commit()
     db.refresh(user)
@@ -519,6 +533,7 @@ def delete_user(
     agent = db.query(Agent).filter(Agent.user_id == user.id).first()
     if agent:
         agent.status = "inactive"
+    _leave_sms_queue(db, user)
     db.commit()
     return None
 

@@ -38,7 +38,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
 )
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import relationship
 
 from app.core.database import Base
@@ -201,4 +201,51 @@ class AgentSaleRate(Base):
 
     __table_args__ = (
         Index("idx_agent_sale_rates_tenant_agent", "tenant_id", "agent_id", "effective_at"),
+    )
+
+
+class PayRules(Base):
+    """The tenant's company pay rules — ONE set for every agent. Append-only
+    versions: a week is always priced with the version that was in force when
+    that week closed, so editing the rules never restates a past week.
+
+    `rules` holds every amount and threshold (see expenses.pay_rules.DEFAULT_RULES)
+    — nothing about pay is hard-coded. The LATEST row's `starts_on` is the
+    Monday the rules take over from the per-agent sale rates; deals logged before
+    it keep their AgentSaleRate pricing."""
+
+    __tablename__ = "pay_rules"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True)
+    rules = Column(JSONB, nullable=False)
+    starts_on = Column(Date, nullable=False)
+    created_by = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
+
+    __table_args__ = (
+        Index("idx_pay_rules_tenant_created", "tenant_id", "created_at"),
+    )
+
+
+class PayException(Base):
+    """One agent's ACA tier locked by an admin (1-based tier number), until
+    `ends_on` (inclusive Eastern day; NULL = no end date) or until revoked.
+    Never deleted, so a past week can always tell whether it was locked."""
+
+    __tablename__ = "pay_exceptions"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True)
+    agent_id = Column(UUID(as_uuid=True), ForeignKey("agents.id"), nullable=False, index=True)
+    tier = Column(Integer, nullable=False)
+    ends_on = Column(Date, nullable=True)
+    reason = Column(String(500), nullable=False)
+    created_by = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
+    revoked_at = Column(DateTime(timezone=True), nullable=True)
+    revoked_by = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
+
+    __table_args__ = (
+        Index("idx_pay_exceptions_tenant_agent", "tenant_id", "agent_id", "created_at"),
     )

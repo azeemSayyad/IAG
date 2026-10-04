@@ -210,6 +210,7 @@ class SaleRateResponse(BaseModel):
 class AgentPayRow(BaseModel):
     agent_id: UUID
     agent_name: str
+    role: str = ""               # the user's role — the pay table defaults to role 'agent'
     current_rate_cents: Optional[int] = None
     rate_effective_from: Optional[date] = None
     hours: Decimal = Decimal(0)
@@ -219,6 +220,11 @@ class AgentPayRow(BaseModel):
     sales: int = 0
     sale_pay_cents: int = 0
     unrated_sales: int = 0       # approved sales logged before any sale rate covered them
+    # This week under the company pay rules.
+    week_commissions: int = 0
+    aca_tier: int = 1
+    aca_rate_cents: int = 0
+    exception: bool = False
 
 
 # ── Summary ──────────────────────────────────────────────────────────────────
@@ -252,3 +258,60 @@ class SummaryResponse(BaseModel):
     agent_unrated_sales: int = 0   # approved sales no sale rate covers yet (they pay $0)
     # Same window, immediately preceding — lets the UI show a period-over-period delta.
     previous_total_cents: int
+
+
+
+# ── Company pay rules ────────────────────────────────────────────────────────
+
+class PayRulesSet(BaseModel):
+    """The whole rule set, replaced as one (validated by expenses.pay_rules)."""
+
+    rules: dict
+    # Optional: move the day the rules start paying sales (snapped to its Monday).
+    starts_on: Optional[date] = None
+
+
+class PayRulesResponse(BaseModel):
+    rules: dict
+    starts_on: date              # the Monday the rules took over from per-agent rates
+    updated_at: datetime
+    carriers: List[str]          # carriers seen on deals, for the per-member picker
+
+
+class PayExceptionSet(BaseModel):
+    tier: int = Field(ge=1, le=8)
+    # 'week' = until this week closes, 'date' = through ends_on, 'none' = no end date.
+    duration: str = Field(pattern="^(week|date|none)$")
+    ends_on: Optional[date] = None
+    reason: str = Field(min_length=3, max_length=500)
+
+
+class PayExceptionResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    tier: int
+    ends_on: Optional[date] = None
+    reason: str
+    created_at: datetime
+
+
+class PayWeek(BaseModel):
+    week_start: date
+    commissions: int
+    tier: int
+    auto_tier: int
+    rate_cents: int
+    exception: bool
+    aca_cents: int
+    other_cents: int
+    current: bool = False
+
+
+class PayPlanResponse(BaseModel):
+    agent_id: UUID
+    agent_name: str
+    rules: dict
+    week: dict                   # pay_rules.week_status for the week in progress
+    exception: Optional[PayExceptionResponse] = None
+    history: List[PayWeek]

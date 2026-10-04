@@ -17,6 +17,7 @@ from app.models.sms import (
     SmsPoolBatch,
     SmsQueueAgent,
 )
+from app.core.active_agents import active_user_clause, active_users_query
 from app.models.user import User
 
 ONLINE_STATUSES = ("AVAILABLE", "ON_CALL", "AWAY")
@@ -29,6 +30,11 @@ def _pool_query(db: Session, tenant_id: str):
 PRIORITY_RANK = {"HOT": 0, "WARM": 1, "NORMAL": 2}
 # Leads still "alive" in the human lane — every one was a positive ("yes") reply.
 YES_OPEN_STATUSES = ("QUEUED", "ASSIGNED", "IN_PROGRESS")
+
+
+def _active_users(db: Session, tenant_id: str) -> dict:
+    """user_id -> User for every ENABLED user (core.active_agents)."""
+    return {str(u.id): u for u in active_users_query(db, tenant_id).all()}
 
 
 def _name(user: User | None) -> str:
@@ -52,10 +58,11 @@ def _period_start(period: str) -> datetime:
 def get_overview(db: Session, tenant_id: str) -> dict:
     today = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
 
+    # Enabled users only — a disabled agent has no availability status at all.
     agent_rows = (
         db.query(SmsQueueAgent, User)
-        .outerjoin(User, User.id == SmsQueueAgent.user_id)
-        .filter(SmsQueueAgent.tenant_id == tenant_id)
+        .join(User, User.id == SmsQueueAgent.user_id)
+        .filter(SmsQueueAgent.tenant_id == tenant_id, active_user_clause())
         .all()
     )
     # Open breaks (reason + since) for AWAY agents.
@@ -316,9 +323,11 @@ def get_leaderboard(db: Session, tenant_id: str, from_iso: str | None = None, to
         .group_by(SmsLead.assigned_agent_id)
         .all()
     )
-    users = {str(u.id): u for u in db.query(User).filter(User.tenant_id == tenant_id).all()}
+    users = _active_users(db, tenant_id)   # disabled agents drop out of every per-agent report
     board = []
     for agent_id, attempted, replied, appointments, sold, avg_resp in rows:
+        if str(agent_id) not in users:
+            continue
         attempted = int(attempted or 0)
         replied = int(replied or 0)
         sold = int(sold or 0)
@@ -608,7 +617,7 @@ def get_agent_activity(db: Session, tenant_id: str, from_iso: str | None = None,
         .group_by(SmsLead.assigned_agent_id)
         .all()
     )
-    users = {str(u.id): u for u in db.query(User).filter(User.tenant_id == tenant_id).all()}
+    users = _active_users(db, tenant_id)   # disabled agents drop out of every per-agent report
     return {
         "from": start.date().isoformat(),
         "to": (end - timedelta(days=1)).date().isoformat(),
@@ -619,6 +628,7 @@ def get_agent_activity(db: Session, tenant_id: str, from_iso: str | None = None,
                 "dispositioned": int(dispositioned or 0),
             }
             for agent_id, accepted, dispositioned in rows
+            if str(agent_id) in users
         ],
     }
 
@@ -705,9 +715,11 @@ def get_pass_keep(db: Session, tenant_id: str, period: str = "day") -> dict:
         .group_by(SmsAgentAction.user_id)
         .all()
     )
-    users = {str(u.id): u for u in db.query(User).filter(User.tenant_id == tenant_id).all()}
+    users = _active_users(db, tenant_id)   # disabled agents drop out of every per-agent report
     items = []
     for user_id, kept, passed in rows:
+        if str(user_id) not in users:
+            continue
         kept = int(kept or 0)
         passed = int(passed or 0)
         offered = kept + passed
@@ -759,7 +771,7 @@ def get_agent_dispositions(db: Session, tenant_id: str, period: str = "day") -> 
         .all()
     )
 
-    users = {str(u.id): u for u in db.query(User).filter(User.tenant_id == tenant_id).all()}
+    users = _active_users(db, tenant_id)   # disabled agents drop out of every per-agent report
     agg: dict[str, dict] = {}
 
     def _row(uid: str) -> dict:
@@ -774,10 +786,14 @@ def get_agent_dispositions(db: Session, tenant_id: str, period: str = "day") -> 
         return agg[uid]
 
     for user_id, disposition, count in disp_rows:
+        if str(user_id) not in users:
+            continue
         r = _row(str(user_id))
         r["dispositions"][disposition] = int(count or 0)
 
     for b in break_rows:
+        if str(b.user_id) not in users:
+            continue
         r = _row(str(b.user_id))
         end = b.ended_at or now
         secs = max(0, int((end - b.started_at).total_seconds()))
@@ -920,8 +936,8 @@ def get_daily_summary(db: Session, tenant_id: str) -> dict:
         if mn and (k not in first_seen or mn < first_seen[k]):
             first_seen[k] = mn
 
-    users = {str(u.id): u for u in db.query(User).filter(User.tenant_id == tenant_id).all()}
-    agent_ids = set(lead_by) | set(break_by) | set(first_seen)
+    users = _active_users(db, tenant_id)   # disabled agents drop out of every per-agent report
+    agent_ids = (set(lead_by) | set(break_by) | set(first_seen)) & set(users)
     items = []
     for aid in agent_ids:
         s = lead_by.get(aid, {"handled": 0, "applications": 0, "appts": 0, "avg": 0})

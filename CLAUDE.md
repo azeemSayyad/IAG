@@ -357,42 +357,119 @@ Rules that keep #2 safe — don't undo them:
   first-template-only lockdown blocks them — CSV_DIRECT leads therefore have no
   chat composer; that is intentional (phone-first) until an exemption is decided.
 
-## Commission (per-sale agent pay) and deal source
+## Commission (per-sale agent pay), company pay rules and deal source
 
 "Commission" everywhere in the portal means **per-sale agent pay** — there is no
 separate carrier-commission number. It is DERIVED, never stored:
-`expenses/services.sale_pay_lines` prices every APPROVED deal with the agent's
-`agent_sale_rates` row in force at the deal's `created_at`. Three surfaces read
-those same lines, so they cannot disagree:
+`expenses/services.sale_pay_lines` returns one line per APPROVED deal, and three
+surfaces sum those same lines, so they cannot disagree:
 
 1. **Expenses → Agent pay** (`/sms/#/expenses`, owner only) — what the company owes.
 2. **All Deals → "Total commission · whole team"** (`totals.commission_cents` on
    `/compliance/deals/today-all`, plus `commission_cents` per deal) — follows the
    page's date filter, so "Today" is the daily counter.
 3. **My Deals → "You earned"** (`/compliance/deals/my-earnings`, plus
-   `earned_cents` per deal on `/deals/my-today`) — the agent's own pay only.
+   `earned_cents` per deal on `/deals/my-today`) — the agent's own pay and their
+   own tier standing (`week`) only.
 
-- **A sale with no rate in force pays $0** (`SaleLine.rated = False`). That is
-  what "$0.00 with 1 approved sale" means — it is not a bug in the sum. The
-  count is surfaced as `unrated_sales` / `agent_unrated_sales` and shown as a
-  warning on the Agent pay card, the Agents table and the All Deals card.
-- Rates take effect NOW by default. `SaleRateSet.effective_on` (the drawer's
-  "Pay these rates from → An earlier date") starts the row at the beginning of
-  that Eastern day instead, which is the ONLY way sales logged before a rate
-  existed get paid. Rows are still append-only; a backdated row prices deals
-  from its day until the agent's next rate begins.
+### Company pay rules — `app/expenses/pay_rules.py` (migration 060)
+ONE rule set per tenant (`pay_rules`, append-only versions, seeded on first read
+from `DEFAULT_RULES`) pays every agent automatically. **Nothing about pay is
+hard-coded** — every amount/threshold is in the `rules` JSON and edited from
+Expenses → Agents → **Edit rules**. Per-agent rate entry is gone from the UI.
+
+- **Weeks are Monday–Sunday, Eastern.** An agent's ACA COMMISSIONS for the week
+  pick the tier (defaults: 0 → $20, 80 → $25, 130 → $30) and EVERY ACA commission
+  that week is paid at that tier — crossing a threshold reprices the whole week.
+  So a deal's commission is not fixed until its week closes.
+- **Commissions are counted per APPLICATION**, not per deal row. The Log Sale
+  form saves one `deals` row per person; rows from one submission share
+  `deals.application_id` (NULL on older rows = its own application):
+  an application marked **EAP → always 1**; a carrier listed in
+  `per_member_carriers` (Anthem) **→ 1 per member**; anything else **→ 1**.
+- **Dental** pays once per application by household size (= the number of people
+  logged on the application; 3+ pays the larger amount). **Ancillary** pays a flat
+  amount once per application. **Vision** has `vision_cents: null` = not offered
+  yet = $0. None of these move the tier.
+- **A closed week never moves when the rules are edited**: it is priced with the
+  rules version in force when it closed, and with the tier exception active at
+  that moment. Deals are still read live, so approving/blocking a deal from an
+  earlier week DOES change that week (there is no stored weekly snapshot).
+- **Exceptions** (`pay_exceptions`): an admin locks one agent's ACA tier until
+  the end of the week / a date / no end, with a required reason; "Back to
+  automatic" revokes it. Set from the agent's **Pay plan** drawer.
+- **Cutover**: the latest rules row's `starts_on` (always a Monday; seeded as the
+  Monday of the week the rules were first read; movable in Edit rules). Deals
+  logged BEFORE it keep the old per-agent `agent_sale_rates` pricing
+  (`_legacy_sale_lines`) — only there can a sale be "unrated" and pay $0
+  (`unrated_sales` warnings). The legacy sale-rate endpoints still exist but have
+  no UI.
+- `pay_rules.price()` is the pure maths (no DB) — `tests/unit/test_pay_rules.py`
+  runs the handoff's example week against it. Change the maths there first.
+
+### Products on the Log Sale form
+`PRODUCT_LIST` in `add-deal.html` is the product registry (ACA, Ancillary,
+Dental, Vision). A product with an `added` date carries a **NEW** tag for
+`NEW_DAYS` (30) after it and the tag then disappears on its own — a future
+product only needs a row there. **Ancillary** (`deals.ancillary_count`) shows as
+a coverage pill, legend entry, "Has Ancillary" filter and details row on All
+Deals / My Deals. The **Leaderboard and Sales Dashboard do NOT count it yet** —
+their "deals" total is still ACA + Dental + Vision.
+
+### Deal source and announcements
 - **`deals.deal_source`** (`carrier` | `eap`, migration 059) is the EAP checkbox
   in each person card on `add-deal.html` (carrier is the default; added persons
-  follow Person 1 until changed). It is a label only — EAP deals are priced with
-  the same ACA/Dental/Vision rates. It shows as an "EAP" tag beside the carrier
+  follow Person 1 until changed). Under the pay rules it also makes the whole
+  application count as ONE commission. It shows as an "EAP" tag beside the carrier
   on All Deals / My Deals, has a "Deal type" filter under More filters, and
   admins can correct it in Edit deal. `normalize_deal_source` is deliberately
   lenient (anything unknown → `carrier`) so a cached old form still logs sales.
 - **Announcements** can be sent by admins AND `head` (`_ADMIN_ROLES` in
   `app/announcements/router.py`, mirrored by the role gates in `inbox.html` and
   `notifications.html`).
-- `.localpreview/verify-commission-eap-announce.mjs` checks all of this against
-  the real backend.
+- `.localpreview/verify-pay-rules.mjs` and `verify-commission-eap-announce.mjs`
+  check all of this against the real backend.
+
+## Trash for sales, and disabled agents — two SHARED filters
+
+Both rules are enforced in ONE place each, on purpose, so a screen added later
+cannot forget them. Do not re-implement either per query.
+
+### Trash (All Deals → admin delete) — migration 061
+A sale is never hard-deleted. `POST /compliance/deals/{id}/trash` sets
+`deals.trashed_at` / `trashed_by`; `…/restore` clears them; `GET
+/compliance/deals/trash` lists them with who/when. Roles: `admin`,
+`tenant_admin`, `super_admin`, `dev` (NOT `head`) — checked server-side.
+- **`core/database.py` hides trashed deals from EVERY ORM select** (a
+  `do_orm_execute` listener adding `with_loader_criteria(Deal, trashed_at IS
+  NULL)` — full-entity, column-only and aggregate queries alike). That is how a
+  trashed sale stops counting toward commissions, the weekly tier, leaderboards
+  and dashboards at once. A query that must see trashed rows opts in with
+  `.execution_options(include_trashed=True)` (`INCLUDE_TRASHED`) — only the
+  Trash list and trash/restore do.
+- Consequence: a trashed deal 404s on edit / status change until restored.
+- Both actions write `deal_trashed` / `deal_restored` to `audit_logs`.
+- UI (`all-deals.html`): red icon beside View → confirmation (Keep sale has
+  focus) → Undo banner for 8s; the "Trash N" button in the page header opens the
+  list with Restore. The modals are bespoke and carry their own dark rules.
+
+### Disabled agents — `core/active_agents.py`
+"Disabled" = `users.status = 'suspended'` (Settings → team → "Inactive users",
+which is also where they are re-enabled) or `users.deleted_at` set. It is NOT
+`Agent.status` — that only says whether a profile is routable, and every admin
+owns an inactive profile.
+- LIVE lists pull from `active_agents_query` / `active_users_query` /
+  `active_user_clause`: Expenses → Agents (and its counts), the agent pickers
+  (`/compliance/agents`), SMS Manager → Agent Availability and every per-agent
+  SMS report, lead routing (`_available_agents`), and the Leaderboard / Sales
+  Dashboard rankings (via `disabled_agent_ids`).
+- HISTORY keeps the person, labelled with `labelled()` → "Name (disabled)": All
+  Deals rows, ledger lines, the audit trail. Totals still include their past pay.
+- Disabling also takes the user OFFLINE in the SMS queue and returns any lead
+  they were only offered to the pool (`_leave_sms_queue` in admin.py).
+- Re-enabling is just the status flip — nothing is deleted, so they reappear
+  everywhere with history intact.
+- `.localpreview/verify-trash-disabled.mjs` checks both features end to end.
 
 ## Verifying UI changes (headless Chrome over CDP)
 

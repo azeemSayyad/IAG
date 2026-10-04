@@ -186,6 +186,9 @@ class DealSubmitRequest(BaseModel):
     consent_form_ids: Optional[List[UUID]] = None
     # 'carrier' (default) or 'eap' — the EAP checkbox on the Add Deal form.
     deal_source: Optional[str] = None
+    # One id shared by every person logged in the same Log Sale submission. Pay
+    # rules count commissions per application; omitted = this person alone.
+    application_id: Optional[UUID] = None
 
     @field_validator("state")
     @classmethod
@@ -225,6 +228,7 @@ class DealResponse(BaseModel):
     aca_count: int = 1
     dental_count: int = 0
     vision_count: int = 0
+    ancillary_count: int = 0
     deal_source: str = "carrier"
     status: str
     approval_decision: Optional[str]

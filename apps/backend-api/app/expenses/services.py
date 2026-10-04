@@ -164,9 +164,12 @@ def bucket(d: date, granularity: str) -> tuple[str, str]:
 
 
 # ── Per-sale pay ─────────────────────────────────────────────────────────────
-# Derived, never posted: every APPROVED deal pays the agent the per-product rate
-# that was in force when the deal was logged. A deal that is later blocked drops
-# out on its own, and a new rate only prices deals logged after it was set.
+# Derived, never posted. Two pricing regimes, split at the pay-rules cutover:
+#   * deals logged BEFORE it  -> the agent's AgentSaleRate in force when logged
+#     (the old per-agent rates; kept so history does not move);
+#   * deals logged from it on -> the company pay rules (expenses.pay_rules):
+#     weekly ACA tiers + dental by household + flat ancillary.
+# A deal that is later blocked drops out on its own.
 
 @dataclass
 class SaleLine:
@@ -178,8 +181,10 @@ class SaleLine:
     cents: int
     deal_id: object = None
     # False when NO sale rate was in force for this agent when the deal was
-    # logged — the sale counts, but it pays $0 until a rate covers that day.
+    # logged — only possible before the pay rules took over, which pay everyone.
     rated: bool = True
+    ancillary: bool = False
+    units: int = 0         # ACA commissions this deal adds to the weekly tier count
 
 
 def current_sale_rate(db: Session, tenant_id: str, agent_id) -> Optional[AgentSaleRate]:
@@ -191,10 +196,10 @@ def current_sale_rate(db: Session, tenant_id: str, agent_id) -> Optional[AgentSa
     )
 
 
-def sale_pay_lines(db: Session, tenant_id: str, start: Optional[datetime] = None,
-                   end: Optional[datetime] = None, agent_id=None) -> list[SaleLine]:
-    """One line per approved deal logged in [start, end) (all time when omitted),
-    priced with the agent's sale rate in force at the deal's created_at."""
+def _legacy_sale_lines(db: Session, tenant_id: str, start: Optional[datetime],
+                       end: Optional[datetime], agent_id=None) -> list[SaleLine]:
+    """Approved deals logged in [start, end), each priced with the agent's own
+    sale rate in force at the deal's created_at (the pre-pay-rules regime)."""
     q = db.query(Deal.id, Deal.agent_id, Deal.created_at, Deal.aca_count, Deal.dental_count,
                  Deal.vision_count).filter(
         Deal.tenant_id == tenant_id,
@@ -226,4 +231,23 @@ def sale_pay_lines(db: Session, tenant_id: str, start: Optional[datetime] = None
                      + (r.vision_cents if has_vision else 0))
         out.append(SaleLine(aid, created.astimezone(tz).date(), has_aca, has_dental, has_vision,
                             cents, deal_id=deal_id, rated=i >= 0))
+    return out
+
+
+def sale_pay_lines(db: Session, tenant_id: str, start: Optional[datetime] = None,
+                   end: Optional[datetime] = None, agent_id=None) -> list[SaleLine]:
+    """One line per approved deal logged in [start, end) (all time when omitted).
+    The ONE function every pay number in the portal is summed from."""
+    from app.expenses import pay_rules
+
+    cut = pay_rules.cutover_utc(pay_rules.rule_versions(db, tenant_id))
+    out: list[SaleLine] = []
+    if start is None or start < cut:
+        out += _legacy_sale_lines(db, tenant_id, start, cut if (end is None or end > cut) else end, agent_id)
+    if end is None or end > cut:
+        tz = ZoneInfo(settings.AGENT_TZ)
+        lines, _weeks = pay_rules.compute(db, tenant_id, start, end, agent_id=agent_id)
+        out += [SaleLine(p.agent_id, p.created_at.astimezone(tz).date(), p.aca, p.dental, p.vision,
+                         p.cents, deal_id=p.deal_id, ancillary=p.ancillary, units=p.units)
+                for p in lines]
     return out

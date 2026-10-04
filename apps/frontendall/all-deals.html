@@ -72,12 +72,13 @@ h1{font-size:1.625rem;letter-spacing:-.015em;color:var(--strong);font-weight:700
 .ds-bar{display:flex;height:26px;border-radius:8px;overflow:hidden;background:rgba(26,31,42,0.06)}
 .ds-bar .seg{height:100%;transition:width .4s ease}
 .ds-bar .seg.aca{background:#E0A92E}
+.ds-bar .seg.ancillary{background:#C7902A}
 .ds-bar .seg.dental{background:#F0C879}
 .ds-bar .seg.vision{background:#F6E6C8}
 .ds-legend{display:flex;flex-wrap:wrap;gap:26px}
 .ds-leg{display:inline-flex;align-items:center;gap:8px;font-size:.875rem;color:var(--text)}
 .ds-dot{width:11px;height:11px;border-radius:3px;flex-shrink:0}
-.ds-dot.aca{background:#E0A92E}.ds-dot.dental{background:#F0C879}.ds-dot.vision{background:#F6E6C8}
+.ds-dot.aca{background:#E0A92E}.ds-dot.ancillary{background:#C7902A}.ds-dot.dental{background:#F0C879}.ds-dot.vision{background:#F6E6C8}
 .ds-leg b{font-weight:800;color:var(--strong);font-variant-numeric:tabular-nums;margin-left:1px}
 /* Team commission = per-sale pay earned by the approved deals in the range */
 .ds-comm{position:relative}
@@ -89,6 +90,50 @@ h1{font-size:1.625rem;letter-spacing:-.015em;color:var(--strong);font-weight:700
 .ds-comm .ds-warn a{color:inherit;text-decoration:underline}
 html[data-mode="dark"] .ds-comm .ds-num,html[data-mode="dark"] .ds-comm .ds-ic{color:#6FCF9B}
 html[data-mode="dark"] .ds-comm .ds-warn{color:#E5B95C}
+/* Trash: admin-only delete (confirm first), Undo banner, and the Trash list */
+.act-cell{white-space:nowrap}
+.page-hdr .filters{margin-left:auto;align-items:center}
+.trash-btn{margin-left:6px;border-color:rgba(185,38,26,.35);background:rgba(185,38,26,.06);color:#B9261A}
+.trash-btn:hover{background:rgba(185,38,26,.14)}
+.trash-open{display:inline-flex;align-items:center;gap:7px;height:34px;padding:0 12px;margin-right:10px;border-radius:10px;border:1px solid var(--border);background:rgba(255,255,255,.6);color:var(--muted);font:inherit;font-size:.8125rem;font-weight:700;cursor:pointer}
+.trash-open:hover{color:var(--text)}
+.trash-open svg{width:15px;height:15px}
+.trash-open b{min-width:18px;padding:1px 6px;border-radius:9px;background:rgba(185,38,26,.12);color:#B9261A;font-size:.6875rem;text-align:center}
+.tc-back{position:fixed;inset:0;z-index:120;display:none;align-items:center;justify-content:center;padding:20px;background:rgba(15,23,42,.45)}
+.tc-back.open{display:flex}
+.tc-card{width:100%;max-width:460px;background:#fff;border-radius:16px;padding:24px;box-shadow:0 20px 50px rgba(26,31,42,.28)}
+.tc-card.wide{max-width:760px;max-height:calc(100vh - 40px);display:flex;flex-direction:column}
+.tc-title{font-size:1.125rem;font-weight:800;color:var(--strong)}
+.tc-box{margin-top:14px;padding:12px 14px;border-radius:10px;background:var(--n96)}
+.tc-box b{display:block;color:var(--strong);font-weight:800}
+.tc-box span{display:block;margin-top:3px;font-size:.8125rem;color:var(--muted)}
+.tc-note{margin-top:14px;font-size:.8125rem;line-height:1.5;color:var(--text)}
+.tc-actions{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:22px}
+.tc-actions button{height:44px;border-radius:10px;font:inherit;font-size:.875rem;font-weight:800;cursor:pointer}
+.tc-keep{border:1px solid var(--border);background:#fff;color:var(--strong)}
+.tc-go{border:1px solid #B9261A;background:#B9261A;color:#fff}
+.tc-go:hover{background:#9E1F15}.tc-go:disabled{opacity:.6;cursor:default}
+.tl-head{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.tl-sub{margin-top:4px;font-size:.8125rem;color:var(--muted)}
+.tl-list{margin-top:14px;overflow:auto;border:1px solid var(--border);border-radius:10px}
+.tl-row{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:11px 14px;border-bottom:1px solid var(--border)}
+.tl-row:last-child{border-bottom:0}
+.tl-row b{color:var(--strong)}
+.tl-meta{font-size:.75rem;color:var(--muted);margin-top:3px}
+.tl-empty{padding:28px;text-align:center;color:var(--faint);font-size:.875rem}
+.undo-bar{position:fixed;left:50%;bottom:24px;transform:translate(-50%,20px);z-index:130;display:flex;align-items:center;gap:14px;padding:11px 16px;border-radius:12px;background:#1A1F2A;color:#fff;font-size:.8125rem;font-weight:600;box-shadow:0 12px 30px rgba(0,0,0,.3);opacity:0;pointer-events:none;transition:opacity .2s,transform .2s}
+.undo-bar.show{opacity:1;transform:translate(-50%,0);pointer-events:auto}
+.undo-bar button{border:0;background:transparent;color:#8FB8FF;font:inherit;font-weight:800;cursor:pointer;text-decoration:underline}
+html[data-mode="dark"] .tc-card{background:#1C2029;color:#D5DAE2}
+html[data-mode="dark"] .tc-title,html[data-mode="dark"] .tc-box b,html[data-mode="dark"] .tl-row b{color:#F0F2F5}
+html[data-mode="dark"] .tc-box{background:rgba(255,255,255,.06)}
+html[data-mode="dark"] .tc-note{color:#D5DAE2}
+html[data-mode="dark"] .tc-keep{background:transparent;border-color:rgba(255,255,255,.18);color:#F0F2F5}
+html[data-mode="dark"] .trash-btn{background:rgba(240,110,98,.12);border-color:rgba(240,110,98,.4);color:#F38B80}
+html[data-mode="dark"] .trash-open{background:rgba(255,255,255,.05);border-color:rgba(255,255,255,.12)}
+html[data-mode="dark"] .trash-open b{background:rgba(240,110,98,.16);color:#F38B80}
+html[data-mode="dark"] .tl-list,html[data-mode="dark"] .tl-row{border-color:rgba(255,255,255,.1)}
+html[data-mode="dark"] .undo-bar{background:#2A303C}
 /* EAP deals carry a tag beside the carrier (carrier deals are the unmarked default) */
 .src-pill{display:inline-flex;align-items:center;margin-left:6px;border-radius:6px;padding:2px 7px;font-size:.6875rem;font-weight:800;letter-spacing:.03em;background:rgba(46,125,91,.14);color:#23634A;white-space:nowrap}
 html[data-mode="dark"] .src-pill{background:rgba(111,207,155,.16);color:#8FE0B4}
@@ -280,6 +325,10 @@ html[data-mode="dark"] #recPlayer{background:#1C2029;border-color:rgba(255,255,2
       <div class="sub" id="dateLbl">Every agent's deals (Eastern)</div>
     </div>
     <div class="filters">
+      <button class="trash-open" id="trashOpen" type="button" hidden title="Sales moved to trash — restore them from here">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/></svg>
+        Trash <b id="trashCount">0</b>
+      </button>
       <div class="seg-group" id="presetSeg">
         <button type="button" class="seg-btn active" data-range="today">Today</button>
         <button type="button" class="seg-btn" data-range="yesterday">Yesterday</button>
@@ -313,11 +362,13 @@ html[data-mode="dark"] #recPlayer{background:#1C2029;border-color:rgba(255,255,2
     <div class="ds-card bar-card">
       <div class="ds-bar" id="dsBar">
         <span class="seg aca" style="width:0%"></span>
+        <span class="seg ancillary" style="width:0%"></span>
         <span class="seg dental" style="width:0%"></span>
         <span class="seg vision" style="width:0%"></span>
       </div>
       <div class="ds-legend">
         <span class="ds-leg"><span class="ds-dot aca"></span>ACA <b id="dsAca">0</b></span>
+        <span class="ds-leg"><span class="ds-dot ancillary"></span>Ancillary <b id="dsAnc">0</b></span>
         <span class="ds-leg"><span class="ds-dot dental"></span>Dental <b id="dsDental">0</b></span>
         <span class="ds-leg"><span class="ds-dot vision"></span>Vision <b id="dsVision">0</b></span>
       </div>
@@ -363,6 +414,7 @@ html[data-mode="dark"] #recPlayer{background:#1C2029;border-color:rgba(255,255,2
                 <select class="filter-sel" id="fCoverage">
                   <option value="">All coverage</option>
                   <option value="aca">Has ACA</option>
+                  <option value="ancillary">Has Ancillary</option>
                   <option value="dental">Has Dental</option>
                   <option value="vision">Has Vision</option>
                 </select>
@@ -413,7 +465,7 @@ html[data-mode="dark"] #recPlayer{background:#1C2029;border-color:rgba(255,255,2
             <th>Coverage</th>
             <th>Status</th>
             <th style="width:84px">Recording</th>
-            <th style="width:70px">Actions</th>
+            <th style="width:112px">Actions</th>
           </tr>
         </thead>
         <tbody id="dealsBody"></tbody>
@@ -438,6 +490,27 @@ html[data-mode="dark"] #recPlayer{background:#1C2029;border-color:rgba(255,255,2
   </div>
 </div>
 <div class="toast" id="toast"></div>
+<!-- Trash confirmation: nothing is trashed until "Move to trash" is pressed -->
+<div class="tc-back" id="tcBack" role="dialog" aria-modal="true" aria-labelledby="tcTitle">
+  <div class="tc-card">
+    <div class="tc-title" id="tcTitle">Move this sale to trash?</div>
+    <div class="tc-box"><b id="tcWhat"></b><span id="tcWho"></span></div>
+    <div class="tc-note">It will stop counting toward the agent's commissions and weekly tier right away. You can restore it from Trash.</div>
+    <div class="tc-actions">
+      <button class="tc-keep" id="tcKeep" type="button">Keep sale</button>
+      <button class="tc-go" id="tcGo" type="button">Move to trash</button>
+    </div>
+  </div>
+</div>
+<!-- Trash list: restore from here -->
+<div class="tc-back" id="tlBack" role="dialog" aria-modal="true" aria-labelledby="tlTitle">
+  <div class="tc-card wide">
+    <div class="tl-head"><div class="tc-title" id="tlTitle">Trash</div><button class="modal-x" id="tlClose" type="button" aria-label="Close">&times;</button></div>
+    <div class="tl-sub">Sales in Trash do not count toward commissions or the weekly tier. Restoring one counts it again.</div>
+    <div class="tl-list" id="tlList"></div>
+  </div>
+</div>
+<div class="undo-bar" id="undoBar" role="status"><span id="undoMsg">Sale moved to trash.</span><button id="undoBtn" type="button">Undo</button></div>
 <div id="recPlayer">
   <span class="rp-label">Recording</span>
   <audio id="recAudio" controls></audio>
@@ -454,6 +527,8 @@ html[data-mode="dark"] #recPlayer{background:#1C2029;border-color:rgba(255,255,2
   var FILTERS = { agent:'', carrier:'', state:'', status:'', coverage:'', rec:'', source:'', q:'', sort:'desc' };
   // Edit is admin-only: hide the button for non-admins (the backend enforces it too).
   var IS_ADMIN = ['admin','tenant_admin','super_admin','head','dev'].indexOf(localStorage.getItem('ebRole')||'') !== -1;
+  // Trash is narrower than Edit: the same roles the API accepts for it (no head managers).
+  var CAN_TRASH = ['admin','tenant_admin','super_admin','dev'].indexOf(localStorage.getItem('ebRole')||'') !== -1;
 
   // ── Date-range filter (computed in Florida / Eastern, matching the backend) ──
   var BIZ_TZ='America/New_York';
@@ -485,11 +560,11 @@ html[data-mode="dark"] #recPlayer{background:#1C2029;border-color:rgba(255,255,2
   // Coverage cell: total count on top, then a pill per present coverage type
   // (ACA / Dental / Vision). When a type has more than 1, the count is shown in the pill.
   function covCell(d){
-    var aca=d.aca_count||0, dental=d.dental_count||0, vision=d.vision_count||0;
-    var total = (d.total!=null) ? d.total : (aca+dental+vision);
+    var aca=d.aca_count||0, dental=d.dental_count||0, vision=d.vision_count||0, anc=d.ancillary_count||0;
+    var total = (d.total!=null) ? d.total : (aca+dental+vision+anc);
     var pills=[];
     function pill(label,n){ if(n>0) pills.push('<span class="cov-pill">'+label+(n>1?' ('+n+')':'')+'</span>'); }
-    pill('ACA',aca); pill('Dental',dental); pill('Vision',vision);
+    pill('ACA',aca); pill('Ancillary',anc); pill('Dental',dental); pill('Vision',vision);
     var body = pills.length ? '<div class="cov-pills">'+pills.join('')+'</div>' : '<span class="muted">—</span>';
     return '<div class="cov-total muted">'+total+' total</div>'+body;
   }
@@ -605,18 +680,20 @@ html[data-mode="dark"] #recPlayer{background:#1C2029;border-color:rgba(255,255,2
 
   // Summary band: total deal count (whole team, this period) + ACA/Dental/Vision split.
   function updateSummary(){
-    var aca=0, dental=0, vision=0;
-    DEALS.forEach(function(d){ aca+=(d.aca_count||0); dental+=(d.dental_count||0); vision+=(d.vision_count||0); });
-    var tot = aca+dental+vision || 1;
+    var aca=0, dental=0, vision=0, anc=0;
+    DEALS.forEach(function(d){ aca+=(d.aca_count||0); dental+=(d.dental_count||0); vision+=(d.vision_count||0); anc+=(d.ancillary_count||0); });
+    var tot = aca+dental+vision+anc || 1;
     var st=$('#dsTotal'); if(st) st.textContent = DEALS.length;
     var ea=$('#dsAca'); if(ea) ea.textContent = aca;
+    var en=$('#dsAnc'); if(en) en.textContent = anc;
     var ed=$('#dsDental'); if(ed) ed.textContent = dental;
     var ev=$('#dsVision'); if(ev) ev.textContent = vision;
     var bar=$('#dsBar');
     if(bar){
       bar.children[0].style.width = (aca/tot*100)+'%';
-      bar.children[1].style.width = (dental/tot*100)+'%';
-      bar.children[2].style.width = (vision/tot*100)+'%';
+      bar.children[1].style.width = (anc/tot*100)+'%';
+      bar.children[2].style.width = (dental/tot*100)+'%';
+      bar.children[3].style.width = (vision/tot*100)+'%';
     }
     // Team commission: what the approved deals in this range earn their agents.
     // Server-computed (same lines as Expenses -> Agent Pay), so it follows the
@@ -628,10 +705,11 @@ html[data-mode="dark"] #recPlayer{background:#1C2029;border-color:rgba(255,255,2
     if(ew){
       ew.hidden = !un;
       if(un){
-        var msg = un+' approved '+(un===1?'sale has':'sales have')+' no pay rate yet';
-        // Rates are set by the owner on Expenses -> Agents; only they get the link.
+        // Only sales logged BEFORE the company pay rules started can be unpaid.
+        var msg = un+' approved '+(un===1?'sale was':'sales were')+' logged before the pay rules started';
+        // The start date is the owner's to move (Expenses -> Agents -> Edit rules).
         ew.innerHTML = (localStorage.getItem('ebRole')==='super_admin' || localStorage.getItem('ebRole')==='dev')
-          ? esc(msg)+' · <a href="/sms/#/expenses">Set rates</a>' : esc(msg);
+          ? esc(msg)+' · <a href="/sms/#/expenses">Pay rules</a>' : esc(msg);
       }
     }
   }
@@ -657,6 +735,7 @@ html[data-mode="dark"] #recPlayer{background:#1C2029;border-color:rgba(255,255,2
       if(FILTERS.state && (d.state||'') !== FILTERS.state) return false;
       if(FILTERS.status && (d.status||'').toLowerCase() !== FILTERS.status) return false;
       if(FILTERS.coverage==='aca' && !((d.aca_count||0)>0)) return false;
+      if(FILTERS.coverage==='ancillary' && !((d.ancillary_count||0)>0)) return false;
       if(FILTERS.coverage==='dental' && !((d.dental_count||0)>0)) return false;
       if(FILTERS.coverage==='vision' && !((d.vision_count||0)>0)) return false;
       if(FILTERS.source && (isEap(d)?'eap':'carrier') !== FILTERS.source) return false;
@@ -744,7 +823,9 @@ html[data-mode="dark"] #recPlayer{background:#1C2029;border-color:rgba(255,255,2
         + '<td class="cov">'+covCell(d)+'</td>'
         + '<td class="status-cell">'+statusSelect(d)+'<div class="status-date">'+dateInline(d.created_at)+'</div></td>'
         + '<td class="rec-cell">'+recCell(d)+'</td>'
-        + '<td><button class="btn view-btn" data-id="'+esc(d.id)+'" type="button">View</button></td>'
+        + '<td class="act-cell"><button class="btn view-btn" data-id="'+esc(d.id)+'" type="button">View</button>'
+        +   (CAN_TRASH ? '<button class="btn icon-btn trash-btn" data-trash="'+esc(d.id)+'" type="button" title="Move to trash" aria-label="Move this sale to trash"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/></svg></button>' : '')
+        + '</td>'
         + '</tr>';
     }).join('');
   }
@@ -766,6 +847,7 @@ html[data-mode="dark"] #recPlayer{background:#1C2029;border-color:rgba(255,255,2
       ['Premium', fmtMoney(d.premium)],
       ['Commission', d.commission_cents==null ? '— (not approved)' : fmtCents(d.commission_cents)],
       ['ACA policies', d.aca_count||0],
+      ['Ancillary policies', d.ancillary_count||0],
       ['Dental policies', d.dental_count||0],
       ['Vision policies', d.vision_count||0],
       ['Total deals', d.total||0],
@@ -851,6 +933,7 @@ html[data-mode="dark"] #recPlayer{background:#1C2029;border-color:rgba(255,255,2
       var r = await window.__ebAPI.get('/compliance/deals/today-all?'+qs);
       DEALS = (r && r.deals) || [];
       TOTALS = (r && r.totals) || {};
+      setTrashCount(TOTALS.trash_count||0);
       rebuildFilterOptions();
       updateSummary();
       applyAndRender();
@@ -858,7 +941,91 @@ html[data-mode="dark"] #recPlayer{background:#1C2029;border-color:rgba(255,255,2
     }catch(e){ DEALS=[]; TOTALS={}; rebuildFilterOptions(); updateSummary(); applyAndRender(); }
   }
 
+  // ── Trash: confirm -> move to trash -> Undo banner; restore from the Trash list ──
+  function products(d){
+    var out=[]; if(d.aca_count>0) out.push('ACA'); if(d.ancillary_count>0) out.push('Ancillary');
+    if(d.dental_count>0) out.push('Dental'); if(d.vision_count>0) out.push('Vision');
+    return out.join(' + ');
+  }
+  // "WellPoint ACA" — the carrier is left out when the sale has none (dental / vision only).
+  function what(d){
+    var c = (d.carrier && d.carrier !== '—') ? d.carrier : '';
+    return [c, products(d)].filter(Boolean).join(' ') || '—';
+  }
+  function setTrashCount(n){
+    var b=$('#trashOpen'); if(!b) return;
+    b.hidden = !CAN_TRASH;            // admins always see the button, even at 0
+    $('#trashCount').textContent = n;
+  }
+  var PENDING = null, undoTimer = null;
+  function askTrash(d){
+    PENDING = d;
+    $('#tcWhat').textContent = (d.customer_name||'—')+' · '+what(d);
+    $('#tcWho').textContent = 'Sold by '+(d.agent_name||'—')+' · '+fmtDateET(d.created_at);
+    $('#tcGo').disabled = false;
+    $('#tcBack').classList.add('open');
+    $('#tcKeep').focus();             // the safe choice has focus: Enter keeps the sale
+  }
+  function closeTrashConfirm(){ $('#tcBack').classList.remove('open'); PENDING = null; }
+  function showUndo(d){
+    var bar=$('#undoBar');
+    $('#undoMsg').textContent = (d.customer_name||'Sale')+' moved to trash.';
+    $('#undoBtn').onclick = function(){ bar.classList.remove('show'); restore(d.id, d.customer_name); };
+    bar.classList.add('show');
+    clearTimeout(undoTimer); undoTimer = setTimeout(function(){ bar.classList.remove('show'); }, 8000);
+  }
+  async function restore(id, name){
+    try{
+      await window.__ebAPI.post('/compliance/deals/'+encodeURIComponent(id)+'/restore', {});
+      if(window.__ebShowToast) window.__ebShowToast((name||'Sale')+' restored', 'success');
+      await load();
+      if($('#tlBack').classList.contains('open')) openTrash();
+    }catch(err){ if(window.__ebShowToast) window.__ebShowToast('Could not restore (admins only)', 'error'); }
+  }
+  $('#tcKeep').addEventListener('click', closeTrashConfirm);
+  $('#tcBack').addEventListener('click', function(e){ if(e.target.id==='tcBack') closeTrashConfirm(); });
+  $('#tcGo').addEventListener('click', async function(){
+    var d = PENDING; if(!d) return;
+    this.disabled = true;
+    try{
+      await window.__ebAPI.post('/compliance/deals/'+encodeURIComponent(d.id)+'/trash', {});
+      closeTrashConfirm();
+      await load();
+      showUndo(d);
+    }catch(err){
+      this.disabled = false;
+      if(window.__ebShowToast) window.__ebShowToast('Could not move the sale to trash (admins only)', 'error');
+    }
+  });
+  async function openTrash(){
+    var list=$('#tlList');
+    $('#tlBack').classList.add('open');
+    list.innerHTML = '<div class="tl-empty">Loading…</div>';
+    try{
+      var r = await window.__ebAPI.get('/compliance/deals/trash?_='+Date.now());
+      var rows = (r && r.deals) || [];
+      setTrashCount(rows.length);
+      list.innerHTML = rows.length ? rows.map(function(d){
+        return '<div class="tl-row"><div><b>'+esc(d.customer_name||'—')+'</b> · '+esc(what(d))
+          + '<div class="tl-meta">Sold by '+esc(d.agent_name||'—')+' · '+esc(fmtDateET(d.created_at))
+          + ' · trashed by '+esc(d.trashed_by_name||'—')+' · '+esc(fmtDateET(d.trashed_at))+'</div></div>'
+          + '<button class="btn" data-restore="'+esc(d.id)+'" data-name="'+esc(d.customer_name||'')+'" type="button">Restore</button></div>';
+      }).join('') : '<div class="tl-empty">Trash is empty.</div>';
+    }catch(err){ list.innerHTML = '<div class="tl-empty">Could not load Trash.</div>'; }
+  }
+  $('#trashOpen').addEventListener('click', openTrash);
+  $('#tlClose').addEventListener('click', function(){ $('#tlBack').classList.remove('open'); });
+  $('#tlBack').addEventListener('click', function(e){
+    if(e.target.id==='tlBack'){ $('#tlBack').classList.remove('open'); return; }
+    var b = e.target.closest('[data-restore]'); if(b){ b.disabled = true; restore(b.getAttribute('data-restore'), b.getAttribute('data-name')); }
+  });
+  document.addEventListener('keydown', function(e){
+    if(e.key==='Escape'){ closeTrashConfirm(); $('#tlBack').classList.remove('open'); }
+  });
+
   $('#dealsBody').addEventListener('click', function(e){
+    var tb = e.target.closest('[data-trash]');
+    if(tb){ var td = DEALS.find(function(x){ return x.id === tb.getAttribute('data-trash'); }); if(td) askTrash(td); return; }
     var vb = e.target.closest('.view-btn');
     if(vb){ var d = DEALS.find(function(x){ return x.id === vb.getAttribute('data-id'); }); if(d) openModal(d); return; }
   });
