@@ -4,6 +4,7 @@ import { api } from "../lib/api";
 import { isAdmin } from "../lib/auth";
 import { formatPhone } from "../lib/phone";
 import { getSocket } from "../lib/socket";
+import { DialButton } from "../components/DialDrawer";
 import { DetailGrid, SourceBadge, isPoolLead, type DetailField } from "../components/LeadDetails";
 import {
   initSound,
@@ -28,6 +29,8 @@ type Lead = {
   source?: string;          // REPLY | CSV_DIRECT
   details?: DetailField[];  // CSV_DIRECT: the uploaded row, in file order
   disposition?: string | null;
+  yes_reply?: string | null; // YES-reply auto dialer: the text that got them called
+  auto_dial?: boolean;
 };
 type Status = {
   status: string;
@@ -399,17 +402,80 @@ export default function SmsQueue() {
 
   const st = status?.status ?? "OFFLINE";
   const admin = isAdmin(); // admins never join the queue or take leads
+
+  // "Ready for calls" — the auto dialer's switch, separate from Join queue.
+  // Off: regular pool only, no headset line (no Vonage minutes). On: live
+  // YES-reply calls are put straight through to this agent.
+  const [dialer, setDialer] = useState<{ enabled: boolean; available: boolean; agent: { ready: boolean } } | null>(null);
+  const [readyBusy, setReadyBusy] = useState(false);
+  useEffect(() => {
+    if (admin) return;
+    let alive = true;
+    const load = () =>
+      api<{ enabled: boolean; available: boolean; agent: { ready: boolean } }>("/voice/dialer/state")
+        .then((d) => alive && setDialer(d))
+        .catch(() => {});
+    load();
+    const id = setInterval(load, 10000);
+    return () => {
+      alive = false;
+      clearInterval(id);
+    };
+  }, [admin, st]);
+  const callsReady = !!dialer?.agent.ready;
+  const showReady = !!dialer && dialer.enabled && dialer.available;
+  async function toggleReady() {
+    setReadyBusy(true);
+    unlockSound();
+    try {
+      const d = await api<{ enabled: boolean; available: boolean; agent: { ready: boolean } }>(
+        "/voice/dialer/ready",
+        { method: "POST", body: JSON.stringify({ on: !callsReady }) },
+      );
+      setDialer(d);
+      window.dispatchEvent(new Event("voice:ready"));
+    } catch {
+      /* transient */
+    } finally {
+      setReadyBusy(false);
+    }
+  }
+  const readySwitch = showReady && (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={callsReady}
+      onClick={toggleReady}
+      disabled={readyBusy}
+      title={callsReady ? "You are taking live YES-reply calls. Click to stop." : "You are not taking calls. Click to start taking live YES-reply calls."}
+      className={`flex h-9 items-center gap-2.5 rounded-lg border pl-3 pr-2 text-sm font-semibold shadow-sm transition-all hover:-translate-y-px hover:shadow-md disabled:translate-y-0 disabled:opacity-50 ${
+        callsReady
+          ? "ready-on border-transparent text-white"
+          : "border-hairline bg-black/5 text-ink-muted hover:text-ink"
+      }`}
+    >
+      <span className="relative flex h-2 w-2">
+        {callsReady && <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#fff] opacity-70" />}
+        <span className={`relative inline-flex h-2 w-2 rounded-full ${callsReady ? "bg-[#fff]" : "bg-ink-faint"}`} />
+      </span>
+      <span>{callsReady ? "Taking calls" : "Calls off"}</span>
+      <span className={`relative h-5 w-9 flex-shrink-0 rounded-full transition-colors ${callsReady ? "bg-[#fff]/35" : "bg-black/20"}`}>
+        <span className={`absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-[#fff] shadow-sm transition-transform ${callsReady ? "translate-x-4" : ""}`} />
+      </span>
+    </button>
+  );
   const inChat = current && current.status === "IN_PROGRESS";
 
   // Sound / mute toggle — shown in both the Available and On-break headers.
   const muteBtn = (
     <button
       onClick={toggleMute}
-      title={muted ? "Sound off — click to enable lead alerts" : "Sound on — click to mute"}
-      aria-label={muted ? "Unmute notifications" : "Mute notifications"}
-      className={`flex h-9 w-9 items-center justify-center rounded-lg text-base ${muted ? "bg-black/5 text-ink-faint" : "bg-accent/12 text-accent"}`}
+      title={muted ? "Lead alert sound is off — click to turn it on" : "Lead alert sound is on — click to mute"}
+      className={`flex h-9 items-center gap-1.5 rounded-lg border px-3 text-sm font-semibold shadow-sm transition-all hover:-translate-y-px hover:shadow-md disabled:translate-y-0 disabled:opacity-50 ${
+        muted ? "border-hairline bg-black/5 text-ink-faint hover:text-ink" : "border-accent/25 bg-accent/10 text-ink-soft hover:bg-accent/15"
+      }`}
     >
-      {muted ? "🔇" : "🔊"}
+      {muted ? "Sound off" : "Sound on"}
     </button>
   );
 
@@ -444,18 +510,19 @@ export default function SmsQueue() {
             </span>
             <span className="text-sm font-semibold tabular-nums text-pending">{elapsedSince(status?.break_started_at)}</span>
             <div className="ml-auto flex items-center gap-2">
+              <DialButton />
               {muteBtn}
               <button
                 onClick={endBreak}
                 disabled={busy}
-                className="flex items-center gap-1.5 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white hover:bg-accent-hover disabled:opacity-50"
+                className="join-btn flex h-9 items-center gap-1.5 rounded-lg px-4 text-sm font-semibold text-white disabled:opacity-50"
               >
                 <IconPlay /> Resume
               </button>
               <button
                 onClick={leave}
                 disabled={busy}
-                className="flex items-center gap-1.5 rounded-lg border border-hairline bg-white px-3 py-2 text-sm font-medium text-ink-muted hover:text-ink disabled:opacity-50"
+                className="flex h-9 items-center gap-1.5 rounded-lg border px-3 text-sm font-semibold shadow-sm transition-all hover:-translate-y-px hover:shadow-md disabled:translate-y-0 disabled:opacity-50 border-danger/25 bg-danger/8 text-danger hover:bg-danger/15"
               >
                 <IconLeave /> Leave
               </button>
@@ -468,13 +535,19 @@ export default function SmsQueue() {
               <span className="h-2 w-2 rounded-full bg-ink-faint" /> Offline
             </span>
             <div className="ml-auto flex items-center gap-2">
+              <DialButton />
               {muteBtn}
               <button
                 onClick={join}
                 disabled={busy}
-                className="rounded-lg bg-accent px-6 py-2.5 text-base font-semibold text-white hover:bg-accent-hover disabled:opacity-50"
+                className="join-btn group flex h-10 items-center gap-2.5 rounded-xl pl-4 pr-5 text-base font-semibold text-white disabled:opacity-50"
               >
+                <span className="relative flex h-2.5 w-2.5">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#fff] opacity-60" />
+                  <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-[#fff]" />
+                </span>
                 Join queue
+                <span aria-hidden className="transition-transform group-hover:translate-x-0.5">→</span>
               </button>
             </div>
           </>
@@ -497,7 +570,9 @@ export default function SmsQueue() {
             <span className="text-xs text-ink-muted">
               Appts <strong className="text-sm text-ink">{status?.total_appointments_set ?? 0}</strong>
             </span>
-            <div className="ml-auto flex items-center gap-2">
+            <div className="ml-auto flex flex-wrap items-center gap-2">
+              {readySwitch}
+              <DialButton />
               {muteBtn}
               <div className="relative">
                 <button
@@ -505,7 +580,7 @@ export default function SmsQueue() {
                   disabled={busy || st === "ON_CALL"}
                   aria-haspopup="menu"
                   aria-expanded={breakMenu}
-                  className="flex items-center gap-1.5 rounded-lg bg-pending/15 px-3 py-2 text-sm font-semibold text-pending transition-colors hover:bg-pending/25 disabled:opacity-40"
+                  className="flex h-9 items-center gap-1.5 rounded-lg border px-3 text-sm font-semibold shadow-sm transition-all hover:-translate-y-px hover:shadow-md disabled:translate-y-0 disabled:opacity-50 border-pending/30 bg-pending/15 text-pending hover:bg-pending/25"
                 >
                   <IconCoffee /> Break
                   <span className={`text-[10px] transition-transform ${breakMenu ? "rotate-180" : ""}`}>▾</span>
@@ -540,7 +615,7 @@ export default function SmsQueue() {
               <button
                 onClick={leave}
                 disabled={busy}
-                className="flex items-center gap-1.5 rounded-lg border border-hairline px-3 py-2 text-sm font-medium text-ink-muted hover:text-ink disabled:opacity-50"
+                className="flex h-9 items-center gap-1.5 rounded-lg border px-3 text-sm font-semibold shadow-sm transition-all hover:-translate-y-px hover:shadow-md disabled:translate-y-0 disabled:opacity-50 border-danger/25 bg-danger/8 text-danger hover:bg-danger/15"
               >
                 <IconLeave /> Leave
               </button>
@@ -575,6 +650,12 @@ export default function SmsQueue() {
                     {formatPhone(current.phone_number)}
                   </span>
                 </div>
+                {current.auto_dial && current.yes_reply && (
+                  <div className="mt-1.5 text-xs text-ink-muted">
+                    <span className="mr-1 rounded-full bg-success/12 px-2 py-0.5 font-semibold text-success">📞 Auto-dialed</span>
+                    replied “{current.yes_reply}”
+                  </div>
+                )}
                 {current.address && (
                   <div className="mt-1.5">
                     <span className="inline-flex items-center gap-1 rounded-lg bg-accent/10 px-3 py-1 text-sm font-bold text-accent">
@@ -613,6 +694,12 @@ export default function SmsQueue() {
                     {formatPhone(current.phone_number)}
                   </span>
                 </div>
+                {current.auto_dial && current.yes_reply && (
+                  <div className="mt-1.5 text-xs text-ink-muted">
+                    <span className="mr-1 rounded-full bg-success/12 px-2 py-0.5 font-semibold text-success">📞 Auto-dialed</span>
+                    replied “{current.yes_reply}”
+                  </div>
+                )}
                 {current.address && (
                   <div className="mt-1.5">
                     <span className="inline-flex items-center gap-1 rounded-lg bg-accent/10 px-3 py-1 text-sm font-bold text-accent">
@@ -687,7 +774,9 @@ export default function SmsQueue() {
           <div className="glass rounded-2xl p-4">
             <h3 className="mb-3 text-sm font-semibold text-ink">Disposition</h3>
             <div className="space-y-2">
-              {DISPOSITIONS.map((d) => (
+              {/* Auto-dialed call: detection can let a voicemail through —
+                  marking it puts the lead back on the dial list. */}
+              {(current.auto_dial ? [{ value: "VOICEMAIL", label: "Voicemail (call again later)", tone: "bg-pending/12 text-pending" }, ...DISPOSITIONS] : DISPOSITIONS).map((d) => (
                 <button
                   key={d.value}
                   onClick={() => onDisposition(current.id, d.value)}

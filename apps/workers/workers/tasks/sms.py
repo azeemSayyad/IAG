@@ -410,3 +410,34 @@ def auto_assign_queue(self) -> Dict:
         return {"tenants": len(tenant_ids), "assigned": total}
     finally:
         db.close()
+
+
+@celery_app.task(
+    name="workers.tasks.sms.voice_dialer_tick",
+    bind=True,
+)
+def voice_dialer_tick(self) -> Dict:
+    """YES-reply auto dialer heartbeat (app/voice_dialer): start calls when
+    agents free up, fire due retries and calling-hour openings, and clean up
+    calls whose final Vonage event never arrived. Webhooks and agent actions
+    also tick, so this is the safety net, not the fast path."""
+    from app.models.sms import VoiceDialerSettings
+    from app.voice_dialer import service as voice
+
+    db = next(get_db())
+    try:
+        tenant_ids = [
+            str(r[0]) for r in db.query(VoiceDialerSettings.tenant_id)
+            .filter(VoiceDialerSettings.enabled.is_(True)).all()
+        ]
+        started = 0
+        for tid in tenant_ids:
+            events = voice.tick(db, tid)
+            voice.flush_events(events)
+            started += sum(
+                (e.get("data") or {}).get("started", 0)
+                for e in events if e.get("event") == "voice:dialer_updated"
+            )
+        return {"tenants": len(tenant_ids), "started": started}
+    finally:
+        db.close()

@@ -344,6 +344,7 @@ def _leave_sms_queue(db: Session, user: User) -> None:
     row = db.query(SmsQueueAgent).filter(SmsQueueAgent.user_id == user.id).first()
     if row:
         row.status, row.queue_position, row.current_lead_id = "OFFLINE", None, None
+        row.voice_ready = False
     db.query(SmsLead).filter(
         SmsLead.assigned_agent_id == user.id, SmsLead.status == "ASSIGNED"
     ).update({SmsLead.status: "QUEUED", SmsLead.assigned_agent_id: None}, synchronize_session=False)

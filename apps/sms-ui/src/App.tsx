@@ -2,6 +2,7 @@ import { Routes, Route, Navigate } from "react-router-dom";
 import PortalShell from "./components/PortalShell";
 import SmsQueue from "./pages/SmsQueue";
 import SmsManager from "./pages/SmsManager";
+import AutoDialer from "./pages/AutoDialer";
 import SmsMonitoring from "./pages/SmsMonitoring";
 import SalesDashboard from "./pages/SalesDashboard";
 import Expenses from "./pages/Expenses";
@@ -58,6 +59,12 @@ export default function App() {
         <Route
           path="/manager"
           element={canSeeManager() ? <SmsManager /> : <Navigate to={home} replace />}
+        />
+        {/* Auto Dialer (YES-reply calls): same audience as SMS Manager. Agents
+            take these calls in Lead Manager and never need this page. */}
+        <Route
+          path="/dialer"
+          element={canSeeManager() ? <AutoDialer /> : <Navigate to={home} replace />}
         />
         {/* SMS Monitoring: dev only. */}
         <Route

@@ -69,6 +69,9 @@ def _lead_dict(l: SmsLead) -> dict:
         # composed address — what the agent card shows so they can call.
         "details": (l.details or {}).get("fields") or [],
         "address": (l.details or {}).get("address"),
+        # YES-reply auto dialer: the reply that put them on the dial list.
+        "yes_reply": l.yes_reply,
+        "auto_dial": l.yes_at is not None,
     }
 
 
@@ -262,6 +265,10 @@ def _available_agents(db: Session, tenant_id: str, exclude_user_id: str | None =
             active_user_clause(),
         )
     )
+    # On a call they dialed by hand (Dial drawer) = busy: no offer, no bridge.
+    from app.voice_dialer.manual import busy_user_ids
+
+    q = q.filter(SmsQueueAgent.user_id.notin_(db.query(busy_user_ids(db, tenant_id))))
     if exclude_user_id:
         q = q.filter(SmsQueueAgent.user_id != exclude_user_id)
     return q.order_by(SmsQueueAgent.last_active_at.asc().nullsfirst()).all()
@@ -277,7 +284,14 @@ def _try_assign(db: Session, tenant_id: str, exclude_user_id: str | None = None)
     call — callers loop when they want to fill multiple agents.
     """
     events: list[dict] = []
+    from app.voice_dialer.service import dialer_reserves_agents
+
+    reserved = dialer_reserves_agents(db, tenant_id)
     for agent in _available_agents(db, tenant_id, exclude_user_id):
+        # An agent on an open headset line is held for the YES-reply dialer
+        # while it has people to call, so a live customer always finds them.
+        if reserved and agent.voice_leg_uuid:
+            continue
         lead = _next_queued_lead(
             db, tenant_id, exclude_lead_ids=_passed_lead_ids(db, tenant_id, agent.user_id)
         )
@@ -335,6 +349,7 @@ def leave(db: Session, tenant_id: str, user_id: str) -> tuple[dict, list[dict]]:
     _release_held_leads(db, tenant_id, user_id)
     agent.current_lead_id = None
     agent.status = "OFFLINE"
+    agent.voice_ready = False  # next shift starts on the pool only
     db.flush()
     events = _try_assign(db, tenant_id)
     db.commit()
@@ -571,11 +586,25 @@ def disposition(
     if not lead:
         return {"ok": False, "reason": "lead_not_found"}, []
     agent = _get_or_create_agent(db, tenant_id, user_id)
-    lead.status = "DISPOSITIONED"
-    lead.disposition = disposition_value
+    # Auto-dialed call still connected? Setting the result ends it — otherwise
+    # the customer would still be on the agent's line when the next one joins.
+    from app.voice_dialer.service import end_call_for_lead
+
+    end_call_for_lead(db, lead.id, disposition_value)
+    # Machine detection let a voicemail through on an auto-dialed call: the
+    # agent marks it Voicemail and it goes back on the dial list.
+    requeued = False
+    if disposition_value == "VOICEMAIL":
+        from app.voice_dialer.service import requeue_voicemail
+
+        requeued = requeue_voicemail(db, lead)
+    if not requeued:
+        lead.status = "DISPOSITIONED"
+        lead.disposition = disposition_value
     if disposition_value in DNC_DISPOSITIONS:
         add_to_dnc(db, tenant_id, lead.phone_number, disposition_value)
-    lead.dispositioned_at = _now()
+    if not requeued:
+        lead.dispositioned_at = _now()
     if callback_time:
         try:
             lead.callback_time = datetime.fromisoformat(callback_time)
@@ -695,6 +724,9 @@ def manager_disposition(
         prev = _get_or_create_agent(db, tenant_id, str(lead.assigned_agent_id))
         if str(prev.current_lead_id) == str(lead.id):
             prev.current_lead_id = None
+    from app.voice_dialer.service import end_call_for_lead
+
+    end_call_for_lead(db, lead.id, disposition_value)  # an auto-dialed call with them ends too
     lead.status = "DISPOSITIONED"
     lead.disposition = disposition_value
     if disposition_value in DNC_DISPOSITIONS:
@@ -831,6 +863,7 @@ def reap_stale_agents(db: Session, tenant_id: str, stale_seconds: int = STALE_AG
         if brk:
             brk.ended_at = _now()
         agent.status = "OFFLINE"
+        agent.voice_ready = False
         reaped += 1
         events.append(_evt("agent", agent.user_id, "sms:presence", {"status": "OFFLINE", "reason": "timeout"}))
     if reaped:
@@ -882,6 +915,7 @@ def kick_all(db: Session, tenant_id: str) -> tuple[dict, list[dict]]:
                 lead.assigned_agent_id = None
                 lead.accepted_at = None
         a.status = "OFFLINE"
+        a.voice_ready = False
         a.queue_position = None
         a.current_lead_id = None
     db.flush()

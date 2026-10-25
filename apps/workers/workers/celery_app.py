@@ -138,6 +138,12 @@ celery_app.conf.update(
         # Hand any QUEUED lead to an available idle agent every 10s. Assignment
         # otherwise only fires on event triggers, so a queued lead could sit
         # unassigned while agents are free. expires<schedule so ticks never pile.
+        # YES-reply auto dialer heartbeat (no-op until a tenant switches it on).
+        "voice-dialer-tick": {
+            "task": "workers.tasks.sms.voice_dialer_tick",
+            "schedule": 3.0,
+            "options": {"expires": 3},
+        },
         "auto-assign-sms-queue": {
             "task": "workers.tasks.sms.auto_assign_queue",
             "schedule": 10.0,

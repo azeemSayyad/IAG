@@ -5,6 +5,8 @@ import { getRole, isAdmin, isAdminClass, isOwner, canSeeQueue, canSeeManager, ca
 import { getSocket } from "../lib/socket";
 import { leadOfferedSound } from "../lib/sound";
 import LeadOfferOverlay from "./LeadOfferOverlay";
+import AgentLine from "./AgentLine";
+import DialDrawer from "./DialDrawer";
 
 const ROLE_LABEL: Record<string, string> = {
   agent: "Agent",
@@ -72,6 +74,7 @@ const APPOINTMENTS_LINK: PortalLink = { href: "/appointments.html", label: "Appo
 const SMS_LINKS: { to: string; label: string; icon: string; show: () => boolean }[] = [
   { to: "/queue", label: "Lead Manager", icon: "queue", show: canSeeQueue },
   { to: "/manager", label: "SMS Manager", icon: "users", show: canSeeManager },
+  { to: "/dialer", label: "Auto Dialer", icon: "phone", show: canSeeManager },
   { to: "/monitoring", label: "SMS Monitoring", icon: "activity", show: canSeeMonitoring },
 ];
 
@@ -213,6 +216,12 @@ function Icon({ name }: { name: string }) {
         <svg {...common}>
           <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
           <path d="M8 9h8M8 13h5" />
+        </svg>
+      );
+    case "phone":
+      return (
+        <svg {...common}>
+          <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.8 19.8 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.12 4.18 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.1 9.9a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92Z" />
         </svg>
       );
     case "activity":
@@ -755,6 +764,13 @@ export default function PortalShell() {
 
       {/* Global blocking lead-offer modal — covers every SMS route */}
       <LeadOfferOverlay />
+
+      {/* YES-reply auto dialer: headset line + live-call screen pop */}
+      <AgentLine />
+
+      {/* Manual dialing: the Dial drawer + its mini dock (opened from the
+          Lead Manager / Auto Dialer pages) */}
+      <DialDrawer />
 
       {/* Manager ping toast */}
       {ping && (
