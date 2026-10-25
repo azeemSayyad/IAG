@@ -237,6 +237,70 @@ td .dt-t{white-space:nowrap;font-size:.72rem;margin-top:1px}
 .mrow{display:flex;justify-content:space-between;gap:16px;padding:10px 0;border-bottom:1px solid rgba(26,31,42,.05);font-size:.875rem}
 .mrow:last-child{border-bottom:none}
 .mk{color:var(--muted)}.mv{color:var(--strong);font-weight:600;text-align:right}
+/* View-deal: every field the Log Sale form saved, grouped into sections */
+.modal-card.view{max-width:780px}
+.modal-card.view .modal-body{padding:0 0 6px}
+.dv-hero{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;padding:20px 22px 16px;background:linear-gradient(135deg,var(--a98),var(--a96));border-bottom:1px solid var(--border)}
+.dv-name{font-size:1.375rem;font-weight:800;letter-spacing:-.015em;color:var(--strong);line-height:1.2}
+.dv-sub{margin-top:5px;font-size:.8125rem;color:var(--muted);font-variant-numeric:tabular-nums}
+.dv-sub b{color:var(--text);font-weight:700}
+.dv-tags{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:6px;flex-shrink:0}
+.dv-tag{display:inline-flex;align-items:center;border-radius:999px;padding:4px 10px;font-size:.6875rem;font-weight:800;letter-spacing:.02em;white-space:nowrap;background:rgba(26,31,42,.06);color:var(--text)}
+.dv-tag.st-approved,.dv-tag.st-paid,.dv-tag.st-won{background:rgba(79,130,104,.14);color:#2E5A45}
+.dv-tag.st-blocked{background:rgba(163,82,92,.12);color:#7A2F39}
+.dv-tag.st-submitted{background:rgba(156,120,66,.12);color:#7C5E2F}
+.dv-tag.eap{background:rgba(46,125,91,.14);color:#23634A}
+.dv-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;padding:16px 22px 4px}
+.dv-stat{padding:12px 14px;border-radius:12px;background:var(--n97);border:1px solid var(--border)}
+.dv-stat span{display:block;font-size:.6875rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.dv-stat b{display:block;margin-top:5px;font-size:1.125rem;font-weight:800;color:var(--strong);font-variant-numeric:tabular-nums}
+.dv-stat b.up{color:var(--up)}
+.dv-stat small{display:block;margin-top:2px;font-size:.6875rem;color:var(--faint)}
+.dv-sec{padding:16px 22px 4px}
+.dv-sec+.dv-sec{border-top:1px solid var(--border);margin-top:12px}
+.dv-h{font-size:.6875rem;font-weight:800;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin-bottom:10px}
+.dv-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px 18px}
+.dv-f{min-width:0}
+.dv-f.wide{grid-column:span 2}
+.dv-f.full{grid-column:1 / -1}
+.dv-k{font-size:.72rem;color:var(--muted);font-weight:600}
+.dv-v{margin-top:2px;font-size:.875rem;font-weight:700;color:var(--strong);overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+.dv-v.none{color:var(--faint);font-weight:500}
+.dv-v.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.8125rem;letter-spacing:.02em}
+.dv-prods{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px}
+.dv-prod{padding:12px 14px;border-radius:12px;border:1px solid var(--border);background:#fff}
+.dv-prod-name{display:inline-flex;border-radius:7px;padding:2px 8px;font-size:.6875rem;font-weight:800;background:rgba(224,162,59,.16);color:#7C5E2F}
+.dv-prod-c{margin-top:8px;font-size:.875rem;font-weight:700;color:var(--strong)}
+.dv-prod-t{margin-top:2px;font-size:.78rem;color:var(--muted)}
+.dv-prod-x{margin-top:6px;font-size:.72rem;color:var(--muted);line-height:1.5}
+.dv-list{border:1px solid var(--border);border-radius:12px;overflow:hidden}
+.dv-li{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 14px;border-bottom:1px solid var(--border);font-size:.8125rem}
+.dv-li:last-child{border-bottom:0}
+.dv-li b{color:var(--strong);font-weight:700}
+.dv-li .muted{font-size:.75rem}
+.dv-li .acts{display:flex;gap:6px;flex-shrink:0}
+.dv-li.link{cursor:pointer}
+.dv-li.link:hover{background:var(--n97)}
+.dv-empty{font-size:.8125rem;color:var(--faint)}
+.dv-note{margin-top:10px;padding:10px 12px;border-radius:10px;background:var(--n96);font-size:.8125rem;color:var(--text);line-height:1.5;white-space:pre-wrap}
+@media(max-width:640px){.dv-hero{flex-direction:column}.dv-tags{justify-content:flex-start}.dv-grid{grid-template-columns:1fr 1fr}.dv-stats{grid-template-columns:1fr 1fr}.dv-stats .dv-stat:last-child{grid-column:1 / -1}}
+@media(max-width:420px){.dv-grid{grid-template-columns:1fr}.dv-f.wide{grid-column:auto}}
+html[data-mode="dark"] .dv-hero{background:linear-gradient(135deg,rgba(255,255,255,.05),rgba(255,255,255,.02));border-color:rgba(255,255,255,.1)}
+html[data-mode="dark"] .dv-name,html[data-mode="dark"] .dv-v,html[data-mode="dark"] .dv-stat b,html[data-mode="dark"] .dv-prod-c,html[data-mode="dark"] .dv-li b{color:#F0F2F5}
+html[data-mode="dark"] .dv-stat b.up{color:#6FCF9B}
+html[data-mode="dark"] .dv-stat,html[data-mode="dark"] .dv-prod,html[data-mode="dark"] .dv-note{background:rgba(255,255,255,.05);border-color:rgba(255,255,255,.1);color:#D5DAE2}
+html[data-mode="dark"] .dv-sec+.dv-sec,html[data-mode="dark"] .dv-list,html[data-mode="dark"] .dv-li{border-color:rgba(255,255,255,.1)}
+html[data-mode="dark"] .dv-li.link:hover{background:rgba(255,255,255,.05)}
+html[data-mode="dark"] .dv-tag{background:rgba(255,255,255,.08);color:#D5DAE2}
+html[data-mode="dark"] .dv-tag.st-approved,html[data-mode="dark"] .dv-tag.st-paid,html[data-mode="dark"] .dv-tag.st-won,html[data-mode="dark"] .dv-tag.eap{background:rgba(111,207,155,.16);color:#8FE0B4}
+html[data-mode="dark"] .dv-tag.st-blocked{background:rgba(240,110,98,.16);color:#F38B80}
+html[data-mode="dark"] .dv-tag.st-submitted{background:rgba(229,185,92,.16);color:#E5B95C}
+html[data-mode="dark"] .dv-prod-name{background:rgba(229,185,92,.16);color:#E5B95C}
+/* CSV export of whatever the filters show */
+.csv-btn{height:32px;padding:0 12px;font-size:.8125rem}
+.csv-btn svg{width:15px;height:15px}
+.csv-btn:disabled{opacity:.6;cursor:default}
+html[data-mode="dark"] .csv-btn{background:rgba(255,255,255,.05);border-color:rgba(255,255,255,.14);color:#F0F2F5}
 .toast{position:fixed;right:22px;bottom:22px;background:#1A1F2A;color:#fff;border-radius:10px;padding:10px 14px;font-size:.8125rem;font-weight:700;opacity:0;transform:translateY(8px);transition:opacity 180ms var(--ease),transform 180ms var(--ease);z-index:80}.toast.show{opacity:1;transform:none}
 #recPlayer{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:90;display:none;align-items:center;gap:10px;background:#fff;border:1px solid var(--border);border-radius:16px;box-shadow:0 12px 32px rgba(26,31,42,.22);padding:8px 10px 8px 16px;max-width:calc(100vw - 32px)}
 #recPlayer.show{display:flex}
@@ -376,7 +440,7 @@ html[data-mode="dark"] #recPlayer{background:#1C2029;border-color:rgba(255,255,2
   </div>
 
   <section class="panel">
-    <div class="panel-head"><div class="panel-title">Deals done</div><div class="panel-head-r"><button class="sort-btn" id="fSortBtn" type="button" aria-label="Toggle sort order"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4v16M7 4 4 7M7 4l3 3"/><path d="M17 20V4M17 20l-3-3M17 20l3-3"/></svg><span id="fSortLabel">Newest first</span></button><button class="clear-link" id="fClear" type="button">Clear filters</button></div></div>
+    <div class="panel-head"><div class="panel-title">Deals done</div><div class="panel-head-r"><button class="sort-btn" id="fSortBtn" type="button" aria-label="Toggle sort order"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4v16M7 4 4 7M7 4l3 3"/><path d="M17 20V4M17 20l-3-3M17 20l3-3"/></svg><span id="fSortLabel">Newest first</span></button><button class="clear-link" id="fClear" type="button">Clear filters</button><button class="btn csv-btn" id="dealsCsvBtn" type="button" title="Download the deals these filters show as a CSV file"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>Export CSV</button></div></div>
     <div class="toolbar">
       <div class="tb-search">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
@@ -727,9 +791,10 @@ html[data-mode="dark"] #recPlayer{background:#1C2029;border-color:rgba(255,255,2
   function setSortUI(){ var l=$('#fSortLabel'); if(l) l.textContent = (FILTERS.sort==='asc') ? 'Oldest first' : 'Newest first'; }
 
   // ── Filtering / sorting / pagination over DEALS (all client-side) ──
-  function getFiltered(){
+  function getFiltered(){ return filterRows(DEALS); }
+  function filterRows(list){
     var q = (FILTERS.q||'').trim().toLowerCase();
-    var rows = DEALS.filter(function(d){
+    var rows = list.filter(function(d){
       if(FILTERS.agent && (d.agent_name||'') !== FILTERS.agent) return false;
       if(FILTERS.carrier && (d.carrier||'') !== FILTERS.carrier) return false;
       if(FILTERS.state && (d.state||'') !== FILTERS.state) return false;
@@ -831,34 +896,122 @@ html[data-mode="dark"] #recPlayer{background:#1C2029;border-color:rgba(255,255,2
   }
 
   var CURRENT = null;   // deal shown in the View modal — lets the in-modal Edit button reopen it for editing
+  // Per-product line from the Log Sale form: "Ambetter · Gold", plus any plan extras.
+  function prodLines(d){
+    var list = Array.isArray(d.products) ? d.products.filter(function(p){ return p && p.product; }) : [];
+    if(list.length) return list;
+    // Older rows have no products list — rebuild it from the counts + flat carrier/plan.
+    var out=[];
+    [['ACA','aca_count'],['Ancillary','ancillary_count'],['Dental','dental_count'],['Vision','vision_count']].forEach(function(x){
+      if((d[x[1]]||0)>0) out.push({ product:x[0], carrier: x[0]==='ACA' ? d.carrier : '', tier: x[0]==='ACA' ? d.plan_type : '' });
+    });
+    return out;
+  }
+  function prodText(p){
+    var bits=[p.carrier, p.tier, p.plan_name].filter(function(v){ return v && v!=='—'; });
+    return p.product+(bits.length?': '+bits.join(' · '):'');
+  }
+  function fullAddress(d){
+    return [d.customer_address, d.customer_city, [d.state, d.customer_zip].filter(Boolean).join(' ')].filter(Boolean).join(', ');
+  }
+  // Other people logged on the same Log Sale submission (one deal row per person).
+  function householdOf(d){
+    if(!d.application_id) return [];
+    return DEALS.filter(function(x){ return x.application_id===d.application_id && x.id!==d.id; });
+  }
+  function fmtLong(iso){
+    if(!iso) return '—';
+    try{ return new Date(iso).toLocaleString('en-US',{timeZone:'America/New_York',month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit'}); }
+    catch(e){ return iso; }
+  }
+  function dvField(label, val, cls){
+    var empty = (val==null || String(val).trim()==='' || val==='—');
+    return '<div class="dv-f'+(cls&&cls.indexOf('wide')!==-1?' wide':'')+(cls&&cls.indexOf('full')!==-1?' full':'')+'">'
+      + '<div class="dv-k">'+esc(label)+'</div>'
+      + '<div class="dv-v'+(empty?' none':'')+(cls&&cls.indexOf('mono')!==-1?' mono':'')+'">'+(empty?'Not given':esc(String(val)))+'</div></div>';
+  }
+  function dvBtns(kind, id, name){
+    var ic = kind==='rec'
+      ? '<button class="btn icon-btn rec-play" data-id="'+esc(id)+'" data-name="'+esc(name)+'" type="button" title="Play" aria-label="Play recording"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></button>'
+        + '<button class="btn icon-btn rec-dl" data-id="'+esc(id)+'" data-name="'+esc(name)+'" type="button" title="Download" aria-label="Download recording"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg></button>'
+      : '<button class="btn icon-btn con-dl" data-id="'+esc(id)+'" data-name="'+esc(name)+'" type="button" title="Download" aria-label="Download consent form"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg></button>';
+    return '<div class="acts">'+ic+'</div>';
+  }
   function openModal(d){
     CURRENT = d;
     $('#mTitle').textContent = 'Deal details';
-    var mc = document.querySelector('.modal-card'); if(mc) mc.classList.remove('wide');
+    var mc = document.querySelector('.modal-card'); if(mc){ mc.classList.remove('wide'); mc.classList.add('view'); }
     var me = $('#mEdit'); if(me){ me.style.display = IS_ADMIN ? '' : 'none'; }
-    var rows = [
-      ['Agent', d.agent_name||'—'],
-      ['Customer', d.customer_name||'—'],
-      ['Lead number', d.customer_phone||'—'],
-      ['State', d.state||'—'],
-      ['Deal type', isEap(d) ? 'EAP deal' : 'Carrier deal'],
-      ['Carrier', d.carrier||'—'],
-      ['Plan / tier', d.plan_type||'—'],
-      ['Premium', fmtMoney(d.premium)],
-      ['Commission', d.commission_cents==null ? '— (not approved)' : fmtCents(d.commission_cents)],
-      ['ACA policies', d.aca_count||0],
-      ['Ancillary policies', d.ancillary_count||0],
-      ['Dental policies', d.dental_count||0],
-      ['Vision policies', d.vision_count||0],
-      ['Total deals', d.total||0],
-      ['Status', (d.status||'—')],
-      ['Logged (ET)', fmtDateET(d.created_at)]
-    ];
-    $('#mBody').innerHTML = rows.map(function(r){
-      return '<div class="mrow"><span class="mk">'+esc(r[0])+'</span><span class="mv">'+esc(String(r[1]))+'</span></div>';
-    }).join('')
-    + '<div class="mrow"><span class="mk">Attachments</span><span class="mv">'
-      + ((d.recording_id || (d.consent_forms||[]).length) ? recCell(d) : '<span class="muted">No recording</span>') + '</span></div>';
+    var st = (d.status||'').toLowerCase();
+    var prods = prodLines(d), hh = householdOf(d);
+    var recs = (d.recordings && d.recordings.length) ? d.recordings
+      : (d.recording_id ? [{id:d.recording_id, filename:d.recording_filename}] : []);
+    var cons = d.consent_forms||[];
+    var html = ''
+      + '<div class="dv-hero"><div>'
+      +   '<div class="dv-name">'+esc(d.customer_name||'Unnamed customer')+'</div>'
+      +   '<div class="dv-sub">'+esc(d.customer_phone||'No phone')+(d.state?' · '+esc(d.state):'')+' · sold by <b>'+esc(d.agent_name||'—')+'</b></div>'
+      + '</div><div class="dv-tags">'
+      +   '<span class="dv-tag st-'+esc(st)+'">'+esc(st?cap(st):'—')+'</span>'
+      +   '<span class="dv-tag'+(isEap(d)?' eap':'')+'">'+(isEap(d)?'EAP deal':'Carrier deal')+'</span>'
+      + '</div></div>'
+      + '<div class="dv-stats">'
+      +   '<div class="dv-stat"><span>Premium</span><b>'+esc(fmtMoney(d.premium))+'</b></div>'
+      +   '<div class="dv-stat"><span>Commission</span><b class="'+(d.commission_cents==null?'':'up')+'">'+(d.commission_cents==null?'—':esc(fmtCents(d.commission_cents)))+'</b>'
+      +     (d.commission_cents==null?'<small>Paid once approved</small>':'')+'</div>'
+      +   '<div class="dv-stat"><span>Policies</span><b>'+(d.total||0)+'</b><small>'+esc(products(d)||'None')+'</small></div>'
+      + '</div>'
+      + '<div class="dv-sec"><div class="dv-h">Customer</div><div class="dv-grid">'
+      +   dvField('Full name', d.customer_name)
+      +   dvField('Phone', d.customer_phone)
+      +   dvField('Date of birth', d.customer_dob)
+      +   dvField('Email', d.customer_email, 'wide')
+      +   dvField('Gender', d.customer_gender)
+      +   dvField('Address', fullAddress(d), 'full')
+      +   dvField('Marital status', d.customer_marital_status)
+      +   dvField('Tobacco', d.customer_tobacco)
+      +   dvField('Household income', d.customer_income)
+      +   dvField('Social Security number', d.customer_ssn, 'mono')
+      + '</div></div>'
+      + '<div class="dv-sec"><div class="dv-h">Coverage</div>'
+      +   (prods.length ? '<div class="dv-prods">'+prods.map(function(p){
+            var extra=[];
+            if(p.plan_name) extra.push('Plan: '+p.plan_name);
+            if(p.premium!=null && p.premium!=='') extra.push('Premium: '+fmtMoney(p.premium));
+            if(p.effective_date) extra.push('Effective: '+p.effective_date);
+            if(p.decision) extra.push('Decision: '+cap(String(p.decision).toLowerCase()));
+            if(p.reason) extra.push(p.reason);
+            return '<div class="dv-prod"><span class="dv-prod-name">'+esc(p.product)+'</span>'
+              + '<div class="dv-prod-c">'+esc(p.carrier||'No carrier')+'</div>'
+              + '<div class="dv-prod-t">'+esc(p.tier||'No plan type')+'</div>'
+              + (extra.length?'<div class="dv-prod-x">'+extra.map(esc).join('<br>')+'</div>':'')+'</div>';
+          }).join('')+'</div>' : '<div class="dv-empty">No products on this deal.</div>')
+      + '</div>'
+      + (hh.length ? '<div class="dv-sec"><div class="dv-h">Also on this application ('+hh.length+')</div><div class="dv-list">'
+          + hh.map(function(x){
+              return '<div class="dv-li link" data-open="'+esc(x.id)+'"><div><b>'+esc(x.customer_name||'—')+'</b>'
+                + '<div class="muted">'+esc([x.customer_dob, products(x)].filter(Boolean).join(' · ')||'—')+'</div></div>'
+                + '<span class="dv-tag st-'+esc((x.status||'').toLowerCase())+'">'+esc(x.status?cap(x.status.toLowerCase()):'—')+'</span></div>';
+            }).join('')+'</div></div>' : '')
+      + '<div class="dv-sec"><div class="dv-h">Attachments</div>'
+      +   ((recs.length||cons.length) ? '<div class="dv-list">'
+            + recs.map(function(r,i){ var nm=r.filename||('recording-'+(i+1));
+                return '<div class="dv-li"><div><b>Call recording'+(recs.length>1?' '+(i+1):'')+'</b><div class="muted">'+esc(nm)+'</div></div>'+dvBtns('rec', r.id, nm)+'</div>'; }).join('')
+            + cons.map(function(c,i){ var nm=c.filename||('consent-form-'+(i+1));
+                return '<div class="dv-li"><div><b>Consent form'+(cons.length>1?' '+(i+1):'')+'</b><div class="muted">'+esc(nm)+'</div></div>'+dvBtns('con', c.id, nm)+'</div>'; }).join('')
+            + '</div>' : '<div class="dv-empty">No recording or consent form attached.</div>')
+      + '</div>'
+      + '<div class="dv-sec"><div class="dv-h">Record</div><div class="dv-grid">'
+      +   dvField('Logged (ET)', fmtLong(d.created_at))
+      +   dvField('Submitted (ET)', fmtLong(d.submitted_at))
+      +   dvField('Last updated (ET)', fmtLong(d.updated_at))
+      +   dvField('Approval decision', d.approval_decision ? cap(String(d.approval_decision)) : '')
+      +   dvField('Deal ID', d.id, 'wide mono')
+      + '</div>'
+      +   (d.approval_reason ? '<div class="dv-note"><b>Approval note:</b> '+esc(d.approval_reason)+'</div>' : '')
+      + '</div>';
+    $('#mBody').innerHTML = html;
+    $('#mBody').scrollTop = 0;
     $('#modal').classList.add('open');
   }
   function closeModal(){ $('#modal').classList.remove('open'); }
@@ -874,7 +1027,7 @@ html[data-mode="dark"] #recPlayer{background:#1C2029;border-color:rgba(255,255,2
     CURRENT = d;
     $('#mTitle').textContent = 'Edit deal';
     var me = $('#mEdit'); if(me){ me.style.display = 'none'; }
-    var mc = document.querySelector('.modal-card'); if(mc) mc.classList.add('wide');
+    var mc = document.querySelector('.modal-card'); if(mc){ mc.classList.remove('view'); mc.classList.add('wide'); }
     $('#mBody').innerHTML =
         '<div class="edit-grid">'
       +   efield('Customer name','customer_name',d.customer_name)
@@ -1054,6 +1207,8 @@ html[data-mode="dark"] #recPlayer{background:#1C2029;border-color:rgba(255,255,2
   $('#modal').addEventListener('click', function(e){
     var s=e.target.closest('#eSave'); if(s){ saveEdit(s.getAttribute('data-id')); return; }
     if(e.target.closest('#eCancel')){ closeModal(); return; }
+    var o=e.target.closest('[data-open]');
+    if(o){ var od = DEALS.find(function(x){ return x.id===o.getAttribute('data-open'); }); if(od) openModal(od); return; }
   });
   document.addEventListener('keydown', function(e){ if(e.key==='Escape') closeModal(); });
 
@@ -1135,6 +1290,75 @@ html[data-mode="dark"] #recPlayer{background:#1C2029;border-color:rgba(255,255,2
     else if(v==='next'){ PAGE++; }
     else { PAGE=parseInt(v,10)||1; }
     applyAndRender();
+  });
+
+  // ── Export: the deals the current filters show, every field, as CSV ──
+  // The table holds at most 500 deals, so the export re-reads the range uncapped
+  // and runs the same filters + sort over it.
+  var CSV_COLS = [
+    ['Logged (ET)', function(d){ return fmtLong(d.created_at); }],
+    ['Agent', function(d){ return d.agent_name; }],
+    ['Customer', function(d){ return d.customer_name; }],
+    ['Phone', function(d){ return d.customer_phone; }],
+    ['Date of birth', function(d){ return d.customer_dob; }],
+    ['Email', function(d){ return d.customer_email; }],
+    ['Address', function(d){ return d.customer_address; }],
+    ['City', function(d){ return d.customer_city; }],
+    ['State', function(d){ return d.state; }],
+    ['ZIP', function(d){ return d.customer_zip; }],
+    ['Gender', function(d){ return d.customer_gender; }],
+    ['Marital status', function(d){ return d.customer_marital_status; }],
+    ['Tobacco', function(d){ return d.customer_tobacco; }],
+    ['Household income', function(d){ return d.customer_income; }],
+    ['SSN', function(d){ return d.customer_ssn; }],
+    ['Deal type', function(d){ return isEap(d) ? 'EAP' : 'Carrier'; }],
+    ['Carrier', function(d){ return d.carrier; }],
+    ['Plan / tier', function(d){ return d.plan_type; }],
+    ['Products', function(d){ return prodLines(d).map(prodText).join('; '); }],
+    ['ACA', function(d){ return d.aca_count||0; }],
+    ['Ancillary', function(d){ return d.ancillary_count||0; }],
+    ['Dental', function(d){ return d.dental_count||0; }],
+    ['Vision', function(d){ return d.vision_count||0; }],
+    ['Total policies', function(d){ return d.total||0; }],
+    ['Premium', function(d){ return d.premium==null ? '' : Number(d.premium).toFixed(2); }],
+    ['Commission', function(d){ return d.commission_cents==null ? '' : ((Number(d.commission_cents)||0)/100).toFixed(2); }],
+    ['Status', function(d){ return d.status; }],
+    ['Approval decision', function(d){ return d.approval_decision; }],
+    ['Approval note', function(d){ return d.approval_reason; }],
+    ['Recordings', function(d){ return (d.recordings||[]).map(function(r){ return r.filename||r.id; }).join('; '); }],
+    ['Consent forms', function(d){ return (d.consent_forms||[]).map(function(c){ return c.filename||c.id; }).join('; '); }],
+    ['Submitted (ET)', function(d){ return d.submitted_at ? fmtLong(d.submitted_at) : ''; }],
+    ['Last updated (ET)', function(d){ return d.updated_at ? fmtLong(d.updated_at) : ''; }],
+    ['Application ID', function(d){ return d.application_id; }],
+    ['Deal ID', function(d){ return d.id; }]
+  ];
+  function csvCell(v){
+    var s = (v==null) ? '' : String(v);
+    // A cell starting with = + - @ would run as a formula in Excel / Sheets.
+    if(/^[=+\-@\t\r]/.test(s) && !/^-?\d+(\.\d+)?$/.test(s)) s = "'" + s;
+    return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g,'""') + '"' : s;
+  }
+  var dealsCsvBtn = $('#dealsCsvBtn');
+  if(dealsCsvBtn) dealsCsvBtn.addEventListener('click', async function(){
+    var btn = this, label = btn.innerHTML;
+    btn.disabled = true; btn.lastChild.textContent = 'Exporting…';
+    try{
+      var qs = 'from='+encodeURIComponent(FROM)+'&to='+encodeURIComponent(TO)+'&all=true&_='+Date.now();
+      var r = await window.__ebAPI.get('/compliance/deals/today-all?'+qs);
+      var rows = filterRows((r && r.deals) || []);
+      if(!rows.length){ if(window.__ebShowToast) window.__ebShowToast('No deals match these filters', 'error'); return; }
+      var lines = [CSV_COLS.map(function(c){ return csvCell(c[0]); }).join(',')]
+        .concat(rows.map(function(d){ return CSV_COLS.map(function(c){ return csvCell(c[1](d)); }).join(','); }));
+      // BOM so Excel opens names with accents correctly.
+      var blob = new Blob(['﻿' + lines.join('\r\n')], { type:'text/csv;charset=utf-8' });
+      var name = 'deals_' + (FROM==='2000-01-01' ? 'all-time' : (FROM===TO ? FROM : FROM+'_to_'+TO)) + '.csv';
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(function(){ URL.revokeObjectURL(url); }, 15000);
+      if(window.__ebShowToast) window.__ebShowToast('Exported '+rows.length+(rows.length===1?' deal':' deals'), 'success');
+    }catch(err){
+      if(window.__ebShowToast) window.__ebShowToast('Could not export deals', 'error');
+    }finally{ btn.disabled = false; btn.innerHTML = label; }
   });
 
   load();

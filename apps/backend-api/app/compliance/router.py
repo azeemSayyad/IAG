@@ -1289,13 +1289,15 @@ def _eastern_range(from_iso: Optional[str], to_iso: Optional[str]):
 def all_deals_today(
     from_: Optional[str] = Query(None, alias="from"),
     to: Optional[str] = Query(None),
+    all_rows: bool = Query(False, alias="all"),
     db: Session = Depends(get_db),
     tenant_id: str = Depends(get_tenant_id),
     current_user: User = Depends(require_compliance_read),
 ):
     """Deals across ALL agents (admin-only) for the selected Eastern date range
     (defaults to today), with org-wide policy totals and the agent who logged
-    each deal. Powers the admin All Deals page."""
+    each deal. Powers the admin All Deals page. ``all=true`` lifts the 500-row
+    table cap — the page's CSV export asks for it."""
     if current_user.role not in ("admin", "tenant_admin", "super_admin"):
         raise HTTPException(status_code=403, detail="Admins only")
 
@@ -1322,7 +1324,19 @@ def all_deals_today(
 
     # Resolve recording_id -> filename (one query, no N+1) so the admin All Deals
     # table can offer a per-deal download/play of the call recording.
-    rec_ids = {d.recording_id for d in deals if d.recording_id}
+    def _as_uuid(v):
+        try:
+            return v if isinstance(v, UUID) else UUID(str(v))
+        except Exception:
+            return None
+    # Every recording on the deal (up to 4), not just the primary one.
+    def _rec_list(d):
+        out = []
+        for u in [d.recording_id, *map(_as_uuid, (d.recording_ids or []))]:
+            if u and u not in out:
+                out.append(u)
+        return out
+    rec_ids = {u for d in deals for u in _rec_list(d)}
     rec_map = {}
     if rec_ids:
         for rid, fn in (
@@ -1332,11 +1346,6 @@ def all_deals_today(
             rec_map[rid] = fn
 
     # Same for the consent forms attached to each deal, so All Deals can link them.
-    def _as_uuid(v):
-        try:
-            return v if isinstance(v, UUID) else UUID(str(v))
-        except Exception:
-            return None
     con_ids = {u for d in deals for u in map(_as_uuid, (d.consent_form_ids or [])) if u}
     con_map = {}
     if con_ids:
@@ -1374,10 +1383,16 @@ def all_deals_today(
         "customer_city": d.customer_city,
         "customer_zip": d.customer_zip,
         "customer_gender": d.customer_gender,
+        "customer_marital_status": d.customer_marital_status,
+        "customer_tobacco": d.customer_tobacco,
+        "customer_income": d.customer_income,
+        "customer_ssn": d.customer_ssn,
         "state": d.state,
         "carrier": d.carrier,
         "plan_type": d.plan_type,
         "premium": float(d.premium) if d.premium is not None else None,
+        "products": d.products or [],
+        "application_id": str(d.application_id) if d.application_id else None,
         "aca_count": d.aca_count or 0,
         "dental_count": d.dental_count or 0,
         "vision_count": d.vision_count or 0,
@@ -1385,13 +1400,17 @@ def all_deals_today(
         "total": (d.aca_count or 0) + (d.dental_count or 0) + (d.vision_count or 0) + (d.ancillary_count or 0),
         "status": d.status,
         "approval_decision": d.approval_decision,
+        "approval_reason": d.approval_reason,
         "recording_id": str(d.recording_id) if d.recording_id else None,
         "recording_filename": rec_map.get(d.recording_id),
+        "recordings": [{"id": str(u), "filename": rec_map.get(u)} for u in _rec_list(d)],
         "consent_forms": [
             {"id": str(c), "filename": con_map.get(str(c))} for c in (d.consent_form_ids or [])
         ],
         "created_at": d.created_at.isoformat() if d.created_at else None,
-    } for d in deals[:500]]   # table capped at 500; totals below span ALL of the range
+        "submitted_at": d.submitted_at.isoformat() if d.submitted_at else None,
+        "updated_at": d.updated_at.isoformat() if d.updated_at else None,
+    } for d in (deals if all_rows else deals[:500])]   # table capped at 500; totals below span ALL of the range
     return {
         "date": to_label,        # kept for backward compat (single-day label)
         "from": from_label,
