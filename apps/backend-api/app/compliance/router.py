@@ -12,7 +12,10 @@ from app.core.audit import log_audit_event
 from app.core.database import INCLUDE_TRASHED, get_db
 from app.core.date_ranges import resolve_range, APPROVED_STATUSES
 from app.core.agent_profile import ensure_agent_profile
-from app.core.deps import get_current_active_user, get_tenant_id, require_compliance_manage, require_compliance_read
+from app.core.deps import (
+    get_current_active_user, get_tenant_id, get_user_from_header_or_query,
+    require_compliance_manage, require_compliance_read,
+)
 from app.models.agent import Agent
 from app.models.compliance import (
     AgentCarrierAppointment,
@@ -804,14 +807,24 @@ async def upload_deal_recording(
     }
 
 
+def _disposition(filename: str, download: bool) -> str:
+    # quote() keeps non-ASCII names valid in the header (latin-1 only otherwise).
+    from urllib.parse import quote
+    safe = filename.replace('"', "")
+    return f"{'attachment' if download else 'inline'}; filename*=UTF-8''{quote(safe)}"
+
+
 @router.get("/deals/recording/{recording_id}")
 def get_deal_recording(
     recording_id: UUID,
+    download: bool = Query(False),
     db: Session = Depends(get_db),
-    tenant_id: str = Depends(get_tenant_id),
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(get_user_from_header_or_query),
 ):
-    """Play back / download a stored deal recording (tenant-scoped)."""
+    """Play back / download a stored deal recording (tenant-scoped). Accepts the
+    JWT as ?token= so the page can point <audio> / a download link straight at it:
+    an authed fetch() can't follow the redirect to the S3 bucket (another origin)."""
+    tenant_id = str(current_user.tenant_id)
     rec = (
         db.query(DealRecording)
         .filter(DealRecording.id == recording_id, DealRecording.tenant_id == tenant_id)
@@ -821,14 +834,14 @@ def get_deal_recording(
         raise HTTPException(status_code=404, detail="Recording not found")
     if rec.storage == "s3" and rec.s3_key:
         from app.calls.s3_storage import s3_storage
-        url = s3_storage.signed_url(rec.s3_key)
+        url = s3_storage.signed_url(rec.s3_key, download_name=(rec.filename or "recording") if download else None)
         if not url:
             raise HTTPException(status_code=404, detail="Recording is unavailable")
         return RedirectResponse(url)
     return Response(
         content=bytes(rec.data or b""),
         media_type=rec.content_type or "application/octet-stream",
-        headers={"Content-Disposition": f'inline; filename="{rec.filename or "recording"}"'},
+        headers={"Content-Disposition": _disposition(rec.filename or "recording", download)},
     )
 
 
@@ -912,11 +925,13 @@ async def upload_deal_consent_form(
 @router.get("/deals/consent-form/{consent_form_id}")
 def get_deal_consent_form(
     consent_form_id: UUID,
+    download: bool = Query(False),
     db: Session = Depends(get_db),
-    tenant_id: str = Depends(get_tenant_id),
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(get_user_from_header_or_query),
 ):
-    """View / download a stored consent form (tenant-scoped)."""
+    """View / download a stored consent form (tenant-scoped). ?token= like the
+    recording route above."""
+    tenant_id = str(current_user.tenant_id)
     doc = (
         db.query(DealRecording)
         .filter(
@@ -930,14 +945,14 @@ def get_deal_consent_form(
         raise HTTPException(status_code=404, detail="Consent form not found")
     if doc.storage == "s3" and doc.s3_key:
         from app.calls.s3_storage import s3_storage
-        url = s3_storage.signed_url(doc.s3_key)
+        url = s3_storage.signed_url(doc.s3_key, download_name=(doc.filename or "consent-form") if download else None)
         if not url:
             raise HTTPException(status_code=404, detail="Consent form is unavailable")
         return RedirectResponse(url)
     return Response(
         content=bytes(doc.data or b""),
         media_type=doc.content_type or "application/octet-stream",
-        headers={"Content-Disposition": f'inline; filename="{doc.filename or "consent-form"}"'},
+        headers={"Content-Disposition": _disposition(doc.filename or "consent-form", download)},
     )
 
 

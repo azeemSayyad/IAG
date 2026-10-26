@@ -92,13 +92,17 @@ class S3RecordingStorage:
         key = self.key_for(tenant_id, call_id)
         return self.upload_bytes(data, key)
 
-    def signed_url(self, key: str, expires_seconds: int = 3600) -> Optional[str]:
-        """Time-limited GET URL for playback (recordings are never public)."""
+    def signed_url(self, key: str, expires_seconds: int = 3600,
+                   download_name: Optional[str] = None) -> Optional[str]:
+        """Time-limited GET URL for playback (recordings are never public).
+        ``download_name`` makes the bucket serve it as an attachment with that name."""
         if not self.configured() or not key:
             return None
-        return self._client().generate_presigned_url(
-            "get_object", Params={"Bucket": self.bucket, "Key": key}, ExpiresIn=expires_seconds,
-        )
+        params = {"Bucket": self.bucket, "Key": key}
+        if download_name:
+            from urllib.parse import quote
+            params["ResponseContentDisposition"] = f"attachment; filename*=UTF-8''{quote(download_name)}"
+        return self._client().generate_presigned_url("get_object", Params=params, ExpiresIn=expires_seconds)
 
 
 s3_storage = S3RecordingStorage()

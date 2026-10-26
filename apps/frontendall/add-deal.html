@@ -133,11 +133,11 @@
   <div class="wiz-card" id="recCard" style="border:1.5px solid rgba(var(--accent-rgb),.4)">
     <div class="wiz-eyebrow">Required first</div>
     <h2 class="wiz-title">Call recording</h2>
-    <p class="wiz-sub">Upload the recording(s) of this sales call — up to 4. You can fill the form now, but Log Sale stays disabled until at least one recording and one consent form are attached.</p>
+    <p class="wiz-sub">Upload the recording(s) of this sales call — up to 4. At least one recording and one consent form are required to log the sale.</p>
     <div id="recList" style="display:flex;flex-direction:column;gap:8px;margin-bottom:10px"></div>
     <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
       <button id="recBtn" type="button" style="height:42px;padding:0 18px;border-radius:10px;border:none;background:var(--accent);color:#fff;font:700 .88rem inherit;cursor:pointer;white-space:nowrap">⬆ Upload call recording</button>
-      <span id="recStatus" style="font-size:.85rem;color:#A3525C;font-weight:600">🔒 Log Sale disabled — upload at least one recording to enable it.</span>
+      <span id="recStatus" style="font-size:.85rem;color:#A3525C;font-weight:600">Required — upload at least one call recording.</span>
     </div>
     <input id="recInput" type="file" accept="audio/*,video/*" style="display:none"/>
   </div>
@@ -148,11 +148,11 @@
   <div class="wiz-card" id="consentCard" style="border:1.5px solid rgba(var(--accent-rgb),.4)">
     <div class="wiz-eyebrow">Required</div>
     <h2 class="wiz-title">Consent forms</h2>
-    <p class="wiz-sub">Attach the signed consent form(s) for this enrollment — PDF, photo or document, up to 6. Log Sale stays disabled until at least one is attached. They’re saved against every person on this deal.</p>
+    <p class="wiz-sub">Attach the signed consent form(s) for this enrollment — PDF, photo or document, up to 6. At least one is required to log the sale. They’re saved against every person on this deal.</p>
     <div id="conList" style="display:flex;flex-direction:column;gap:8px;margin-bottom:10px"></div>
     <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
       <button id="conBtn" type="button" style="height:42px;padding:0 18px;border-radius:10px;border:1.5px solid var(--accent);background:transparent;color:var(--accent);font:700 .88rem inherit;cursor:pointer;white-space:nowrap">⬆ Upload consent form</button>
-      <span id="conStatus" style="font-size:.85rem;color:#A3525C;font-weight:600">🔒 Log Sale disabled — upload at least one consent form to enable it.</span>
+      <span id="conStatus" style="font-size:.85rem;color:#A3525C;font-weight:600">Required — upload at least one consent form.</span>
     </div>
     <input id="conInput" type="file" accept=".pdf,.doc,.docx,.txt,image/*,application/pdf" multiple style="display:none"/>
   </div>
@@ -260,14 +260,11 @@
   let CONSENT_IDS = [];             // attached consent forms: {id, name} — mandatory, gates Log Sale
   const CON_MAX = 6;
   function setLocked(){
-    // Upload gate: the agent CAN fill the whole form; only SUBMIT (Log Sale)
-    // is gated until a call recording AND a consent form are attached.
-    const needRec = !RECORDING_IDS.length, needCon = !CONSENT_IDS.length;
-    const locked = needRec || needCon;
-    const log = $('#btnLog');
-    log.disabled = locked;
-    log.style.opacity = locked ? '.5' : '';
-    log.title = locked ? ('Upload ' + [needRec && 'the call recording', needCon && 'a consent form'].filter(Boolean).join(' and ') + ' to enable Log Sale') : '';
+    // Log Sale is always tappable: a tap with the recording / consent form missing
+    // shows the error on those cards instead of a dead, silent button. Uploading
+    // clears that error.
+    if(RECORDING_IDS.length) clearCardError($('#recCard'));
+    if(CONSENT_IDS.length) clearCardError($('#consentCard'));
   }
 
   function money(el){
@@ -459,6 +456,28 @@
     if(dobError(v) || d.length!==8) return '';
     return d.slice(4)+'-'+d.slice(0,2)+'-'+d.slice(2,4);
   }
+  // "Required" errors shown right under the field the agent missed. The message
+  // line is created on demand for fields whose markup has none. data-req marks it
+  // as ours, so typing / picking in the field clears it (the DOB / phone hints
+  // keep their own live rules).
+  function hintFor(host){
+    let hint = host.querySelector(':scope > .field-hint');
+    if(!hint){ hint = document.createElement('p'); hint.className = 'field-hint'; hint.hidden = true; host.appendChild(hint); }
+    return hint;
+  }
+  function showError(el, msg, host){
+    host = host || el.closest('.field') || el;
+    const hint = hintFor(host);
+    hint.textContent = msg; hint.hidden = false; hint.dataset.req = '1';
+    markInvalid(el);
+  }
+  function clearError(el, host){
+    host = host || el.closest('.field') || el;
+    const hint = host.querySelector(':scope > .field-hint');
+    if(hint && hint.dataset.req){ hint.hidden = true; hint.textContent = ''; delete hint.dataset.req; }
+    el.classList.remove('eb-invalid'); el.style.outline='';
+  }
+  function clearCardError(card){ if(card) clearError(card, card); }
   function setFieldHint(el, msg){
     const field = el.closest('.field');
     const hint = field && field.querySelector('.field-hint');
@@ -627,7 +646,7 @@
     if(n>=REC_MAX){ btn.disabled=true; btn.style.opacity='.5'; btn.style.cursor='default'; btn.textContent='Maximum '+REC_MAX+' recordings'; }
     else { btn.disabled=false; btn.style.opacity=''; btn.style.cursor='pointer'; btn.textContent = n ? ('⬆ Add another recording ('+n+'/'+REC_MAX+')') : '⬆ Upload call recording'; }
     if(n){ st.style.color='#2E5A45'; st.textContent='✓ '+n+' recording'+(n>1?'s':'')+' attached.'; }
-    else { st.style.color='#A3525C'; st.textContent='🔒 Log Sale disabled — upload at least one recording to enable it.'; }
+    else { st.style.color='#A3525C'; st.textContent='Required — upload at least one call recording.'; }
     setLocked();
   }
   $('#recBtn').addEventListener('click', ()=>{ if(RECORDING_IDS.length<REC_MAX) $('#recInput').click(); });
@@ -667,7 +686,7 @@
     if(n>=CON_MAX){ btn.disabled=true; btn.style.opacity='.5'; btn.style.cursor='default'; btn.textContent='Maximum '+CON_MAX+' consent forms'; }
     else { btn.disabled=false; btn.style.opacity=''; btn.style.cursor='pointer'; btn.textContent = n ? ('\u2b06 Add another consent form ('+n+'/'+CON_MAX+')') : '\u2b06 Upload consent form'; }
     if(n){ st.style.color='#2E5A45'; st.textContent='\u2713 '+n+' consent form'+(n>1?'s':'')+' attached.'; }
-    else { st.style.color='#A3525C'; st.textContent='\ud83d\udd12 Log Sale disabled \u2014 upload at least one consent form to enable it.'; }
+    else { st.style.color='#A3525C'; st.textContent='Required \u2014 upload at least one consent form.'; }
     setLocked();
   }
   $('#conBtn').addEventListener('click', ()=>{ if(CONSENT_IDS.length<CON_MAX) $('#conInput').click(); });
@@ -698,67 +717,75 @@
   // the agent fills it. Used by the Log Sale validation below so the reason is shown
   // ON the field, not just in the toast.
   function markInvalid(el){ if(!el) return; el.classList.add('eb-invalid'); el.style.outline='2px solid #d9534f'; el.style.outlineOffset='1px'; }
-  function clearInvalidAll(){ $$('.eb-invalid').forEach(el=>{ el.classList.remove('eb-invalid'); el.style.outline=''; }); }
-  document.addEventListener('input', function(e){
-    const el=e.target; if(el && el.classList && el.classList.contains('eb-invalid')){ el.classList.remove('eb-invalid'); el.style.outline=''; }
-  });
-  document.addEventListener('change', function(e){
-    const el=e.target; if(el && el.classList && el.classList.contains('eb-invalid')){ el.classList.remove('eb-invalid'); el.style.outline=''; }
-  });
+  function clearInvalidAll(){
+    $$('.eb-invalid').forEach(el=>{ el.classList.remove('eb-invalid'); el.style.outline=''; });
+    $$('.field-hint[data-req]').forEach(h=>{ h.hidden=true; h.textContent=''; delete h.dataset.req; });
+  }
+  function clearOnEdit(e){
+    const el=e.target; if(!el || !el.classList) return;
+    if(el.classList.contains('eb-invalid')) clearError(el);
+    // Ticking any product clears that person's "pick a product" message.
+    if(el.matches && el.matches('input[data-prod]')){
+      const pr=el.closest('.prods');
+      if(pr){ clearError(pr, pr); $$('.prod', pr).forEach(function(x){ x.classList.remove('eb-invalid'); x.style.outline=''; }); }
+    }
+  }
+  document.addEventListener('input', clearOnEdit);
+  document.addEventListener('change', clearOnEdit);
 
   $('#btnLog').addEventListener('click', async function(){
     const btn=this; btn.disabled=true;
-    if(!RECORDING_IDS.length){ flash('Cannot log the sale — upload at least one call recording first.'); btn.disabled=false; return; }
-    if(!CONSENT_IDS.length){ flash('Cannot log the sale — upload at least one consent form first.'); btn.disabled=false; return; }
     clearInvalidAll();
-    // Household State and Agent NPN are mandatory.
+    // Check EVERYTHING in one pass and put the message under each field the agent
+    // missed, then scroll to the first one.
+    const errs = [];
+    const err = (el, msg, host) => { if(!el) return; showError(el, msg, host); errs.push(el); };
     const stateEl = $('#sState'); const state = (stateEl.value||'').trim().toUpperCase();
-    if(!state){ markInvalid(stateEl); stateEl.scrollIntoView({behavior:'smooth',block:'center'}); flash('Cannot log the sale — missing the household State (fill it at the top of the form).'); btn.disabled=false; return; }
-    // The API only accepts a real 2-letter US code; anything else is rejected
-    // before the deal is saved, so catch it here with a clear message.
-    // Same list as VALID_US_STATES in the API (50 states + DC; no territories).
+    // The API only accepts a real 2-letter US code — same list as VALID_US_STATES
+    // in the API (50 states + DC; no territories).
     const API_STATES = 'AL AK AZ AR CA CO CT DE FL GA HI IA ID IL IN KS KY LA MA MD ME MI MN MO MS MT NC ND NE NH NJ NM NV NY OH OK OR PA RI SC SD TN TX UT VA VT WA WI WV WY DC'.split(' ');
-    if(API_STATES.indexOf(state) === -1){ markInvalid(stateEl); stateEl.scrollIntoView({behavior:'smooth',block:'center'}); flash('Cannot log the sale — "'+state+'" is not a US state. Use the 2-letter code, e.g. FL.'); btn.disabled=false; return; }
+    if(!state) err(stateEl, 'State is required.');
+    else if(API_STATES.indexOf(state) === -1) err(stateEl, '"'+state+'" is not a US state — use the 2-letter code, e.g. FL.');
     const npnEl = $('#sNpn');
-    if(!(npnEl.value||'').trim()){ markInvalid(npnEl); npnEl.scrollIntoView({behavior:'smooth',block:'center'}); flash('Cannot log the sale — missing the Agent NPN (set it in Settings → Licenses & Appointments).'); btn.disabled=false; return; }
+    if(!(npnEl.value||'').trim()) err(npnEl, 'Agent NPN is required (set it in Settings → Licenses & Appointments).');
     const cards = $$('.person-card', wrap);
     const people = cards.map(collectPerson);
-    // Validate each person: collect EVERY missing required field, NAME them all in one
-    // message AND outline each missing field red + scroll to the first, so the agent
-    // sees exactly what to fix (e.g. "Person 1 is missing: Email, ZIP").
+    // Everything is required EXCEPT Apt / Unit # and Social (SSN).
     for(let i=0;i<people.length;i++){
       const p=people[i], card=cards[i];
-      const fieldEl = f => card.querySelector('[data-f="'+f+'"]');
-      const missing=[], badEls=[];
-      const req = (bad, label, f) => { if(bad){ missing.push(label); const el = f && fieldEl(f); if(el) badEls.push(el); } };
-      // Everything is required EXCEPT Apt / Unit # and Social (SSN).
-      req(!p.first,'First name','first');
-      req(!p.last,'Last name','last');
-      // Date of birth is rendered for Person 1 only — added persons drop that
-      // field (see addPerson), so only require it on the first person.
-      // A typed-but-unparseable date (e.g. "13/45/1990") is called out as invalid
-      // rather than "missing", so the agent knows to fix it, not fill it.
-      if(i===0) req(!p.dob, p.dobRaw ? 'a valid Date of birth (MM/DD/YYYY)' : 'Date of birth', 'dob');
-      // Same shape as the DOB check: a half-typed number is called out as invalid
-      // rather than "missing", so the agent knows to fix it, not fill it.
-      req(!p.phone || !!phoneError(p.phone), p.phone ? 'a valid 10-digit Phone' : 'Phone', 'phone');
-      req(!p.address,'Address','address');
-      req(!p.city,'City','city');
-      req(!p.zip,'ZIP','zip');
-      req(!p.gender,'Gender','gender');
-      req(!p.products.length,'a product (tick at least one)',null);
-      if(missing.length){
-        badEls.forEach(markInvalid);
-        (badEls[0]||card).scrollIntoView({behavior:'smooth',block:'center'});
-        flash('Cannot log the sale — Person '+(i+1)+' is missing: '+missing.join(', ')+'.');
-        btn.disabled=false; return;
+      const f = name => card.querySelector('[data-f="'+name+'"]');
+      if(!p.first) err(f('first'), 'First name is required.');
+      if(!p.last) err(f('last'), 'Last name is required.');
+      // Date of birth is rendered for Person 1 only (added persons drop it). A
+      // typed-but-unparseable date is called out as invalid, not missing.
+      if(i===0 && !p.dob) err(f('dob'), p.dobRaw ? 'Enter a valid date of birth (MM/DD/YYYY).' : 'Date of birth is required.');
+      if(!p.phone) err(f('phone'), 'Phone is required.');
+      else if(phoneError(p.phone)) err(f('phone'), 'Enter a valid 10-digit phone number.');
+      if(!p.address) err(f('address'), 'Address is required.');
+      if(!p.city) err(f('city'), 'City is required.');
+      if(!p.zip) err(f('zip'), 'ZIP is required.');
+      if(!p.gender) err(f('gender'), 'Gender is required.');
+      const prods = card.querySelector('.prods');
+      if(!p.products.length){
+        // Message under the product list; outline the product rows, not the EAP box above them.
+        showError(prods, 'Pick at least one product for this person.', prods);
+        prods.classList.remove('eb-invalid'); prods.style.outline='';
+        $$('.prod', prods).forEach(markInvalid);
+        errs.push($$('.prod', prods)[0] || prods);
       }
-      for(const pr of p.products){
-        if(pr.product!=='ACA') continue;
-        const prodEl = $$('.prod', card).find(function(el){ const cb=el.querySelector('input[data-prod]'); return cb && cb.dataset.prod==='ACA'; });
-        if(!pr.carrier){ const el=prodEl&&prodEl.querySelector('[data-pf="carrier"]'); markInvalid(el); (el||card).scrollIntoView({behavior:'smooth',block:'center'}); flash('Cannot log the sale — Person '+(i+1)+' (ACA): choose a carrier.'); btn.disabled=false; return; }
-        if(!pr.tier){ const el=prodEl&&prodEl.querySelector('[data-pf="tier"]'); markInvalid(el); (el||card).scrollIntoView({behavior:'smooth',block:'center'}); flash('Cannot log the sale — Person '+(i+1)+' (ACA): choose a plan type.'); btn.disabled=false; return; }
+      const aca = $$('.prod', card).find(function(el){ const cb=el.querySelector('input[data-prod]'); return cb && cb.checked && cb.dataset.prod==='ACA'; });
+      const acaP = p.products.find(function(pr){ return pr.product==='ACA'; });
+      if(aca && acaP){
+        if(!acaP.carrier) err(aca.querySelector('[data-pf="carrier"]'), 'Choose a carrier for ACA.');
+        if(!acaP.tier) err(aca.querySelector('[data-pf="tier"]'), 'Choose a plan type for ACA.');
       }
+    }
+    // The upload cards already say "Required — upload…" in red; outline them.
+    if(!RECORDING_IDS.length){ const c=$('#recCard'); markInvalid(c); errs.push(c); }
+    if(!CONSENT_IDS.length){ const c=$('#consentCard'); markInvalid(c); errs.push(c); }
+    if(errs.length){
+      errs[0].scrollIntoView({behavior:'smooth',block:'center'});
+      btn.disabled=false; return;
     }
     // Validation passed — show a loading spinner on the button for the network phase.
     const _logHTML = btn.innerHTML;

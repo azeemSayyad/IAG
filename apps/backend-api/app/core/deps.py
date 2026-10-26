@@ -1,8 +1,10 @@
-from fastapi import Depends, HTTPException, status
+from typing import Optional
+
+from fastapi import Depends, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.core.security import get_current_user
+from app.core.security import decode_token, get_current_user
 from app.core.permissions import (
     Permission,
     require_permission,
@@ -17,6 +19,27 @@ def get_current_active_user(current_user: User = Depends(get_current_user)) -> U
     if current_user.status != "active":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Inactive user")
     return current_user
+
+
+def get_user_from_header_or_query(
+    request: Request,
+    token: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+) -> User:
+    # <video src> / <audio src> / a download link can't send an Authorization
+    # header, so file routes also accept the access token as ?token=… (still the
+    # same JWT, same expiry).
+    auth = request.headers.get("authorization") or ""
+    raw = auth[7:] if auth.lower().startswith("bearer ") else (token or "")
+    if not raw:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    payload = decode_token(raw)
+    if payload.get("type") != "access":
+        raise HTTPException(status_code=401, detail="Invalid token type")
+    user = db.query(User).filter(User.id == payload.get("sub"), User.deleted_at.is_(None)).first()
+    if not user or user.status != "active":
+        raise HTTPException(status_code=401, detail="User not found")
+    return user
 
 
 # Roles that share the full run of the admin surfaces. "head" (Head Manager) is

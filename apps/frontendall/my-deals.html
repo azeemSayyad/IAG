@@ -519,38 +519,49 @@ html[data-mode="dark"] #recPlayer{background:#1C2029;border-color:rgba(255,255,2
     return '<button class="btn icon-btn rec-play" data-id="'+esc(d.recording_id)+'" data-name="'+nm+'" type="button" title="Play recording" aria-label="Play recording"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></button>'
          + '<button class="btn icon-btn rec-dl" data-id="'+esc(d.recording_id)+'" data-name="'+nm+'" type="button" title="Download recording" aria-label="Download recording"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg></button>';
   }
-  // The GET recording route needs the auth header, so fetch as an authed blob
-  // (a plain <a href> would 401). Works same-origin in prod and cross-origin in dev.
-  async function fetchRecordingBlob(id){
-    var tok = localStorage.getItem('access_token');
+  // Point <audio> / a download link straight at the API, the JWT as ?token= —
+  // in production the file lives in S3 and the route redirects there, which an
+  // authed fetch() can't follow (another origin). Doing it inside the tap is
+  // also what lets iPad / iPhone Safari start playback.
+  function fileUrl(kind, id, download){
+    var tok = localStorage.getItem('access_token') || '';
     var base = (window.__ebAPI && window.__ebAPI.baseUrl) || '';
-    var res = await fetch(base + '/api/v1/compliance/deals/recording/' + encodeURIComponent(id),
-                          { headers: tok ? { Authorization: 'Bearer ' + tok } : {} });
-    if(!res.ok) throw new Error('HTTP '+res.status);
-    return await res.blob();
+    return base + '/api/v1/compliance/deals/' + kind + '/' + encodeURIComponent(id)
+      + '?token=' + encodeURIComponent(tok) + (download ? '&download=true' : '');
+  }
+  // The token rides in the URL, so it must not be stale: if it expires within a
+  // minute, one authed call first lets api.js refresh it.
+  function tokenFresh(){
+    try{
+      var t = localStorage.getItem('access_token') || '';
+      var p = JSON.parse(atob(t.split('.')[1].replace(/-/g,'+').replace(/_/g,'/')));
+      return !p.exp || p.exp*1000 > Date.now() + 60000;
+    }catch(e){ return true; }   // not a JWT (e.g. the local demo token) — leave it to the server
+  }
+  function withFreshToken(fn){
+    if(tokenFresh()) return fn();
+    Promise.resolve(window.__ebAPI && window.__ebAPI.get('/auth/me')).catch(function(){}).then(fn);
+  }
+  function saveFile(url, name){
+    var a=document.createElement('a'); a.href=url; a.download=name||''; a.rel='noopener';
+    document.body.appendChild(a); a.click(); a.remove();
   }
   // Play or download — delegated on document so it fires in the table AND the modal.
-  document.addEventListener('click', async function(e){
+  document.addEventListener('click', function(e){
     var play = e.target.closest('.rec-play'), dl = e.target.closest('.rec-dl');
     var btn = play || dl; if(!btn) return;
     var id = btn.getAttribute('data-id'), name = btn.getAttribute('data-name')||'recording';
-    var orig = btn.innerHTML; btn.disabled = true; btn.innerHTML = '…';
-    try{
-      var blob = await fetchRecordingBlob(id);
-      var url = URL.createObjectURL(blob);
+    withFreshToken(function(){
       if(play){
-        // Play in a single fixed mini-player so the table layout never shifts
-        // (an inline <audio> in the cell would widen the row and push Actions out of view).
+        // One fixed mini-player so the table layout never shifts.
         var rp=$('#recPlayer'), ra=$('#recAudio');
-        ra.src=url; rp.classList.add('show'); ra.play();
-        setTimeout(function(){ URL.revokeObjectURL(url); }, 300000);
+        ra.onerror = function(){ if(ra.getAttribute('src') && window.__ebShowToast) window.__ebShowToast('Could not load recording', 'error'); };
+        ra.src = fileUrl('recording', id, false); rp.classList.add('show');
+        var p = ra.play(); if(p && p.catch) p.catch(function(){});   // the player's own ▶ still works
       }else{
-        var a=document.createElement('a'); a.href=url; a.download=name; document.body.appendChild(a); a.click(); a.remove();
-        setTimeout(function(){ URL.revokeObjectURL(url); }, 15000);
+        saveFile(fileUrl('recording', id, true), name);
       }
-    }catch(err){
-      if(window.__ebShowToast) window.__ebShowToast('Could not load recording', 'error');
-    }finally{ btn.disabled=false; btn.innerHTML=orig; }
+    });
   });
   // Close the mini-player: stop playback and hide it.
   $('#recClose').addEventListener('click', function(){

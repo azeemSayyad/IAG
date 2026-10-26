@@ -18,8 +18,7 @@ from sqlalchemy.orm import Session
 
 from app.core.audit import log_audit_event
 from app.core.database import get_db
-from app.core.deps import get_current_active_user, get_tenant_id, require_role
-from app.core.security import decode_token
+from app.core.deps import get_current_active_user, get_tenant_id, get_user_from_header_or_query, require_role
 from app.models.training import TrainingStep
 from app.models.user import User
 from app.schemas.training import (
@@ -352,33 +351,13 @@ def remove_step_video(
     return _to_response(s)
 
 
-def _user_from_header_or_query(
-    request: Request,
-    token: Optional[str] = Query(None),
-    db: Session = Depends(get_db),
-) -> User:
-    # <video src> can't send an Authorization header, so playback also accepts
-    # the access token as ?token=… (still the same JWT, same expiry).
-    auth = request.headers.get("authorization") or ""
-    raw = auth[7:] if auth.lower().startswith("bearer ") else (token or "")
-    if not raw:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-    payload = decode_token(raw)
-    if payload.get("type") != "access":
-        raise HTTPException(status_code=401, detail="Invalid token type")
-    user = db.query(User).filter(User.id == payload.get("sub"), User.deleted_at.is_(None)).first()
-    if not user or user.status != "active":
-        raise HTTPException(status_code=401, detail="User not found")
-    return user
-
-
 @router.get("/steps/{step_id}/video")
 def stream_step_video(
     step_id: UUID,
     request: Request,
     download: bool = Query(False, description="Force a download instead of inline display"),
     db: Session = Depends(get_db),
-    user: User = Depends(_user_from_header_or_query),
+    user: User = Depends(get_user_from_header_or_query),
 ):
     """Serve a step's uploaded file (video, audio, image, PDF, document…)."""
     s = _own(db, str(user.tenant_id), step_id)
