@@ -328,3 +328,22 @@ html[data-mode="dark"] .contact-avatar {
   background: hsl(var(--h) 62% 60% / 0.20);
   color: hsl(var(--h) 70% 74%);
 }
+
+/* Lead Manager "Join queue" — brand gradient, soft glow, lifts on hover. */
+.join-btn {
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  box-shadow: 0 10px 22px -10px rgba(var(--accent-rgb), 0.75), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease;
+}
+.join-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  filter: brightness(1.06);
+  box-shadow: 0 14px 28px -10px rgba(var(--accent-rgb), 0.85), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+.join-btn:active:not(:disabled) { transform: translateY(0); }
+
+/* Lead Manager "Taking calls" — live green, same feel as Join queue. */
+.ready-on {
+  background: linear-gradient(135deg, var(--color-success), color-mix(in srgb, var(--color-success) 70%, #2dd4bf));
+  box-shadow: 0 8px 18px -8px color-mix(in srgb, var(--color-success) 80%, transparent), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}

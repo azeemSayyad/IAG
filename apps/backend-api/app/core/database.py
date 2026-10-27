@@ -30,6 +30,29 @@ engine = create_engine(
 )
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
+# Local diagnosis only (DB_POOL_DEBUG=1): log any connection held > 3 s and
+# where it was taken — the culprit behind "QueuePool limit … reached" errors.
+if os.getenv("DB_POOL_DEBUG") or settings.DB_POOL_DEBUG:
+    import logging
+    import time
+    import traceback
+
+    _pool_log = logging.getLogger("db.pool")
+
+    @event.listens_for(engine, "checkout")
+    def _co(dbapi_conn, record, proxy):
+        record.info["_t"] = time.monotonic()
+        record.info["_stack"] = "".join(
+            f for f in traceback.format_stack(limit=40) if "/app/" in f and "database.py" not in f
+        )[-1500:]
+
+    @event.listens_for(engine, "checkin")
+    def _ci(dbapi_conn, record):
+        held = time.monotonic() - record.info.pop("_t", time.monotonic())
+        stack = record.info.pop("_stack", "")
+        if held > 3:
+            _pool_log.warning("DB connection held %.1fs, taken at:\n%s", held, stack)
+
 
 class Base(DeclarativeBase):
     pass

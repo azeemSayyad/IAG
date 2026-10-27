@@ -41,6 +41,10 @@ from app.models.sms import (
     SmsPoolBatch,
     SmsQueueAgent,
     SmsSettings,
+    VoiceCallAttempt,
+    VoiceDialerSettings,
+    ManualCall,
+    VoiceClientOwner,
 )
 
 __all__ = [

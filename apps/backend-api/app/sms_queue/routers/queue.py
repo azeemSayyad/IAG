@@ -21,6 +21,28 @@ from app.sms_queue.services import lead_ingest, queue_service
 router = APIRouter(prefix="/sms/queue", tags=["sms-queue"])
 
 
+async def _dialer(tenant_id: str) -> None:
+    """An agent just became free (joined / back from break / set a result):
+    let the YES-reply auto dialer use them now rather than on its next tick."""
+    try:
+        from app.core.database import SessionLocal
+        from app.voice_dialer import service as voice
+
+        from starlette.concurrency import run_in_threadpool
+
+        def run():
+            # Sync DB work stays off the event loop (see voice_dialer/router._run).
+            db = SessionLocal()
+            try:
+                return voice.tick(db, tenant_id)
+            finally:
+                db.close()
+
+        await _flush(await run_in_threadpool(run))
+    except Exception:
+        pass
+
+
 async def _flush(events: list[dict]) -> None:
     for e in events:
         to, _id, event, data = e["to"], e["id"], e["event"], e["data"]
@@ -47,6 +69,7 @@ async def join(
         return {"status": "OFFLINE", "blocked": "admin"}
     data, events = queue_service.join(db, tenant_id, str(user.id))
     await _flush(events)
+    await _dialer(tenant_id)
     return data
 
 
@@ -58,6 +81,13 @@ async def leave(
 ):
     data, events = queue_service.leave(db, tenant_id, str(user.id))
     await _flush(events)
+    # Leaving closes the agent's auto-dialer headset line too.
+    try:
+        from app.voice_dialer import service as voice
+
+        await _flush(voice.drop_line(db, tenant_id, str(user.id)))
+    except Exception:
+        pass
     return data
 
 
@@ -85,6 +115,7 @@ async def set_break(
 ):
     data, events = queue_service.set_break(db, tenant_id, str(user.id), on_break)
     await _flush(events)
+    await _dialer(tenant_id)
     return data
 
 
@@ -108,6 +139,7 @@ async def break_end(
 ):
     data, events = queue_service.end_break(db, tenant_id, str(user.id))
     await _flush(events)
+    await _dialer(tenant_id)
     return data
 
 
@@ -164,6 +196,7 @@ async def disposition(
         db, tenant_id, str(user.id), lead_id, disposition, callback_time, appointment_time
     )
     await _flush(events)
+    await _dialer(tenant_id)
     return data
 
 

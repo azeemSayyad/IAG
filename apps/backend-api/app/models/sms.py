@@ -13,6 +13,7 @@ from sqlalchemy import (
     Boolean,
     Column,
     DateTime,
+    Float,
     ForeignKey,
     Index,
     Integer,
@@ -60,7 +61,17 @@ class SmsLead(Base):
     # HOT | WARM | NORMAL
     priority = Column(String(20), nullable=False, default="NORMAL")
     # QUEUED | ASSIGNED | IN_PROGRESS | DISPOSITIONED | PARKED | BLOCKED
+    #   + the YES-reply auto dialer (app/voice_dialer):
+    # READY_TO_CALL — replied YES, waiting for the dialer (NOT in the pool)
+    # DIALING       — a call to them is in flight; locked to that one call
     status = Column(String(30), nullable=False, default="QUEUED")
+
+    # --- YES-reply auto dialer (migration 062) ---
+    yes_reply = Column(Text, nullable=True)                    # the reply that made them Ready to call
+    yes_at = Column(DateTime(timezone=True), nullable=True)    # set => an auto-dial lead
+    dial_from = Column(String(32), nullable=True)              # our number they texted (caller ID)
+    next_dial_at = Column(DateTime(timezone=True), nullable=True)
+    dial_attempts = Column(Integer, nullable=False, default=0, server_default="0")
 
     assigned_agent_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
     disposition = Column(String(40), nullable=True)
@@ -141,6 +152,14 @@ class SmsQueueAgent(Base):
     total_appointments_set = Column(Integer, nullable=False, default=0)
     avg_response_time_ms = Column(Integer, nullable=True)
     last_active_at = Column(DateTime(timezone=True), nullable=True)
+
+    # Auto dialer: the agent's open headset line (Vonage in-app leg). Set while
+    # their browser holds the line; a live customer is transferred straight onto it.
+    voice_leg_uuid = Column(String(64), nullable=True)
+    voice_line_at = Column(DateTime(timezone=True), nullable=True)
+    # "Ready for calls" — the agent's own switch in Lead Manager, separate from
+    # Join queue. Off = regular pool only, no line open (no Vonage minutes).
+    voice_ready = Column(Boolean, nullable=False, default=False, server_default="false")
 
     created_at = Column(DateTime(timezone=True), nullable=False, default=_now)
     updated_at = Column(DateTime(timezone=True), nullable=False, default=_now, onupdate=_now)
@@ -278,3 +297,135 @@ class SmsDoNotCall(Base):
         UniqueConstraint("tenant_id", "phone_number", name="uq_sms_dnc_tenant_phone"),
         Index("idx_sms_dnc_tenant_phone", "tenant_id", "phone_number"),
     )
+
+
+class VoiceCallAttempt(Base):
+    """One auto-dialer call to a YES-responder (or one inbound callback).
+
+    The audit trail behind every dialing rule: the 3-per-24h cap and the
+    abandoned-call rate are both counted from here."""
+
+    __tablename__ = "voice_call_attempts"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False)
+    sms_lead_id = Column(UUID(as_uuid=True), ForeignKey("sms_leads.id", ondelete="SET NULL"), nullable=True)
+    phone_number = Column(String(32), nullable=False)       # +1XXXXXXXXXX
+    from_number = Column(String(32), nullable=True)         # caller ID used
+    direction = Column(String(10), nullable=False, default="outbound")  # outbound | inbound
+    call_uuid = Column(String(64), nullable=True)            # Vonage call leg uuid
+
+    # DIALING -> RINGING -> ANSWERED -> CONNECTED -> COMPLETED
+    # or a final miss: MACHINE | NO_ANSWER | BUSY | FAILED | ABANDONED | CANCELLED
+    status = Column(String(20), nullable=False, default="DIALING")
+    agent_user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
+    recording_id = Column(UUID(as_uuid=True), nullable=True)   # deal_recordings.id
+    # The result the agent set for this call with Mark… (SALE, APPOINTMENT_SET,
+    # NOT_INTERESTED, VOICEMAIL, …) — what the manager sees as the call's outcome.
+    disposition = Column(String(40), nullable=True)
+    error = Column(Text, nullable=True)
+    # Inbound caller on hold (status HOLDING) waiting for their own agent;
+    # NULL = waiting for whoever is free first.
+    hold_for_user_id = Column(UUID(as_uuid=True), nullable=True)
+
+    created_at = Column(DateTime(timezone=True), nullable=False, default=_now)
+    answered_at = Column(DateTime(timezone=True), nullable=True)
+    human_at = Column(DateTime(timezone=True), nullable=True)
+    connected_at = Column(DateTime(timezone=True), nullable=True)
+    ended_at = Column(DateTime(timezone=True), nullable=True)
+    duration_seconds = Column(Integer, nullable=True)
+
+    __table_args__ = (
+        Index("idx_voice_attempts_tenant_created", "tenant_id", "created_at"),
+        Index("idx_voice_attempts_phone", "tenant_id", "phone_number", "created_at"),
+        Index("idx_voice_attempts_call_uuid", "call_uuid"),
+        Index("idx_voice_attempts_lead", "sms_lead_id"),
+    )
+
+
+class ManualCall(Base):
+    """One call placed by hand from the Dial drawer (any user, any number).
+
+    Its own log on purpose: the auto dialer's rules, stats and Called list
+    never see these. While one is in flight its user is busy — no pool offer
+    and no dialer bridge reaches them (queue_service._available_agents)."""
+
+    __tablename__ = "manual_calls"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    phone_number = Column(String(32), nullable=False)       # who was called
+    from_number = Column(String(32), nullable=True)         # caller ID used
+    app_leg_uuid = Column(String(64), nullable=True)         # the caller's browser leg
+    callee_leg_uuid = Column(String(64), nullable=True)      # the phone leg
+
+    # DIALING -> RINGING -> ANSWERED -> COMPLETED
+    # or a final miss: NO_ANSWER | BUSY | FAILED | CANCELLED
+    status = Column(String(20), nullable=False, default="DIALING")
+    recording_id = Column(UUID(as_uuid=True), nullable=True)   # deal_recordings.id
+    error = Column(Text, nullable=True)
+
+    created_at = Column(DateTime(timezone=True), nullable=False, default=_now)
+    answered_at = Column(DateTime(timezone=True), nullable=True)
+    ended_at = Column(DateTime(timezone=True), nullable=True)
+    duration_seconds = Column(Integer, nullable=True)
+
+    __table_args__ = (
+        Index("idx_manual_calls_tenant_created", "tenant_id", "created_at"),
+        Index("idx_manual_calls_user_created", "user_id", "created_at"),
+        Index("idx_manual_calls_app_leg", "app_leg_uuid"),
+    )
+
+
+class VoiceDialerSettings(Base):
+    """Per-tenant auto-dialer switch + dialing rules (edited on SMS Manager)."""
+
+    __tablename__ = "voice_dialer_settings"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False, unique=True)
+    enabled = Column(Boolean, nullable=False, default=False)
+    pacing_ratio = Column(Float, nullable=False, default=1.0)       # UNUSED: pacing is fixed at 1 call per free agent
+    ring_seconds = Column(Integer, nullable=False, default=25)       # 15 – 45
+    max_attempts_24h = Column(Integer, nullable=False, default=3)
+    max_total_attempts = Column(Integer, nullable=False, default=6)  # then -> regular pool
+    retry_minutes = Column(Integer, nullable=False, default=30)
+    reply_delay_seconds = Column(Integer, nullable=False, default=3)  # wait after a reply before calling (0 – 30)
+    window_start_hour = Column(Integer, nullable=False, default=8)   # client's local time
+    window_end_hour = Column(Integer, nullable=False, default=20)
+    business_name = Column(String(120), nullable=True)
+    callback_number = Column(String(32), nullable=True)
+    # Inbound calls: longest hold before "we'll call you back", and open hours
+    # (outside them a caller hears the closed message). Off = always open.
+    max_hold_seconds = Column(Integer, nullable=False, default=300)  # 60 – 600
+    hours_enabled = Column(Boolean, nullable=False, default=False)
+    open_days = Column(String(20), nullable=False, default="0,1,2,3,4")  # Mon=0 … Sun=6
+    open_start_minute = Column(Integer, nullable=False, default=540)      # 9:00
+    open_end_minute = Column(Integer, nullable=False, default=1080)       # 18:00
+    hours_tz = Column(String(40), nullable=False, default="America/New_York")
+    created_at = Column(DateTime(timezone=True), nullable=False, default=_now)
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=_now, onupdate=_now)
+
+
+class VoiceClientOwner(Base):
+    """The agent a client's callbacks go to, by phone number: the agent who
+    most recently called or talked to them (source "call"), or an admin's
+    pick (source "admin"). Managers never own a client."""
+
+    __tablename__ = "voice_client_owners"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False)
+    phone_number = Column(String(32), nullable=False)   # +1XXXXXXXXXX
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    source = Column(String(20), nullable=False, default="call")   # call | admin
+    set_by_user_id = Column(UUID(as_uuid=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=_now)
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=_now, onupdate=_now)
+
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "phone_number", name="uq_voice_client_owner_phone"),
+        Index("idx_voice_client_owners_user", "tenant_id", "user_id"),
+    )
+

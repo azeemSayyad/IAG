@@ -257,6 +257,10 @@
       if (canManager) {
         items.push({ href: '/sms/#/manager', label: 'SMS Manager', svg: '<circle cx="9" cy="7" r="4"/><path d="M3 21c0-3.5 3-6 6-6s6 2.5 6 6"/><path d="M16 3.5a4 4 0 0 1 0 7.5"/><path d="M22 21c0-3-2-5-5-5.5"/>' });
       }
+      // Auto Dialer (YES-reply calls) — same audience as SMS Manager.
+      if (canManager) {
+        items.push({ href: '/sms/#/dialer', label: 'Auto Dialer', svg: '<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.8 19.8 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.12 4.18 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.1 9.9a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92Z"/>' });
+      }
       // Sales Dashboard (admin-class, Head Manager included) is bundled into the
       // SMS section, right under SMS Manager.
       if (isAdminClass) {

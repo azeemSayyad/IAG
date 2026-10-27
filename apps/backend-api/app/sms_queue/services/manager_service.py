@@ -29,7 +29,8 @@ def _pool_query(db: Session, tenant_id: str):
     return pool_query(db, tenant_id)
 PRIORITY_RANK = {"HOT": 0, "WARM": 1, "NORMAL": 2}
 # Leads still "alive" in the human lane — every one was a positive ("yes") reply.
-YES_OPEN_STATUSES = ("QUEUED", "ASSIGNED", "IN_PROGRESS")
+# READY_TO_CALL / DIALING are YES-replies waiting on the auto dialer.
+YES_OPEN_STATUSES = ("QUEUED", "ASSIGNED", "IN_PROGRESS", "READY_TO_CALL", "DIALING")
 
 
 def _active_users(db: Session, tenant_id: str) -> dict:

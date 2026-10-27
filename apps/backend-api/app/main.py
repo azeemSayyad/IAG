@@ -38,10 +38,13 @@ from app.sms_queue.routers.manager import router as sms_manager_router
 from app.sms_queue.routers.queue import router as sms_queue_router
 from app.sms_queue.routers.pool import router as sms_pool_router
 from app.sales_dashboard.router import router as sales_dashboard_router
-from app.onboarding.router import router as onboarding_router
+# Hiree onboarding flow disabled — public (no-auth) endpoints removed from the
+# app. Re-enable by restoring this import and the include_router line below.
+# from app.onboarding.router import router as onboarding_router
 from app.applicant_inbox.router import router as applicant_inbox_router
 from app.direct_messages.router import router as direct_messages_router
 from app.training.router import router as training_router
+from app.voice_dialer.router import router as voice_dialer_router
 
 
 def _cors_origins() -> list[str]:
@@ -126,10 +129,11 @@ app.include_router(sms_manager_router, prefix="/api/v1")
 app.include_router(sms_queue_router, prefix="/api/v1")
 app.include_router(sms_pool_router, prefix="/api/v1")
 app.include_router(sales_dashboard_router, prefix="/api/v1")
-app.include_router(onboarding_router, prefix="/api/v1")
+# app.include_router(onboarding_router, prefix="/api/v1")  # hiree onboarding disabled
 app.include_router(applicant_inbox_router, prefix="/api/v1")
 app.include_router(direct_messages_router, prefix="/api/v1")
 app.include_router(training_router, prefix="/api/v1")
+app.include_router(voice_dialer_router, prefix="/api/v1")
 
 
 @app.get("/health")

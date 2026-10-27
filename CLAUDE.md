@@ -471,6 +471,223 @@ owns an inactive profile.
   everywhere with history intact.
 - `.localpreview/verify-trash-disabled.mjs` checks both features end to end.
 
+## YES-reply auto dialer (Vonage) — `app/voice_dialer/`, migration 062
+
+A client who texts YES is called automatically; only a LIVE person is bridged to
+an agent, and the lead card pops on that same agent's screen. Built on the
+**Vonage Communications APIs** (Voice + Messages) — NOT Vonage Business
+(app.vonage.com), which has no webhooks / machine detection / transfers.
+
+- **Lead states:** a YES makes the lead `READY_TO_CALL`; `DIALING` is the lock
+  while a call is in flight. Neither is `QUEUED`, so the pool / offer popup never
+  see them. A live answer jumps straight to `IN_PROGRESS` + agent `ON_CALL` — no
+  Accept/Pass. Out of attempts (`max_total_attempts`) → back to `QUEUED` (pool).
+- **Two switches for the agent in Lead Manager: Join queue and Ready for calls**
+  (`sms_queue_agents.voice_ready`, `POST /voice/dialer/ready`). Join queue alone
+  = regular pool only, NO headset line, so no Vonage minutes. Ready for calls
+  opens the line; the dialer only counts agents with it on (`_ready_agents`), and
+  `on_agent_line` refuses a line for anyone with it off. The line also closes
+  while they work a regular pool lead (reopens when free). Leave / timeout /
+  disabling the user switch it off. Manager board shows "Regular pool only".
+- **Agents answer in the portal** (`components/AgentLine.tsx`, `lib/voice.ts`):
+  while Available AND Ready for calls, the browser holds one Vonage Client SDK call parked in the
+  agent's room (`iag-agent-<uuid>`); a live customer is TRANSFERRED into it, which
+  is why the bridge is instant. Line = `sms_queue_agents.voice_leg_uuid`.
+  Leaving the SPA drops the line, so while a customer is connected AgentLine
+  warns on unload and opens off-app links (Log Sale) in a new tab.
+- **Rules are server-side and clamped** (`service.update_settings`): 8 am–8 pm in
+  the CLIENT's zone (`rules.py`; split states must satisfy every zone, unknown
+  state = 11 am–8 pm ET), ≤3 tries per number per 24 h, ring 15–45 s.
+  Pacing is FIXED at one call per free agent on the line (no setting — YES
+  replies trickle in, so over-dialing only risks abandoned calls; the unused
+  `voice_dialer_settings.pacing_ratio` column is left in place). DNC/STOP
+  numbers are never dialed; never two calls to one number.
+- **Every reply is called except a negative one** (owner's rule, `replies.py`):
+  `classify` → YES (clear yes) | REPLY (anything else: "who is this?", "maybe",
+  "not now", "where are you?", "I'm fine", "I'm good", "did you eat?", "?", a
+  photo) | STOP (also "block", "do not disturb"/DND) | NEGATIVE ("no", "not
+  interested", "no, I'm good") | ABUSE
+  (profanity, slurs, "scam/fake", threats) | WRONG. All four negatives go on
+  Do-Not-Call forever (`DNC_REASON`: OPTED_OUT / NOT_INTERESTED / ABUSIVE /
+  WRONG_NUMBER). **Opting back in** (`service._opt_back_in`): a CLEAR yes from
+  an opted-out number ("yes", "ok", "call me", "I'm interested", "start",
+  "unstop", "I want a quote"…) deletes its Do-Not-Call rows and the lead is
+  normal again (called, textable); a vague text ("cool", "hi") is only saved.
+  The texts are marked `sms_messages.status` OPT_OUT / OPT_IN (shown on the
+  Inbox thread) and the opt-in is audited (`ai_dnc_opt_in_by_text`, their
+  words). Note `audit_logs.resource_id` is a UUID — pass a lead id or None,
+  never a phone (that made every dialer audit insert fail silently).
+  The dialer does NOT use the shared `block_words` list — it
+  treats "who is this?" / "huh" as opt-outs, which the owner wants called.
+  A client an agent already CLOSED is reopened only by a clear YES; any other
+  follow-up ("thank you") is just saved (`reply_saved`). Match by phone (last 10
+  digits), never by name.
+- **Wait before calling** (`voice_dialer_settings.reply_delay_seconds`, default 3,
+  0–30, in Dialing rules): a reply sets `next_dial_at = now + delay` and
+  `_tick_later` fires the dialer when it's up (polls / Celery beat also cover it).
+- While the dialer has people to call, agents on an open line are held for it:
+  `_try_assign` skips them and `_reclaim_offers` pulls back an UNACCEPTED offer.
+- "Voicemail" in Lead Manager's disposition list (auto-dialed leads only) puts
+  the lead back on the dial list instead of closing it.
+- **Connect on answer** (`VONAGE_CONNECT_ON_ANSWER`, default on — manager's choice
+  "Option B"): the customer is bridged on the `answered` event (~1.5 s to the
+  agent) while machine detection keeps listening; `human` only stamps
+  `human_at`, and a later `machine` runs `_drop_early_voicemail` (hang up, agent
+  back to AVAILABLE + their room, lead requeued, `voice:ended` reason voicemail
+  closes the agent's card). Off = wait for `human` (~5 s) as before.
+  **Webhook order is not fixed:** with machine detection on, Vonage asks the
+  customer's ANSWER URL only AFTER detection decides (seen live: answered →
+  human → answer, ~4 s later). `webhooks.answer` therefore replies to match
+  where the call already is — CONNECTED → `room_only_ncco` (same call room),
+  ABANDONED → abandon message, ended → "Goodbye", still in flight → bridge via
+  `ncco_out`. Replying with the hold room after a bridge pulled the customer
+  out: both sides connected, total silence (happened twice).
+- **Bridge latency:** each call gets its own room (`call_room`) — recording a
+  room is what Vonage does, and the agent's all-shift room gave 1-second files.
+  Agent and customer legs are transferred IN PARALLEL over one pooled keep-alive
+  httpx client (`vonage._http`); the notice is `VONAGE_RECORDING_NOTICE`
+  ("This call is recorded.", spoken in the customer's NCCO before the room) —
+  every word there is delay.
+- **Each call keeps the agent's result**: `voice_call_attempts.disposition` is set
+  from Mark… (`end_call_for_lead`, called by both agent and manager
+  disposition paths) — the Called tab shows it as the call's outcome (Sale,
+  Appointment set, Not interested…), and Today counts sales/appointments from it.
+- **Called list is paged**: `GET /voice/dialer/calls?kind=all|talked|sales|missed&before=<created_at>&limit=30`
+  (`service.call_history`) returns a page + the per-filter counts; the page loads
+  30 more when the bottom scrolls into view and re-reads the loaded rows every 5 s.
+- **Period picker** (Today / Yesterday / This week / This month / All time /
+  Custom dates) sits on the stats card and also filters the Called list:
+  `?period=…&from=YYYY-MM-DD&to=YYYY-MM-DD` on `/overview` and `/calls`
+  (`service.period_bounds`; days in Eastern, weeks start Monday like agent pay).
+  The header's abandoned-calls warning only fires on Today.
+- The "Sorry we missed you" follow-up text from the spec is deliberately NOT
+  sent — the first-template-only lockdown forbids it.
+- Webhooks (public, `?k=VONAGE_WEBHOOK_TOKEN` or Vonage's signed JWT): Voice app
+  answer `/api/v1/voice/vonage/answer`, event `/voice/vonage/event`; Messages
+  inbound `/voice/vonage/inbound-sms`, status `/voice/vonage/sms-status`. Per-call
+  URLs are built from `VOICE_CALLBACK_BASE_URL`. Env: `VONAGE_APPLICATION_ID`,
+  `VONAGE_PRIVATE_KEY` (or `_PATH`), `VONAGE_SIGNATURE_SECRET`,
+  `VONAGE_WEBHOOK_TOKEN`, `VONAGE_FROM_NUMBERS`, `VONAGE_TENANT_ID`.
+- **Managers/admins have their own page, `/sms/#/dialer` ("Auto Dialer",
+  `pages/AutoDialer.tsx`)** — switch, today's numbers, agents on the line, calls
+  in progress, dial list, outcomes, recent calls, rules. Same audience as SMS
+  Manager; linked from BOTH sidebars (`PortalShell.tsx` SMS_LINKS and
+  `services/error-boundary.js`). Agents never use it — their side is Lead Manager.
+- **Never run dialer DB code on the event loop.** `service`/`webhooks`/`simulator`
+  are synchronous SQLAlchemy; every `async def` route in `voice_dialer/router.py`
+  calls them through `_run` (threadpool), and the queue router's `_dialer` does
+  the same. Calling them directly froze the WHOLE app during a demo: once the
+  10-connection pool was busy, the blocked loop waited 10 s for a connection only
+  the loop could release (1,000+ `QueuePool limit` errors).
+- **Webhook parsing lives in ONE place, `webhooks.py`** — the HTTP routes in
+  `router.py` are thin shells (trust check → `webhooks.*` → flush events).
+- **Simulator (`simulator.py`):** with no Vonage keys and `APP_ENV != production`
+  it plays Vonage — builds Vonage-format payloads (Messages inbound, Voice
+  answer/event, AMD human/machine, record event) and feeds them to `webhooks.py`,
+  so tests run the production code path. "Test it" box on the Auto Dialer page:
+  send a text; "When the dialer calls" (live person after 2 s by default /
+  voicemail / no answer / busy / let me choose); "Ignore calling hours while
+  testing" (default on — testing happens outside US hours). Production never
+  simulates.
+- **Recordings:** Vonage deletes them after 30 days, so `store_recording` copies
+  each one to the SAME place Log Sale keeps call recordings — a `deal_recordings`
+  row (kind `recording`) with the audio in the Railway S3 bucket under
+  `deal-recordings/<tenant>/` (inline on the row only if S3 is unavailable, Log
+  Sale's own fallback). `voice_call_attempts.recording_id` → `deal_recordings.id`,
+  so a dialer recording can be attached to a sale like an uploaded one. Play:
+  `GET /voice/dialer/recordings/{attempt_id}?token=` (managers: any; agents:
+  their own), shown as ▶ Play in Called + Inbox.
+- **Opted out** card on the Auto Dialer page (`optouts.py`, `/voice/dialer/optouts`):
+  the tenant's `sms_do_not_call` list made readable — who, when, reason (Texted
+  STOP / Not interested / Wrong number / Blocked by admin / other), their last
+  text; filters, search, the page's period, paged on scroll. Admin-class can
+  **Block number** by hand and **Remove from list**; removing a real STOP
+  (`OPTED_OUT`) needs `?confirm_stop=true` (409 otherwise) and the UI asks first.
+  Removal never re-dials — only a new YES does. Both actions go to the audit log.
+  Today's card shows "N opted out" for the period.
+- **Inbox** on the Auto Dialer page (`inbox.py`, `/voice/dialer/inbox[/{lead}]`):
+  everyone who texted our Vonage numbers, newest first; one read-only timeline
+  per client mixing their texts with our calls (result, agent, talk, recording).
+- Switched on per tenant from the Auto Dialer page (off by default). Celery
+  beat `voice-dialer-tick` (3 s) is the safety net; webhooks, agent actions and
+  the agent's `/voice/dialer/state` poll also tick.
+- `tests/unit/test_voice_dialer.py`; `.localpreview/verify-auto-dialer.mjs` drives
+  the whole flow in the browser against the real backend.
+
+## Manual dialing (Dial drawer) — `app/voice_dialer/manual.py`, migration 063
+
+Anyone signed in can call ANY number from the browser over Vonage. The **Dial**
+button opens a right-hand drawer that overlays the page (does not resize it):
+on the **Auto Dialer** page for manager-class, on **Lead Manager** for agents.
+`components/DialDrawer.tsx` is mounted ONCE in `PortalShell` (opened by the
+`dial:open` window event), so a call survives SMS route changes; with the drawer
+closed a mini dock keeps Hang up reachable.
+
+- Flow: `POST /voice/manual/calls` logs a `manual_calls` row → the browser does
+  `serverCall({purpose:"manual", mc})` → `webhooks.answer` sees `custom_data`
+  → `manual.on_answer` returns `record` + `connect` (phone; recording notice via
+  the endpoint's `onAnswer` → `?leg=manual_notice`). Phone-leg events carry
+  `?mc=`; the browser leg is matched by `app_leg_uuid`. Hang up ends the row
+  immediately (`/end`) — Vonage's later events only fill in the exact duration.
+- **Busy while dialing, no UI change:** an in-flight manual call (derived from the
+  row — `live_clause`, nothing stored) is excluded in
+  `queue_service._available_agents` (no pool offer, no dialer bridge),
+  `on_agent_line` refuses a line, and `agent_state.manual` makes AgentLine keep
+  the headset line closed. "Ready for calls" is never touched, so the line
+  reopens by itself when the call ends. Lost events can't strand an agent: no
+  browser leg after 90 s or 4 h in flight = not live.
+- **No DNC, no calling hours, no attempt cap** (owner's rule — dialer only).
+  Refused only while the user has an auto-dialed customer CONNECTED.
+- **Separate log**: never in the dialer's Called list / stats. Calls tab: agents
+  see their own (tap to redial); manager-class sees everyone + "Who dialed"
+  filter + ▶ recording (`GET /voice/manual/calls/{id}/recording?token=`,
+  manager-class only). Recordings use `service.save_recording` (same S3
+  `deal-recordings/` store as the dialer).
+- Caller ID: dropdown of `VONAGE_FROM_NUMBERS`, first = default, last pick kept
+  in `localStorage.manualDialFrom`. Keypad sends DTMF during a call.
+- One SDK session (`lib/voice.ts` `sdk()`) serves both the headset line and
+  manual calls. Simulator (no keys, non-prod): `start` plays the answer webhook,
+  the drawer calls `/sim-answer` after 2 s.
+- `.localpreview/verify-manual-dial.mjs` checks the drawer UI per role (never
+  presses Call — with real keys that rings a real phone).
+
+## Inbound calls: client owners + hold queue — `app/voice_dialer/inbound.py`, migration 064
+
+Team-agreed rules for a client calling one of our numbers (the admin-facing
+copy is the **"How calls work"** drawer on the Auto Dialer page,
+`components/DialerNotes.tsx` — keep it in step when a rule changes):
+
+- **Owner** (`voice_client_owners`, by phone): the agent who MOST RECENTLY
+  called / talked to the client — set by `manual.start`, `connect_human` and
+  inbound `connect`. Managers (`MANAGER_ROLES`, incl. head) never own; their
+  clients' callbacks go to any free agent. Admins reassign / remove under
+  **Client owners** (`/voice/dialer/owners`); the next agent call overrides it.
+- Routing (`inbound.on_call`): closed (open hours on + outside) → closed message
+  with the hours; DNC / lead being worked → "we'll call you back"; owner **free**
+  on the line → owner; owner **busy** (Ready for calls, AVAILABLE/ON_CALL, not
+  free) → status `HOLDING` with `hold_for_user_id`, only the owner may take it
+  until `max_hold_seconds` (default 300), then anyone; owner **away** / none →
+  first free agent; nobody free → `HOLDING` for anyone; **nobody taking calls
+  at all** → no hold, callback.
+- Hold = NCCO loop `talk` + `stream` (bargeIn, ~45 s generated soft loop at
+  `/voice/vonage/hold-music.wav`, or `VONAGE_HOLD_MUSIC_URL`) + 1-digit `input`
+  → `/voice/vonage/hold`. **1 = call me back.** The dialer tick
+  (`serve_holding`, before outbound) bridges held callers longest-first and ends
+  holds past the limit if their webhook never came. `HOLDING → BRIDGING` is the
+  lock so the tick and the hold webhook never both bridge one caller.
+- Callback (`schedule_callback`): attempt → `MISSED` with the reason; dialer on →
+  lead `READY_TO_CALL` keeping their place (`yes_at` = hold start); dialer off →
+  regular pool as HOT. Hanging up on hold counts as a callback request.
+- **Held callers outrank everything:** `_tick` starts no outbound call while
+  anyone holds, and `dialer_reserves_agents` keeps pool offers off agents on a line.
+- Open hours + longest hold are in Dialing rules ("When clients call us"):
+  `voice_dialer_settings.max_hold_seconds / hours_enabled / open_days (Mon=0) /
+  open_start_minute / open_end_minute / hours_tz` (US zones). Hours default OFF.
+- Free agents on the line are bridged instantly (parked line), so there is no
+  "ring the owner for N seconds" step.
+- Tests: `tests/unit/test_voice_dialer.py` (hours); scenario + UI checks in
+  `.localpreview/verify-inbound-routing.mjs`.
+
 ## Verifying UI changes (headless Chrome over CDP)
 
 The `.localpreview/*.mjs` scripts drive a headless Chrome via the DevTools Protocol
