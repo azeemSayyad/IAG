@@ -1,4 +1,5 @@
 import { api } from "./api";
+import { playRemote, watchRemote } from "./remoteSound";
 
 /* The agent's auto-dialer headset line (Telnyx WebRTC).
 
@@ -52,12 +53,14 @@ async function telnyxPhone(token: string): Promise<Phone> {
     document.body.appendChild(audio);
   }
   c.remoteElement = audio;
+  watchRemote(audio);
   const calls = new Map<string, TelnyxCall>();
   let waiting: ((id: string) => void)[] = [];
 
   c.on("telnyx.notification", ((n: { type?: string; call?: TelnyxCall }) => {
     const call = n.call;
     if (n.type !== "callUpdate" || !call) return;
+    if (call.state === "active") playRemote();
     if (call.state === "ringing" && call.direction === "inbound" && !calls.has(call.id)) {
       const take = waiting.shift();
       if (!take) {

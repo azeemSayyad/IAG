@@ -5,6 +5,7 @@ import { formatPhone } from "../lib/phone";
 import { getSocket } from "../lib/socket";
 import { leadOfferedSound } from "../lib/sound";
 import { closeLine, onLineState, openLine, setMuted, type LineState } from "../lib/voice";
+import { onSoundBlocked, playRemote } from "../lib/remoteSound";
 import { DetailGrid, type DetailField } from "./LeadDetails";
 
 /* YES-reply auto dialer — the agent's side. Mounted once in PortalShell.
@@ -98,6 +99,8 @@ export default function AgentLine() {
   }, [admin]);
 
   useEffect(() => onLineState((s) => setLine(s)), []);
+  const [soundBlocked, setSoundBlocked] = useState(false);
+  useEffect(() => onSoundBlocked(setSoundBlocked), []);
 
   const fastPoll = line === "ready";
   useEffect(() => {
@@ -278,6 +281,15 @@ export default function AgentLine() {
           </span>
         )}
       </div>
+
+      {soundBlocked && (
+        <button
+          onClick={playRemote}
+          className="fixed left-1/2 top-4 z-[9600] -translate-x-1/2 rounded-lg bg-danger px-4 py-2.5 text-sm font-semibold text-white shadow-lg"
+        >
+          Click here to turn on call sound — you can't hear callers yet
+        </button>
+      )}
 
       {/* The screen pop — the agent is already talking to this person. */}
       {pop && (
