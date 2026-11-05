@@ -419,7 +419,7 @@ def auto_assign_queue(self) -> Dict:
 def voice_dialer_tick(self) -> Dict:
     """YES-reply auto dialer heartbeat (app/voice_dialer): start calls when
     agents free up, fire due retries and calling-hour openings, and clean up
-    calls whose final Vonage event never arrived. Webhooks and agent actions
+    calls whose final carrier event never arrived. Webhooks and agent actions
     also tick, so this is the safety net, not the fast path."""
     from app.models.sms import VoiceDialerSettings
     from app.voice_dialer import service as voice

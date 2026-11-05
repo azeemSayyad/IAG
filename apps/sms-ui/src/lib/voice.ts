@@ -1,31 +1,144 @@
 import { api } from "./api";
 
-/* The agent's auto-dialer headset line (Vonage Client SDK, WebRTC).
+/* The agent's auto-dialer headset line (Telnyx WebRTC).
 
-   While an agent is Available, the browser holds ONE open call to Vonage that
-   sits in the agent's private room. When the dialer reaches a live person it
+   While an agent is Available, the browser holds ONE open call that sits in
+   the agent's private room. When the dialer reaches a live person it
    transfers that customer into the room — an instant bridge, no ring — which
    is how the agent can be talking within 2 seconds of the customer's "hello".
 
+   A browser can't start a scripted call, so it ASKS the server to ring it
+   (POST /voice/dialer/line, POST /voice/manual/calls) and answers that call by
+   itself. Calls nobody here asked for are refused.
+
    The SDK is imported lazily so pages that never open a line don't pay for it.
-   In the simulator (no Vonage keys, dev only) no SDK is loaded at all; the
-   backend just marks the line open. */
+   In the simulator (no keys, dev only) no SDK is loaded at all; the backend
+   just marks the line open. */
 
 export type LineState = "off" | "connecting" | "ready" | "mic_blocked" | "error";
 
-type Client = {
-  createSession(token: string): Promise<string>;
-  deleteSession(): Promise<unknown>;
-  serverCall(context?: Record<string, unknown>): Promise<string>;
-  hangup(callId: string): Promise<void>;
-  mute(callId: string): Promise<unknown>;
-  unmute(callId: string): Promise<unknown>;
-  sendDTMF(callId: string, digits: string): Promise<void>;
-  on(event: string, cb: (...args: never[]) => void): symbol;
+/** The browser phone. Call ids are the SDK's own. */
+type Phone = {
+  /** Open the headset line. */
+  line(): Promise<string>;
+  /** Place a manual call: `create` logs it on the server (which also
+   *  rings us); resolves once our leg is up. */
+  manual(create: () => Promise<{ id: string }>): Promise<string>;
+  hangup(id: string): Promise<void>;
+  mute(id: string, muted: boolean): Promise<void>;
+  dtmf(id: string, digits: string): Promise<void>;
 };
 
-let client: Client | null = null;
-let session = false; // one SDK session serves the headset line AND manual calls
+type TelnyxCall = {
+  id: string;
+  state: string;
+  direction: string;
+  answer(): Promise<void>;
+  hangup(): Promise<void>;
+  muteAudio(): void;
+  unmuteAudio(): void;
+  dtmf(digits: string): void;
+};
+
+const RING_WAIT_MS = 20000;
+
+async function telnyxPhone(token: string): Promise<Phone> {
+  const { TelnyxRTC } = await import("@telnyx/webrtc");
+  const c = new TelnyxRTC({ login_token: token });
+  let audio = document.getElementById("telnyx-remote-audio") as HTMLAudioElement | null;
+  if (!audio) {
+    audio = Object.assign(document.createElement("audio"), { id: "telnyx-remote-audio", autoplay: true });
+    audio.style.display = "none";
+    document.body.appendChild(audio);
+  }
+  c.remoteElement = audio;
+  const calls = new Map<string, TelnyxCall>();
+  let waiting: ((id: string) => void)[] = [];
+
+  c.on("telnyx.notification", ((n: { type?: string; call?: TelnyxCall }) => {
+    const call = n.call;
+    if (n.type !== "callUpdate" || !call) return;
+    if (call.state === "ringing" && call.direction === "inbound" && !calls.has(call.id)) {
+      const take = waiting.shift();
+      if (!take) {
+        call.hangup().catch(() => undefined); // nobody here asked for this call
+        return;
+      }
+      calls.set(call.id, call);
+      call.answer().then(() => take(call.id)).catch(() => undefined);
+    } else if ((call.state === "hangup" || call.state === "destroy") && calls.delete(call.id)) {
+      callEnded(call.id);
+    }
+  }) as never);
+  c.on("telnyx.socket.close", (() => sessionLost()) as never);
+
+  await new Promise<void>((resolve, reject) => {
+    const t = window.setTimeout(() => reject(new Error("Telnyx did not connect")), 15000);
+    c.on("telnyx.ready", (() => {
+      window.clearTimeout(t);
+      resolve();
+    }) as never);
+    c.on("telnyx.error", (() => {
+      window.clearTimeout(t);
+      reject(new Error("Telnyx login failed"));
+    }) as never);
+    c.connect();
+  });
+
+  /** Wait for the server to ring this browser (register BEFORE asking). */
+  function expectRing(): { ringing: Promise<string>; cancel: () => void } {
+    let take!: (id: string) => void;
+    let timer = 0;
+    const ringing = new Promise<string>((resolve, reject) => {
+      take = (id) => {
+        window.clearTimeout(timer);
+        resolve(id);
+      };
+      timer = window.setTimeout(() => {
+        waiting = waiting.filter((w) => w !== take);
+        reject(new Error("The call did not reach this browser"));
+      }, RING_WAIT_MS);
+    });
+    waiting.push(take);
+    return {
+      ringing,
+      cancel: () => {
+        window.clearTimeout(timer);
+        waiting = waiting.filter((w) => w !== take);
+      },
+    };
+  }
+
+  async function rungBy(ask: () => Promise<unknown>): Promise<string> {
+    const r = expectRing();
+    try {
+      await ask();
+    } catch (e) {
+      r.cancel();
+      throw e;
+    }
+    return r.ringing;
+  }
+
+  return {
+    line: () => rungBy(() => api("/voice/dialer/line", { method: "POST", body: JSON.stringify({ on: true }) })),
+    manual: (create) => rungBy(create),
+    async hangup(id) {
+      await calls.get(id)?.hangup();
+    },
+    async mute(id, muted) {
+      const call = calls.get(id);
+      if (muted) call?.muteAudio();
+      else call?.unmuteAudio();
+    },
+    async dtmf(id, digits) {
+      calls.get(id)?.dtmf(digits);
+    },
+  };
+}
+
+let phone: Phone | null = null;
+let phoneLoading: Promise<Phone> | null = null; // one SDK session serves the headset line AND manual calls
 let callId: string | null = null;
 let simulated = false;
 let opening: Promise<void> | null = null;
@@ -49,37 +162,39 @@ export function lineState(): LineState {
   return state;
 }
 
-/** The logged-in SDK client (created + signed in on first use). */
-async function sdk(): Promise<Client> {
-  if (!client) {
-    const mod = await import("@vonage/client-sdk");
-    // Same datacenter as the Vonage application (North America - East).
-    client = new mod.VonageClient({ region: "US" } as never) as unknown as Client;
-    client.on("callHangup", ((id: string) => {
-      if (id === callId) {
-        callId = null;
-        set("off", "line dropped");
-      } else if (id === manualSdkId) {
-        manualSdkId = null;
-        manualDropped();
-      }
-    }) as never);
-    client.on("sessionError", (() => {
-      session = false;
-      callId = null;
-      set("error", "session lost");
-      if (manualSdkId) {
-        manualSdkId = null;
-        manualDropped();
-      }
-    }) as never);
+function callEnded(id: string) {
+  if (id === callId) {
+    callId = null;
+    set("off", "line dropped");
+  } else if (id === manualSdkId) {
+    manualSdkId = null;
+    manualDropped();
   }
-  if (!session) {
-    const { token } = await api<{ token: string }>("/voice/dialer/token", { method: "POST" });
-    await client.createSession(token);
-    session = true;
+}
+
+function sessionLost() {
+  phone = null;
+  callId = null;
+  set("error", "session lost");
+  if (manualSdkId) {
+    manualSdkId = null;
+    manualDropped();
   }
-  return client;
+}
+
+/** The signed-in browser phone (created on first use). */
+function sdk(): Promise<Phone> {
+  if (phone) return Promise.resolve(phone);
+  if (!phoneLoading) {
+    phoneLoading = (async () => {
+      const { token } = await api<{ token: string }>("/voice/dialer/token", { method: "POST" });
+      phone = await telnyxPhone(token);
+      return phone;
+    })().finally(() => {
+      phoneLoading = null;
+    });
+  }
+  return phoneLoading;
 }
 
 async function micAllowed(): Promise<boolean> {
@@ -109,8 +224,8 @@ export function openLine(simulate: boolean): Promise<void> {
         set("mic_blocked");
         return;
       }
-      const c = await sdk();
-      callId = await c.serverCall({ purpose: "agent_line" });
+      const p = await sdk();
+      callId = await p.line();
       set("ready");
     } catch (e) {
       callId = null;
@@ -127,7 +242,7 @@ export async function closeLine(): Promise<void> {
   const id = callId;
   callId = null;
   try {
-    if (client && id) await client.hangup(id);
+    if (phone && id) await phone.hangup(id);
   } catch {
     /* already gone */
   }
@@ -141,9 +256,8 @@ export async function closeLine(): Promise<void> {
 }
 
 export async function setMuted(muted: boolean): Promise<void> {
-  if (!client || !callId) return;
-  if (muted) await client.mute(callId);
-  else await client.unmute(callId);
+  if (!phone || !callId) return;
+  await phone.mute(callId, muted);
 }
 
 export function isSimulated(): boolean {
@@ -154,9 +268,9 @@ export function isSimulated(): boolean {
 
    Anyone can call any number. The server logs the call first (POST
    /voice/manual/calls — that also marks the caller busy, so no pool offer or
-   dialer bridge reaches them, and closes their headset line); then the
-   browser places it with serverCall({purpose: "manual", mc}). Vonage records
-   it and rings the number. The call's status is read back from the server
+   dialer bridge reaches them, closes their headset line, and rings this
+   browser, which answers by itself); Telnyx then records it and rings the
+   number. The call's status is read back from the server
    (polled + socket "voice:manual"), so the drawer and the mini dock show the
    same thing wherever they are mounted. */
 
@@ -219,11 +333,11 @@ function startPoll() {
 function stopPoll(ended: boolean) {
   if (pollTimer !== null) window.clearInterval(pollTimer);
   pollTimer = null;
-  if (ended && manualSdkId && client) {
+  if (ended && manualSdkId && phone) {
     // The phone side is over (busy / no answer / they hung up): drop our leg too.
     const id = manualSdkId;
     manualSdkId = null;
-    client.hangup(id).catch(() => undefined);
+    phone.hangup(id).catch(() => undefined);
   }
 }
 
@@ -233,7 +347,7 @@ export function nudgeManual() {
 }
 
 function manualDropped() {
-  // The browser's call ended on its own (network, Vonage) — end it server-side.
+  // The browser's call ended on its own (network, carrier) — end it server-side.
   const id = mState.call?.id;
   if (!id || !mState.call || !MANUAL_LIVE.includes(mState.call.status)) return;
   api<ManualCall>(`/voice/manual/calls/${id}/end`, { method: "POST" })
@@ -267,15 +381,18 @@ export async function startManualCall(to: string, from: string | null): Promise<
       setManual({ starting: false, error: "Microphone blocked — allow it in the browser to call" });
       return;
     }
-    call = await api<ManualCall>("/voice/manual/calls", {
-      method: "POST",
-      body: JSON.stringify({ to, from_number: from }),
-    });
-    setManual({ call, simulated: simulate });
-    startPoll();
+    const create = async () => {
+      call = await api<ManualCall>("/voice/manual/calls", {
+        method: "POST",
+        body: JSON.stringify({ to, from_number: from }),
+      });
+      setManual({ call, simulated: simulate });
+      startPoll();
+      return call;
+    };
     if (simulate) {
       // Simulator: the person picks up after a moment.
-      const id = call.id;
+      const id = (await create()).id;
       window.setTimeout(() => {
         if (mState.call?.id === id && MANUAL_LIVE.includes(mState.call.status)) {
           api<ManualCall>(`/voice/manual/calls/${id}/sim-answer`, { method: "POST" })
@@ -284,8 +401,8 @@ export async function startManualCall(to: string, from: string | null): Promise<
         }
       }, SIM_ANSWER_MS);
     } else {
-      const c = await sdk();
-      manualSdkId = await c.serverCall({ purpose: "manual", mc: call.id });
+      const p = await sdk();
+      manualSdkId = await p.manual(create);
     }
     setManual({ starting: false });
   } catch (e) {
@@ -298,7 +415,7 @@ export async function endManualCall(): Promise<void> {
   const id = mState.call?.id;
   const sdkId = manualSdkId;
   manualSdkId = null;
-  if (client && sdkId) await client.hangup(sdkId).catch(() => undefined);
+  if (phone && sdkId) await phone.hangup(sdkId).catch(() => undefined);
   if (!id) return;
   try {
     setManual({ call: await api<ManualCall>(`/voice/manual/calls/${id}/end`, { method: "POST" }) });
@@ -315,13 +432,12 @@ export function resetManual() {
 }
 
 export async function muteManual(muted: boolean): Promise<void> {
-  if (!client || !manualSdkId) return;
-  if (muted) await client.mute(manualSdkId);
-  else await client.unmute(manualSdkId);
+  if (!phone || !manualSdkId) return;
+  await phone.mute(manualSdkId, muted);
 }
 
 /** Keypad during a live call (menus: "press 1 for…"). */
 export async function sendManualDigits(digits: string): Promise<void> {
-  if (!client || !manualSdkId) return;
-  await client.sendDTMF(manualSdkId, digits).catch(() => undefined);
+  if (!phone || !manualSdkId) return;
+  await phone.dtmf(manualSdkId, digits).catch(() => undefined);
 }

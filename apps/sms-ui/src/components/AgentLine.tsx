@@ -12,7 +12,7 @@ import { DetailGrid, type DetailField } from "./LeadDetails";
    • Keeps the agent's headset line open only while they have "Ready for calls"
      on (Lead Manager) and are Available, or on an auto-dialed call. Working a
      regular pool lead, on break or after Leave, the line is closed — an open
-     line is billed by Vonage per minute.
+     line is billed by Telnyx per minute.
    • Pops the lead card the moment a live customer is bridged onto that line
      ("voice:connected"). No Accept/Pass — the agent is already talking.
    • A small dock shows the line state, a call timer, Mute and Hang up.

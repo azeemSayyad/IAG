@@ -108,7 +108,7 @@ export default function DialerNotes({ s }: { s: NotesSettings }) {
             {s.recording_notice
               ? <>Every connected call starts with "<b>{s.recording_notice}</b>"</>
               : <>Call recording is <b>off</b>.</>}{" "}
-            Recordings are copied to our storage right away (Vonage deletes theirs after 30 days) and can be attached to a sale.
+            Recordings are copied to our storage right away and can be attached to a sale.
           </p>
         </Section>
       </Drawer>

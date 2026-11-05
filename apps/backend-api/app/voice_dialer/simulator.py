@@ -1,12 +1,12 @@
-"""Dev-only Vonage simulator.
+"""Dev-only carrier simulator.
 
-Stands in for Vonage when there are no API keys (never in production — see
-vonage.simulating()). It does NOT poke the dialer's internals: it builds the
-exact payloads Vonage sends (Messages API inbound text, Voice answer/event
+Stands in for Telnyx when there are no API keys (never in production — see
+telnyx.simulating()). It does NOT poke the dialer's internals: it builds the
+payloads webhooks.py reads (inbound text, Voice answer/event
 webhooks, advanced-machine-detection verdicts, record events) and feeds them to
 webhooks.py — the same functions the real HTTP routes call. So a simulated
 YES → call → live answer → hang up → recording runs the production code path
-end to end; only the network hop from Vonage is skipped.
+end to end; only the network hop from the carrier is skipped.
 
 What a simulated call does on its own is set per tenant ("sim mode"): a live
 person answers after SIM_ANSWER_AFTER_SECONDS (default), voicemail, no answer,
@@ -97,15 +97,15 @@ def set_ignore_hours(tenant_id, on: bool) -> bool:
     return bool(on)
 
 
-# ---- Vonage-shaped payloads ---------------------------------------------------------
+# ---- Webhook-shaped payloads --------------------------------------------------------
 
 def _leg(att: VoiceCallAttempt) -> dict:
-    """Fields Vonage puts on every Voice webhook for this call leg."""
+    """Fields on every Voice webhook for this call leg."""
     return {
         "uuid": att.call_uuid,
         "conversation_uuid": f"CON-{att.id}",
-        "from": replies.vonage_number(att.from_number),
-        "to": replies.vonage_number(att.phone_number),
+        "from": replies.digits_only(att.from_number),
+        "to": replies.digits_only(att.phone_number),
         "direction": "outbound",
         "timestamp": _iso(),
     }
@@ -119,8 +119,8 @@ def text_in(db: Session, phone: str, text: str, to: str | None) -> tuple[dict, l
         "channel": "sms",
         "message_type": "text",
         "message_uuid": str(uuid.uuid4()),
-        "from": replies.vonage_number(replies.normalize_phone(phone) or phone),
-        "to": replies.vonage_number(to or "+15615550100"),
+        "from": replies.digits_only(replies.normalize_phone(phone) or phone),
+        "to": replies.digits_only(to or "+15615550100"),
         "text": text,
         "timestamp": _iso(),
         "sms": {"num_messages": "1"},
@@ -163,7 +163,7 @@ def play(db: Session, att: VoiceCallAttempt, result: str) -> list[dict]:
 
 
 def hangup(db: Session, att: VoiceCallAttempt) -> list[dict]:
-    """Our side hung the customer up (agent's Hang up): Vonage reports completed."""
+    """Our side hung the customer up (agent's Hang up): the carrier reports completed."""
     return play(db, att, "hangup")
 
 
@@ -171,7 +171,7 @@ def hangup(db: Session, att: VoiceCallAttempt) -> list[dict]:
 
 def fake_audio(seconds: int = SIM_TALK_SECONDS) -> bytes:
     """A short two-channel WAV (customer tone left, agent tone right), standing
-    in for the call audio Vonage would record."""
+    in for the call audio the carrier would record."""
     rate = 8000
     buf = io.BytesIO()
     with wave.open(buf, "wb") as w:
@@ -190,7 +190,7 @@ def fake_audio(seconds: int = SIM_TALK_SECONDS) -> bytes:
 
 
 def _send_recordings(db: Session, tenant_id) -> None:
-    """A connected call that has ended gets its record event, like Vonage sends
+    """A connected call that has ended gets its record event, like the carrier sends
     a moment after hang-up."""
     from app.voice_dialer import webhooks
 

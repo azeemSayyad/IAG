@@ -153,12 +153,12 @@ class SmsQueueAgent(Base):
     avg_response_time_ms = Column(Integer, nullable=True)
     last_active_at = Column(DateTime(timezone=True), nullable=True)
 
-    # Auto dialer: the agent's open headset line (Vonage in-app leg). Set while
+    # Auto dialer: the agent's open headset line (browser WebRTC leg). Set while
     # their browser holds the line; a live customer is transferred straight onto it.
     voice_leg_uuid = Column(String(64), nullable=True)
     voice_line_at = Column(DateTime(timezone=True), nullable=True)
     # "Ready for calls" — the agent's own switch in Lead Manager, separate from
-    # Join queue. Off = regular pool only, no line open (no Vonage minutes).
+    # Join queue. Off = regular pool only, no line open (no carrier minutes).
     voice_ready = Column(Boolean, nullable=False, default=False, server_default="false")
 
     created_at = Column(DateTime(timezone=True), nullable=False, default=_now)
@@ -313,7 +313,7 @@ class VoiceCallAttempt(Base):
     phone_number = Column(String(32), nullable=False)       # +1XXXXXXXXXX
     from_number = Column(String(32), nullable=True)         # caller ID used
     direction = Column(String(10), nullable=False, default="outbound")  # outbound | inbound
-    call_uuid = Column(String(64), nullable=True)            # Vonage call leg uuid
+    call_uuid = Column(String(64), nullable=True)            # carrier call id (Telnyx CallSid)
 
     # DIALING -> RINGING -> ANSWERED -> CONNECTED -> COMPLETED
     # or a final miss: MACHINE | NO_ANSWER | BUSY | FAILED | ABANDONED | CANCELLED

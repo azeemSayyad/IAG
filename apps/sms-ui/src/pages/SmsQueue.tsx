@@ -404,7 +404,7 @@ export default function SmsQueue() {
   const admin = isAdmin(); // admins never join the queue or take leads
 
   // "Ready for calls" — the auto dialer's switch, separate from Join queue.
-  // Off: regular pool only, no headset line (no Vonage minutes). On: live
+  // Off: regular pool only, no headset line (no carrier minutes). On: live
   // YES-reply calls are put straight through to this agent.
   const [dialer, setDialer] = useState<{ enabled: boolean; available: boolean; agent: { ready: boolean } } | null>(null);
   const [readyBusy, setReadyBusy] = useState(false);

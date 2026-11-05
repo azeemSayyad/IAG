@@ -2,13 +2,12 @@
 
 Two groups, both under /api/v1:
 
-* /voice/vonage/*  PUBLIC webhooks Vonage calls (no portal login). Each one is
-  checked with vonage.webhook_trusted() — Vonage's signed JWT or our ?k= token.
+* /voice/telnyx/*  PUBLIC webhooks Telnyx calls (no portal login). Each one is
+  checked with telnyx.webhook_trusted() — Telnyx's signature or our ?k= token.
     answer      customer leg answered (hold while detection listens) | agent
                 headset line opened | a client calling one of our numbers
     event       call status + machine-detection verdicts
-    inbound-sms Messages API inbound text (the YES / STOP trigger)
-    sms-status  delivery receipts (acknowledged only)
+    inbound-sms inbound text (the YES / STOP trigger)
     recording   a connected call's recording is ready
     optout      "press 9" on the all-agents-busy message
 * /voice/dialer/*  the portal: agent line + state, manager overview/settings,
@@ -32,7 +31,7 @@ from app.core.database import get_db
 from app.core.deps import get_current_active_user, get_tenant_id, require_role
 from app.models.user import User
 from app.realtime.websocket import emit_to_agent, emit_to_tenant, emit_to_user
-from app.voice_dialer import inbox, manual, optouts, service, simulator, vonage, webhooks
+from app.voice_dialer import inbox, manual, optouts, service, simulator, telnyx, webhooks
 
 logger = logging.getLogger(__name__)
 
@@ -68,7 +67,7 @@ async def _flush(events: list[dict]) -> None:
 
 
 async def _payload(request: Request) -> tuple[dict, bytes]:
-    """Vonage sends JSON (POST) or query params (GET); merge both."""
+    """JSON or form fields (POST) or query params (GET); merge them."""
     body = await request.body()
     data: dict = {}
     if body:
@@ -83,20 +82,13 @@ async def _payload(request: Request) -> tuple[dict, bytes]:
     return data, body
 
 
-async def _trusted(request: Request) -> tuple[dict, bytes]:
-    data, body = await _payload(request)
-    if not vonage.webhook_trusted(request.headers, body, request.query_params.get("k")):
-        raise HTTPException(status_code=401, detail="untrusted webhook")
-    return data, body
-
-
 def _trace(kind: str, request: Request, data: dict, reply) -> None:
-    """TEMP (local debugging of live calls): what Vonage sent and what we said."""
+    """TEMP (local debugging of live calls): what Telnyx sent and what we said."""
     if not settings_trace():
         return
     q = {k: v for k, v in request.query_params.items() if k != "k"}
-    keep = {k: data.get(k) for k in ("uuid", "call_uuid", "status", "sub_state", "direction", "from_user", "reason") if data.get(k) is not None}
-    logger.warning("VONAGE %s %s %s -> %s", kind, q, keep or data, json.dumps(reply)[:300] if reply is not None else "")
+    keep = {k: data.get(k) for k in ("uuid", "call_uuid", "status", "sub_state", "direction", "reason") if data.get(k) is not None}
+    logger.warning("TELNYX %s %s %s -> %s", kind, q, keep or data, json.dumps(reply)[:300] if reply is not None else "")
 
 
 def settings_trace() -> bool:
@@ -105,68 +97,84 @@ def settings_trace() -> bool:
     return (_s.APP_ENV or "").lower() != "production"
 
 
-# =========================== Vonage webhooks ===========================
+# =========================== Telnyx webhooks ===========================
 # Thin HTTP shells: check trust, parse, hand to webhooks.py (shared with the
 # simulator so it runs the very same code), flush socket events.
+# telnyx.normalize() turns TeXML's form fields into the payload webhooks.py
+# reads, and every call script that comes back is answered as TeXML.
 
-@router.api_route("/voice/vonage/answer", methods=["GET", "POST"])
-async def vonage_answer(request: Request, db: Session = Depends(get_db)):
-    data, _ = await _trusted(request)
-    ncco, events = await _run(webhooks.answer, db, data, dict(request.query_params))
+async def _telnyx_trusted(request: Request) -> dict:
+    data, body = await _payload(request)
+    if not telnyx.webhook_trusted(request.headers, body, request.query_params.get("k")):
+        raise HTTPException(status_code=401, detail="untrusted webhook")
+    return data
+
+
+def _texml(script: list[dict]) -> Response:
+    return Response(content=telnyx.to_texml(script), media_type="application/xml")
+
+
+@router.api_route("/voice/telnyx/answer", methods=["GET", "POST"])
+async def telnyx_answer(request: Request, db: Session = Depends(get_db)):
+    data = telnyx.normalize(await _telnyx_trusted(request))
+    script, events = await _run(webhooks.answer, db, data, dict(request.query_params))
     await _flush(events)
-    _trace("answer", request, data, ncco)
-    return ncco
+    _trace("answer", request, data, script)
+    return _texml(script)
 
 
-@router.api_route("/voice/vonage/event", methods=["GET", "POST"])
-async def vonage_event(request: Request, db: Session = Depends(get_db)):
-    data, _ = await _trusted(request)
+@router.api_route("/voice/telnyx/event", methods=["GET", "POST"])
+async def telnyx_event(request: Request, db: Session = Depends(get_db)):
+    data = telnyx.normalize(await _telnyx_trusted(request))
     _trace("event", request, data, None)
     await _flush(await _run(webhooks.event, db, data, dict(request.query_params)))
     return {"ok": True}
 
 
-@router.api_route("/voice/vonage/inbound-sms", methods=["GET", "POST"])
-async def vonage_inbound_sms(request: Request, db: Session = Depends(get_db)):
-    data, _ = await _trusted(request)
-    result, events = await _run(webhooks.inbound_sms, db, data)
+@router.api_route("/voice/telnyx/inbound-sms", methods=["GET", "POST"])
+async def telnyx_inbound_sms(request: Request, db: Session = Depends(get_db)):
+    msg = telnyx.inbound_message(await _telnyx_trusted(request))
+    if not msg.get("from"):
+        return {"ok": True, "ignored": True}  # delivery receipts and other message events
+    result, events = await _run(webhooks.inbound_sms, db, msg)
     await _flush(events)
     return result
 
 
-@router.api_route("/voice/vonage/sms-status", methods=["GET", "POST"])
-async def vonage_sms_status(request: Request):
-    await _trusted(request)
-    return {"ok": True}
-
-
-@router.api_route("/voice/vonage/recording", methods=["GET", "POST"])
-async def vonage_recording(request: Request, db: Session = Depends(get_db)):
-    data, _ = await _trusted(request)
+@router.api_route("/voice/telnyx/recording", methods=["GET", "POST"])
+async def telnyx_recording(request: Request, db: Session = Depends(get_db)):
+    data = telnyx.normalize(await _telnyx_trusted(request))
     return await _run(webhooks.recording, db, data, dict(request.query_params))
 
 
-@router.api_route("/voice/vonage/hold", methods=["GET", "POST"])
-async def vonage_hold(request: Request, db: Session = Depends(get_db)):
-    data, _ = await _trusted(request)
-    ncco, events = await _run(webhooks.hold, db, data, dict(request.query_params))
+@router.api_route("/voice/telnyx/hold", methods=["GET", "POST"])
+async def telnyx_hold(request: Request, db: Session = Depends(get_db)):
+    data = telnyx.normalize(await _telnyx_trusted(request))
+    script, events = await _run(webhooks.hold, db, data, dict(request.query_params))
     await _flush(events)
-    return ncco
+    return _texml(script)
 
 
-@router.get("/voice/vonage/hold-music.wav")
-def vonage_hold_music():
-    """Hold music Vonage streams to callers in the queue (public audio)."""
+@router.get("/voice/telnyx/hold-music.wav")
+def telnyx_hold_music():
+    """Hold music Telnyx streams to callers in the queue (public audio)."""
     from app.voice_dialer import inbound
 
     return Response(content=inbound.hold_music(), media_type="audio/wav",
                     headers={"Cache-Control": "public, max-age=86400"})
 
 
-@router.api_route("/voice/vonage/optout", methods=["GET", "POST"])
-async def vonage_optout(request: Request, db: Session = Depends(get_db)):
-    data, _ = await _trusted(request)
-    return await _run(webhooks.optout, db, data, dict(request.query_params))
+@router.get("/voice/telnyx/silence.wav")
+def telnyx_silence():
+    """Wait audio for conferences, so nobody alone in a room hears hold music."""
+    return Response(content=telnyx.silence_wav(), media_type="audio/wav",
+                    headers={"Cache-Control": "public, max-age=86400"})
+
+
+@router.api_route("/voice/telnyx/optout", methods=["GET", "POST"])
+async def telnyx_optout(request: Request, db: Session = Depends(get_db)):
+    data = telnyx.normalize(await _telnyx_trusted(request))
+    return _texml(await _run(webhooks.optout, db, data, dict(request.query_params)))
 
 
 # =========================== Portal ===========================
@@ -195,17 +203,17 @@ def dialer_token(
     tenant_id: str = Depends(get_tenant_id),
     user: User = Depends(get_current_active_user),
 ):
-    """Vonage Client SDK login for this agent's headset line."""
-    if not vonage.available():
-        raise HTTPException(status_code=503, detail="Vonage is not configured")
-    name = vonage.agent_username(user.id)
+    """Browser calling login for this user (Telnyx WebRTC)."""
+    if not telnyx.available():
+        raise HTTPException(status_code=503, detail="Calling is not configured")
+    name = telnyx.agent_username(user.id)
     try:
-        vonage.ensure_user(name, f"{user.first_name or ''} {user.last_name or ''}".strip() or None)
-        token = vonage.client_token(name)
+        telnyx.ensure_user(name, f"{user.first_name or ''} {user.last_name or ''}".strip() or None)
+        token = telnyx.client_token(name)
     except Exception as exc:
-        logger.warning("vonage token failed: %s", exc)
-        raise HTTPException(status_code=502, detail="Could not reach Vonage")
-    return {"token": token, "username": name, "simulate": vonage.simulating()}
+        logger.warning("telnyx token failed: %s", exc)
+        raise HTTPException(status_code=502, detail="Could not reach the phone service")
+    return {"token": token, "username": name, "simulate": telnyx.simulating()}
 
 
 @router.post("/voice/dialer/line")
@@ -215,11 +223,20 @@ async def dialer_line(
     tenant_id: str = Depends(get_tenant_id),
     user: User = Depends(get_current_active_user),
 ):
-    """Line off (any mode) or — simulator only — line on without a real SDK leg."""
+    """Line off (any mode); line on — ring this browser (it answers by itself
+    and the line opens when our answer URL is asked); simulator: open it
+    without a real leg."""
+    if on and not telnyx.simulating():
+        try:
+            await _run(service.open_line, db, tenant_id, str(user.id))
+        except ValueError as exc:
+            raise HTTPException(status_code=409, detail=str(exc))
+        except Exception as exc:
+            logger.warning("telnyx: ringing the agent line failed: %s", exc)
+            raise HTTPException(status_code=502, detail="Could not reach the phone service")
+        return await _run(service.agent_state, db, tenant_id, str(user.id))
     if on:
-        if not vonage.simulating():
-            raise HTTPException(status_code=400, detail="the line is opened by the Vonage SDK")
-        _ncco, events = await _run(service.on_agent_line, db, str(user.id), f"sim-line-{user.id}")
+        _script, events = await _run(service.on_agent_line, db, str(user.id), f"sim-line-{user.id}")
     else:
         events = await _run(service.drop_line, db, tenant_id, str(user.id))
     await _flush(events)
@@ -419,7 +436,7 @@ def dialer_inbox(
     tenant_id: str = Depends(get_tenant_id),
     _user: User = Depends(_require_manager),
 ):
-    """Everyone who texted our Vonage numbers, latest activity first."""
+    """Everyone who texted our numbers, latest activity first."""
     return {"items": inbox.conversations(db, tenant_id)}
 
 
@@ -629,12 +646,12 @@ def manual_recording(
     return _audio_response(request, payload, ctype, f"manual-call-{call_id}")
 
 
-# ---- Simulator (dev only: no Vonage keys, not production) ----
-# Everything goes through simulator.py, which feeds Vonage-format payloads to
-# the same webhook code the real Vonage requests hit.
+# ---- Simulator (dev only: no Telnyx keys, not production) ----
+# Everything goes through simulator.py, which feeds carrier-format payloads to
+# the same webhook code the real Telnyx requests hit.
 
 def _sim_only() -> None:
-    if not vonage.simulating():
+    if not telnyx.simulating():
         raise HTTPException(status_code=404, detail="simulator is off")
 
 

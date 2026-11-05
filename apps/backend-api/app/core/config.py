@@ -135,39 +135,36 @@ class Settings(BaseSettings):
     # Public base URL Sinch should call back to (voice webhooks / SVAML).
     VOICE_CALLBACK_BASE_URL: str = ""   # e.g. https://getquotedtoday.com
 
-    # Vonage Communications APIs — YES-reply auto dialer (app/voice_dialer).
-    # Programmable Voice + Messages, NOT Vonage Business (app.vonage.com): only the
-    # APIs give inbound-text webhooks, machine detection and instant transfers.
+    # Telnyx — YES-reply auto dialer, Dial drawer, inbound calls (app/voice_dialer).
     # Blank = not configured; the dialer then refuses to dial (or, outside
-    # production with VONAGE_SIMULATE on, fakes every Vonage call for testing).
+    # production with VOICE_SIMULATE on, fakes every carrier call for testing).
+    # `python -m app.voice_dialer.telnyx_setup` creates the TeXML app / SIP
+    # connection / profiles and prints these IDs.
+    TELNYX_API_KEY: str = ""
+    TELNYX_PUBLIC_KEY: str = ""         # Ed25519 key that signs Telnyx webhooks (base64)
+    TELNYX_ACCOUNT_SID: str = ""        # account UUID (TeXML REST path); learned from webhooks if blank
+    TELNYX_TEXML_APP_ID: str = ""       # TeXML application: customer calls + agent lines
+    TELNYX_CREDENTIAL_CONNECTION_ID: str = ""  # SIP connection agents' browsers log in to
+    TELNYX_FROM_NUMBERS: str = ""       # our Telnyx numbers, comma-separated (caller IDs)
+    TELNYX_API_BASE_URL: str = "https://api.telnyx.com/v2"
+    # Call behaviour
     DB_POOL_DEBUG: bool = False         # local diagnosis: log DB connections held > 3 s
-    VONAGE_API_KEY: str = ""
-    VONAGE_API_SECRET: str = ""
-    VONAGE_APPLICATION_ID: str = ""
-    VONAGE_PRIVATE_KEY: str = ""        # PEM text (\n escapes allowed) …
-    VONAGE_PRIVATE_KEY_PATH: str = ""   # … or a path to private.key
-    VONAGE_SIGNATURE_SECRET: str = ""   # verifies Vonage's signed webhooks (HS256 JWT)
-    VONAGE_WEBHOOK_TOKEN: str = ""      # ?k= token on our webhook URLs (fallback check)
-    VONAGE_FROM_NUMBERS: str = ""       # the DID fleet, comma-separated (fallback caller IDs)
-    VONAGE_TEST_NUMBERS: str = ""       # TESTING ONLY: non-US numbers (+91…) treated like US clients, no calling hours
-    VONAGE_TENANT_ID: str = ""          # tenant that owns the numbers (blank = the only tenant)
-    VONAGE_API_BASE_URL: str = "https://api.nexmo.com"
+    VOICE_WEBHOOK_TOKEN: str = ""       # ?k= token on our webhook URLs (fallback check)
+    VOICE_TEST_NUMBERS: str = ""        # TESTING ONLY: non-US numbers (+91…) treated like US clients, no calling hours
+    VOICE_TENANT_ID: str = ""           # tenant that owns the numbers (blank = the only tenant)
     # Short on purpose: it is spoken as the customer joins the agent, so every
     # word is a word of delay before they talk.
-    VONAGE_RECORDING_NOTICE: str = "This call is recorded."
-    VONAGE_HOLD_MUSIC_URL: str = ""     # hold music for callers in the queue (blank = built-in soft loop)
+    VOICE_RECORDING_NOTICE: str = "This call is recorded."
+    VOICE_HOLD_MUSIC_URL: str = ""      # hold music for callers in the queue (blank = built-in soft loop)
     # Bridge the moment the customer picks up; machine detection keeps
     # listening and pulls the agent out if it was voicemail (~1.5 s to the
     # agent instead of ~5 s). False = wait for the "human" verdict first.
-    VONAGE_CONNECT_ON_ANSWER: bool = True
-    # Machine detection (voicemail vs person). OFF: with it on, Vonage re-runs the
-    # customer's answer NCCO once detection decides — AFTER we bridged them —
-    # which pulled the person out of the call room and hung up their leg
-    # (live, 2026-10-23: three calls in a row, silence both ways). Off = the
-    # answer webhook bridges on pickup in its own reply; a voicemail reaches the
-    # agent, who marks it "Voicemail" (back on the dial list).
-    VONAGE_MACHINE_DETECTION: bool = False
-    VONAGE_SIMULATE: bool = True        # dev only — never honoured in production
+    VOICE_CONNECT_ON_ANSWER: bool = True
+    # Machine detection (voicemail vs person). Off = the answer webhook bridges
+    # on pickup; a voicemail reaches the agent, who marks it "Voicemail" (back
+    # on the dial list). Off by default until it has been proven on real calls.
+    VOICE_MACHINE_DETECTION: bool = False
+    VOICE_SIMULATE: bool = True         # dev only — never honoured in production
 
     # AWS / storage  (call recordings are downloaded from Sinch and stored here
     # permanently — Sinch is NOT the permanent store).

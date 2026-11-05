@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import logging
 import re
+import time
 from datetime import datetime, timedelta, timezone
 from urllib.parse import urlencode
 
@@ -47,13 +48,19 @@ from app.models.sms import (
     VoiceDialerSettings,
 )
 from app.sms_queue.services import queue_service as qs
-from app.voice_dialer import replies, rules, vonage
+from app.voice_dialer import telnyx
+from app.voice_dialer import replies, rules
 
 logger = logging.getLogger(__name__)
 
 IN_FLIGHT = ("DIALING", "RINGING", "ANSWERED")
 FINAL = ("COMPLETED", "MACHINE", "NO_ANSWER", "BUSY", "FAILED", "ABANDONED", "CANCELLED", "MISSED")
-# Vonage's default limit is 3 new calls per second (CPS). A tick never starts
+# Recordings whose webhook never came: how often to look, and how far back.
+RECORDING_CHECK_SECONDS = 15.0
+RECORDING_LOOKBACK = timedelta(hours=6)
+_recording_checked: dict[str, float] = {}
+
+# Stay within 3 new calls per second (CPS). A tick never starts
 # more than this many calls, and ticks are seconds apart, so a backlog (e.g. the
 # overnight YES replies all due at 8 am) can't trip it. Raise both together.
 MAX_CALLS_PER_TICK = 3
@@ -161,8 +168,8 @@ def update_settings(db: Session, tenant_id, data: dict) -> dict:
 
 
 def owner_tenant_id(db: Session) -> str | None:
-    """The tenant our Vonage numbers belong to (webhooks carry no tenant)."""
-    tid = (settings.VONAGE_TENANT_ID or "").strip()
+    """The tenant our phone numbers belong to (webhooks carry no tenant)."""
+    tid = (settings.VOICE_TENANT_ID or "").strip()
     if tid:
         return tid
     from app.models.tenant import Tenant
@@ -174,9 +181,9 @@ def owner_tenant_id(db: Session) -> str | None:
 def _url(path: str, **params) -> str:
     base = (settings.VOICE_CALLBACK_BASE_URL or settings.FRONTEND_URL or "").rstrip("/")
     q = {k: str(v) for k, v in params.items() if v is not None}
-    if settings.VONAGE_WEBHOOK_TOKEN:
-        q["k"] = settings.VONAGE_WEBHOOK_TOKEN
-    return f"{base}/api/v1/voice/vonage/{path}" + (f"?{urlencode(q)}" if q else "")
+    if settings.VOICE_WEBHOOK_TOKEN:
+        q["k"] = settings.VOICE_WEBHOOK_TOKEN
+    return f"{base}/api/v1/voice/{telnyx.SLUG}/{path}" + (f"?{urlencode(q)}" if q else "")
 
 
 def conversation_name(user_id) -> str:
@@ -193,7 +200,7 @@ def _phone_match(column, phone: str):
 
 
 def find_lead(db: Session, tenant_id, phone: str) -> SmsLead | None:
-    """Match by PHONE, never by name (Vonage names are often missing or garbled).
+    """Match by PHONE, never by name (carrier names are often missing or garbled).
     Prefer a lead that is still live over an old dispositioned one."""
     return (
         db.query(SmsLead)
@@ -302,7 +309,7 @@ def on_inbound_sms(
     db: Session, tenant_id, from_raw: str, to_raw: str | None, text: str | None,
     message_id: str | None = None,
 ) -> tuple[dict, list[dict]]:
-    """One inbound text from Vonage (the owner's rule): every reply is called,
+    """One inbound text (the owner's rule): every reply is called,
     reply_delay_seconds after it lands, EXCEPT a negative one — STOP, a plain
     no / not interested, abuse, wrong number — which goes on Do-Not-Call
     forever. A client an agent already closed is reopened only by a CLEAR yes;
@@ -338,7 +345,7 @@ def on_inbound_sms(
         db.flush()
     msg = SmsMessage(
         tenant_id=tenant_id, sms_lead_id=lead.id, phone_number=phone, direction="INBOUND",
-        body=text or "", sender_type="CUSTOMER", status="RECEIVED", provider="vonage",
+        body=text or "", sender_type="CUSTOMER", status="RECEIVED", provider=telnyx.SLUG,
         provider_message_id=message_id,
     )
     db.add(msg)
@@ -358,7 +365,7 @@ def on_inbound_sms(
             if lead.status == "DIALING":
                 live = _live_attempt_for_lead(db, lead.id)
                 if live is not None:
-                    vonage.hangup(live.call_uuid)
+                    telnyx.hangup(live.call_uuid)
             if lead.status == "ASSIGNED" and lead.assigned_agent_id:
                 holder = qs._get_or_create_agent(db, tenant_id, str(lead.assigned_agent_id))
                 if str(holder.current_lead_id) == str(lead.id):
@@ -393,7 +400,7 @@ def on_inbound_sms(
                 lead.dispositioned_at = None
         if opted_out:
             result = "reply_saved_opted_out"  # vague text from an opted-out number: saved only
-        elif lead.status == "ASSIGNED" and s.enabled and vonage.available():
+        elif lead.status == "ASSIGNED" and s.enabled and telnyx.available():
             # Sitting in someone's unaccepted "New lead" popup: nobody is working
             # it yet, so the YES wins — pull the offer back and dial them.
             if lead.assigned_agent_id:
@@ -408,7 +415,7 @@ def on_inbound_sms(
             result = "ready_to_call"
         elif lead.status in ("IN_PROGRESS", "ASSIGNED", "DIALING"):
             result = "yes_already_active"  # someone has them / a call is already in flight
-        elif s.enabled and vonage.available():
+        elif s.enabled and telnyx.available():
             lead.status = "READY_TO_CALL"
             # The owner's "don't ring them the very second they reply" pause.
             lead.next_dial_at = now + timedelta(seconds=_reply_delay(s))
@@ -430,7 +437,7 @@ def on_inbound_sms(
     events.append(_evt("tenant", tenant_id, "sms:new_message", payload))
     if lead.assigned_agent_id:
         events.append(_evt("agent", lead.assigned_agent_id, "sms:new_message", payload))
-    events.append(_evt("tenant", tenant_id, "sms:queue_updated", {"reason": "vonage_inbound"}))
+    events.append(_evt("tenant", tenant_id, "sms:queue_updated", {"reason": "voice_inbound"}))
     if lead.status == "QUEUED" and kind not in replies.NEGATIVE_KINDS:
         _d, ev = qs.assign_next(db, tenant_id)
         events += ev
@@ -492,7 +499,7 @@ def _inbound_sms_international(db: Session, tenant_id, from_raw: str, text: str 
         db.flush()
     db.add(SmsMessage(
         tenant_id=tenant_id, sms_lead_id=lead.id, phone_number=phone, direction="INBOUND",
-        body=text or "", sender_type="CUSTOMER", status="RECEIVED", provider="vonage",
+        body=text or "", sender_type="CUSTOMER", status="RECEIVED", provider=telnyx.SLUG,
         provider_message_id=message_id,
     ))
     lead.last_message = text
@@ -673,7 +680,7 @@ def _attempts_24h(db: Session, tenant_id, phone: str) -> list[datetime]:
 
 def fleet_numbers() -> list[str]:
     out = []
-    for raw in (settings.VONAGE_FROM_NUMBERS or "").split(","):
+    for raw in (settings.TELNYX_FROM_NUMBERS or "").split(","):
         n = replies.normalize_phone(raw)
         if n:
             out.append(n)
@@ -687,7 +694,7 @@ def _caller_id(db: Session, tenant_id, lead: SmsLead) -> str | None:
         return lead.dial_from
     fleet = fleet_numbers()
     if not fleet:
-        return "+15550000000" if vonage.simulating() else None
+        return "+15550000000" if telnyx.simulating() else None
     used = dict(
         db.query(VoiceCallAttempt.from_number, func.count(VoiceCallAttempt.id))
         .filter(VoiceCallAttempt.tenant_id == tenant_id, VoiceCallAttempt.created_at >= _today_start())
@@ -711,7 +718,7 @@ def _tick_lock(tenant_id) -> bool:
 
 def _cps_slot(tenant_id) -> bool:
     """At most one dialing batch (<= MAX_CALLS_PER_TICK calls) per second per
-    tenant, however many ticks fire — keeps us under Vonage's CPS limit."""
+    tenant, however many ticks fire — keeps us under the CPS limit."""
     try:
         from app.core.redis import redis_service
 
@@ -748,6 +755,11 @@ def _tick(db: Session, tenant_id) -> list[dict]:
 
     s = get_settings(db, tenant_id)
     events = _housekeeping(db, tenant_id, s)
+    try:
+        collect_recordings(db, tenant_id)
+    except Exception as exc:
+        db.rollback()
+        logger.warning("voice dialer: collecting recordings failed: %s", exc)
     # Callers on hold come first: they get the free agents before any new
     # outbound call is started.
     try:
@@ -755,7 +767,7 @@ def _tick(db: Session, tenant_id) -> list[dict]:
     except Exception as exc:
         db.rollback()
         logger.warning("voice dialer: serving held callers failed: %s", exc)
-    if not s.enabled or not vonage.available():
+    if not s.enabled or not telnyx.available():
         db.commit()
         return events
 
@@ -780,7 +792,7 @@ def _tick(db: Session, tenant_id) -> list[dict]:
         db.commit()
         return events  # nobody new is dialed while a caller waits on hold
     # One call per free agent on the line — never more calls than agents to take
-    # them — and never more than Vonage's calls-per-second limit in one go.
+    # them — and never more than the calls-per-second limit in one go.
     capacity = min(len(_ready_agents(db, tenant_id)) - len(flying), MAX_CALLS_PER_TICK)
     if capacity <= 0:
         due = sum(
@@ -818,7 +830,7 @@ def _tick(db: Session, tenant_id) -> list[dict]:
             continue
         from_ = _caller_id(db, tenant_id, lead)
         if not from_:
-            logger.warning("voice dialer: no caller ID (set VONAGE_FROM_NUMBERS)")
+            logger.warning("voice dialer: no caller ID (set TELNYX_FROM_NUMBERS)")
             break
         # The lock: only one claimer can move READY_TO_CALL -> DIALING.
         claimed = (
@@ -839,9 +851,9 @@ def _tick(db: Session, tenant_id) -> list[dict]:
         db.commit()
         db.refresh(lead)
         try:
-            att.call_uuid = vonage.create_call(
-                to=replies.vonage_number(phone),
-                from_=replies.vonage_number(from_),
+            att.call_uuid = telnyx.create_call(
+                to=replies.digits_only(phone),
+                from_=replies.digits_only(from_),
                 answer_url=_url("answer", leg="customer", a=att.id),
                 event_url=_url("event", a=att.id),
                 ring_seconds=s.ring_seconds,
@@ -903,10 +915,10 @@ def _housekeeping(db: Session, tenant_id, s: VoiceDialerSettings) -> list[dict]:
         db.rollback()
         logger.warning("voice dialer: reap_stale_agents failed: %s", exc)
     # Commit what the reaper changed before anything below can wait on the
-    # network: an open transaction holding agent rows while we talk to Vonage
+    # network: an open transaction holding agent rows while we talk to the carrier
     # made every agent's status poll queue up behind it (pool exhaustion).
     db.commit()
-    if vonage.simulating():
+    if telnyx.simulating():
         from app.voice_dialer import simulator
 
         events += simulator.housekeeping(db, tenant_id)
@@ -937,7 +949,7 @@ def _housekeeping(db: Session, tenant_id, s: VoiceDialerSettings) -> list[dict]:
     ):
         hangups.append(att.call_uuid)
         att.status = "NO_ANSWER"
-        att.error = "no final event from Vonage"
+        att.error = "no final event from the carrier"
         att.ended_at = now
         events += _requeue(db, _lead_of(db, att), s)
     # A call still "connected" whose lead is no longer being worked (result set
@@ -971,7 +983,7 @@ def _housekeeping(db: Session, tenant_id, s: VoiceDialerSettings) -> list[dict]:
     ):
         att.status = "COMPLETED"
         att.ended_at = att.ended_at or now
-        att.error = att.error or "no end event from Vonage"
+        att.error = att.error or "no end event from the carrier"
     # A line left on an agent who is no longer working is not a line.
     for a in (
         db.query(SmsQueueAgent)
@@ -987,7 +999,7 @@ def _housekeeping(db: Session, tenant_id, s: VoiceDialerSettings) -> list[dict]:
         a.voice_line_at = None
     db.commit()
     for uuid_ in hangups:
-        vonage.hangup(uuid_)
+        telnyx.hangup(uuid_)
     return events
 
 
@@ -1038,14 +1050,14 @@ def _speak_digits(e164: str | None) -> str:
 
 
 def call_room(att: VoiceCallAttempt) -> str:
-    """One room per bridged call. Vonage records a ROOM, not a person, and
+    """One room per bridged call. A recording belongs to the ROOM, not a person, and
     the agent's own room lasts their whole shift — so each call gets a room of
     its own: its recording starts when they meet and ends when the customer
     leaves. (Recording inside the agent's room produced 1-second files.)"""
     return f"iag-call-{att.id.hex if hasattr(att.id, 'hex') else att.id}"
 
 
-def agent_room_ncco(agent_user_id) -> list[dict]:
+def agent_room_script(agent_user_id) -> list[dict]:
     """The agent's parked line: their private room, all shift."""
     return [{
         "action": "conversation", "name": conversation_name(agent_user_id),
@@ -1053,13 +1065,13 @@ def agent_room_ncco(agent_user_id) -> list[dict]:
     }]
 
 
-def connect_ncco(agent_user_id, att: VoiceCallAttempt) -> list[dict]:
+def connect_script(agent_user_id, att: VoiceCallAttempt) -> list[dict]:
     """The customer's side of the bridge: into this call's own room, recorded.
 
-    endOnExit stays FALSE: Vonage re-runs the customer's instructions when it
-    finally asks the answer URL (after machine detection, ~4 s in), so the
+    endOnExit stays FALSE: if the answer URL is asked after the bridge, the
     customer briefly leaves and rejoins this room — with endOnExit that ended
-    the room and Vonage HUNG UP the agent (live test: silence both ways).
+    the room and hung up the agent (seen live on the previous carrier: silence
+    both ways).
     When the customer really hangs up, _return_agent_line moves the agent back
     to their own room; the room is then empty, ends, and the recording lands."""
     room: dict = {
@@ -1071,11 +1083,11 @@ def connect_ncco(agent_user_id, att: VoiceCallAttempt) -> list[dict]:
     room.update({"record": True, "eventUrl": [_url("recording", a=att.id)], "eventMethod": "POST"})
     # The notice is the customer's first second with us — one short line,
     # then straight in to the agent (who is already in the room).
-    notice = {"action": "talk", "text": settings.VONAGE_RECORDING_NOTICE, "language": "en-US"}
+    notice = {"action": "talk", "text": settings.VOICE_RECORDING_NOTICE, "language": "en-US"}
     return [notice, room]
 
 
-def room_only_ncco(att: VoiceCallAttempt) -> list[dict]:
+def room_only_script(att: VoiceCallAttempt) -> list[dict]:
     """The customer's instructions when they are ALREADY in the call room (the
     answer URL can be asked after we bridged them): the same room, no second
     notice. Any other reply would pull them out of the call."""
@@ -1084,16 +1096,16 @@ def room_only_ncco(att: VoiceCallAttempt) -> list[dict]:
     return [{"action": "conversation", "name": call_room(att), "startOnEnter": True, "endOnExit": False}]
 
 
-def agent_call_ncco(agent_user_id, att: VoiceCallAttempt) -> list[dict]:
+def agent_call_script(agent_user_id, att: VoiceCallAttempt) -> list[dict]:
     """The agent's side: join the call's room; when it closes, carry on to the
     next action — straight back to their own parked room, ready for the next."""
     return [{
         "action": "conversation", "name": call_room(att),
         "startOnEnter": True, "endOnExit": False,
-    }] + agent_room_ncco(agent_user_id)
+    }] + agent_room_script(agent_user_id)
 
 
-def abandon_ncco(s: VoiceDialerSettings, att: VoiceCallAttempt) -> list[dict]:
+def abandon_script(s: VoiceDialerSettings, att: VoiceCallAttempt) -> list[dict]:
     biz = s.business_name or DEFAULT_BUSINESS
     text = f"Hi, this is {biz}, returning your text. All of our agents are helping other customers right now."
     spoken = _speak_digits(s.callback_number)
@@ -1109,7 +1121,7 @@ def abandon_ncco(s: VoiceDialerSettings, att: VoiceCallAttempt) -> list[dict]:
     ]
 
 
-def hold_ncco(att: VoiceCallAttempt) -> list[dict]:
+def hold_script(att: VoiceCallAttempt) -> list[dict]:
     """While machine detection listens: a silent room of their own."""
     return [{"action": "conversation", "name": f"iag-hold-{att.id.hex if hasattr(att.id, 'hex') else att.id}"}]
 
@@ -1138,7 +1150,7 @@ def _end_live_calls(db: Session, *, lead_id=None, agent_user_id=None) -> int:
 
 def _hangup_after_commit(db: Session, legs: list) -> None:
     """Hang these legs up once this session's transaction commits — never while
-    it still holds row locks (a Vonage round trip inside a transaction made
+    it still holds row locks (a carrier round trip inside a transaction made
     every agent's status poll queue behind it and drained the DB pool)."""
     legs = [l for l in legs if l]
     if not legs:
@@ -1147,7 +1159,7 @@ def _hangup_after_commit(db: Session, legs: list) -> None:
 
     def go(_session):
         for leg in legs:
-            vonage.hangup(leg)
+            telnyx.hangup(leg)
 
     event.listen(db, "after_commit", go, once=True)
 
@@ -1197,15 +1209,15 @@ def _claim_agent(db: Session, tenant_id, lead: SmsLead, prefer_user_id=None,
 
 
 def connect_human(db: Session, att: VoiceCallAttempt, early: bool = False,
-                  ncco_out: list | None = None) -> list[dict]:
+                  script_out: list | None = None) -> list[dict]:
     """A live person answered: claim an agent, bridge, then pop the card.
 
     early=True (connect on answer): bridged before machine detection has
     decided, so human_at stays empty until its "human" verdict — and a
     "machine" verdict pulls the agent back out (_drop_early_voicemail).
 
-    ncco_out: called from the customer's ANSWER webhook. The customer's
-    instructions go back in that response (filled into ncco_out) instead of a
+    script_out: called from the customer's ANSWER webhook. The customer's
+    instructions go back in that response (filled into script_out) instead of a
     transfer — a transfer issued then raced the answer webhook's own reply,
     which put the customer back in the hold room: both sides heard silence."""
     if att.status not in IN_FLIGHT:
@@ -1221,10 +1233,10 @@ def connect_human(db: Session, att: VoiceCallAttempt, early: bool = False,
         att.status = "CANCELLED"
         att.ended_at = now
         db.commit()
-        if ncco_out is not None:
-            ncco_out.append({"action": "talk", "text": "Goodbye."})
+        if script_out is not None:
+            script_out.append({"action": "talk", "text": "Goodbye."})
         else:
-            vonage.hangup(att.call_uuid)
+            telnyx.hangup(att.call_uuid)
         return []
 
     from app.voice_dialer import inbound
@@ -1233,16 +1245,16 @@ def connect_human(db: Session, att: VoiceCallAttempt, early: bool = False,
     if agent is None:
         att.status = "ABANDONED"
         db.commit()
-        if ncco_out is not None:
-            ncco_out.extend(abandon_ncco(s, att))
+        if script_out is not None:
+            script_out.extend(abandon_script(s, att))
             events = _requeue(db, lead, s)
             db.commit()
             return events
         try:
-            vonage.transfer(att.call_uuid, abandon_ncco(s, att))
+            telnyx.transfer(att.call_uuid, abandon_script(s, att))
         except Exception as exc:
             logger.warning("voice dialer: abandon message failed: %s", exc)
-            vonage.hangup(att.call_uuid)
+            telnyx.hangup(att.call_uuid)
         events = _requeue(db, lead, s)
         db.commit()
         return events
@@ -1268,10 +1280,10 @@ def connect_human(db: Session, att: VoiceCallAttempt, early: bool = False,
         from concurrent.futures import ThreadPoolExecutor
 
         with ThreadPoolExecutor(max_workers=2) as pool:
-            a = pool.submit(vonage.transfer, agent_leg, agent_call_ncco(agent.user_id, att)) if agent_leg else None
+            a = pool.submit(telnyx.transfer, agent_leg, agent_call_script(agent.user_id, att)) if agent_leg else None
             c = None
-            if ncco_out is None:
-                c = pool.submit(vonage.transfer, att.call_uuid, connect_ncco(agent.user_id, att))
+            if script_out is None:
+                c = pool.submit(telnyx.transfer, att.call_uuid, connect_script(agent.user_id, att))
             errors = []
             for f in (a, c):
                 if f is None:
@@ -1283,20 +1295,20 @@ def connect_human(db: Session, att: VoiceCallAttempt, early: bool = False,
             moved_agent = a is not None and a.exception() is None
             if errors:
                 raise errors[0]
-        if ncco_out is not None:
-            ncco_out.extend(connect_ncco(agent.user_id, att))
+        if script_out is not None:
+            script_out.extend(connect_script(agent.user_id, att))
     except Exception as exc:
         logger.warning("voice dialer: bridge failed: %s", exc)
         if moved_agent:
             try:
-                vonage.transfer(agent_leg, agent_room_ncco(agent.user_id))
+                telnyx.transfer(agent_leg, agent_room_script(agent.user_id))
             except Exception:
                 pass  # their browser reopens the line by itself
-        if ncco_out is not None:
-            ncco_out.clear()
-            ncco_out.append({"action": "talk", "text": "Sorry, please hold on. We will call you right back."})
+        if script_out is not None:
+            script_out.clear()
+            script_out.append({"action": "talk", "text": "Sorry, please hold on. We will call you right back."})
         else:
-            vonage.hangup(att.call_uuid)
+            telnyx.hangup(att.call_uuid)
         att.status = "FAILED"
         att.error = f"bridge failed: {exc}"[:500]
         att.ended_at = _now()
@@ -1353,7 +1365,7 @@ def find_attempt(db: Session, attempt_id: str | None, call_uuid: str | None) -> 
 
 
 def on_call_event(db: Session, att: VoiceCallAttempt, payload: dict) -> list[dict]:
-    """Vonage call-leg event for a customer call (status / machine detection)."""
+    """Call-leg event for a customer call (status / machine detection)."""
     status = str(payload.get("status") or "").lower()
     leg = payload.get("uuid") or payload.get("call_uuid")
     if leg and not att.call_uuid:
@@ -1374,18 +1386,18 @@ def on_call_event(db: Session, att: VoiceCallAttempt, payload: dict) -> list[dic
             att.status = "ANSWERED"
             att.answered_at = now
         db.commit()
-        if not settings.VONAGE_MACHINE_DETECTION:
+        if not settings.VOICE_MACHINE_DETECTION:
             # No detection: the answer webhook (asked at pickup) bridges them in
             # its own reply. A transfer from here would race it.
             return []
-        if settings.VONAGE_CONNECT_ON_ANSWER:
+        if settings.VOICE_CONNECT_ON_ANSWER:
             # Put them through now (by transfer); detection keeps listening.
-            # With detection on, Vonage only asks our answer URL AFTER it
-            # decides — webhooks.answer then keeps them in this same room.
+            # If our answer URL is asked after this, webhooks.answer keeps
+            # them in this same room.
             return connect_human(db, att, early=True)
         # Detection listens for a few seconds — open the connection the
         # bridge will need, so it is warm when "human" lands.
-        vonage.warm()
+        telnyx.warm()
         return []
     if status == "human":
         if att.status in ("CONNECTED", "COMPLETED"):
@@ -1402,7 +1414,7 @@ def on_call_event(db: Session, att: VoiceCallAttempt, payload: dict) -> list[dic
         att.status = "MACHINE"
         att.answered_at = att.answered_at or now
         db.commit()
-        vonage.hangup(att.call_uuid)
+        telnyx.hangup(att.call_uuid)
         events = _requeue(db, _lead_of(db, att), s)
         db.commit()
         return events
@@ -1452,7 +1464,7 @@ def _return_agent_line(db: Session, att: VoiceCallAttempt) -> None:
     if agent is None or not agent.voice_leg_uuid:
         return
     try:
-        vonage.transfer(agent.voice_leg_uuid, agent_room_ncco(agent.user_id))
+        telnyx.transfer(agent.voice_leg_uuid, agent_room_script(agent.user_id))
     except Exception as exc:  # the leg may already be gone — the browser reopens it
         logger.info("voice dialer: return agent line: %s", exc)
 
@@ -1479,7 +1491,7 @@ def _drop_early_voicemail(db: Session, att: VoiceCallAttempt, s: VoiceDialerSett
             agent.status = "AVAILABLE"
     db.commit()
     _return_agent_line(db, att)  # agent out first, so they stop hearing the greeting
-    vonage.hangup(att.call_uuid)
+    telnyx.hangup(att.call_uuid)
     events = _requeue(db, lead, s)
     db.commit()
     if agent_id:
@@ -1508,7 +1520,7 @@ def on_optout(db: Session, att: VoiceCallAttempt, digits: str | None) -> list[di
 # ---- Agent headset line ---------------------------------------------------------
 
 def on_agent_line(db: Session, user_id: str, leg_uuid: str) -> tuple[list[dict], list[dict]]:
-    """The agent's browser opened its line. Returns (ncco, events)."""
+    """The agent's browser opened its line. Returns (script, events)."""
     from app.models.user import User
 
     u = db.query(User).filter(User.id == user_id).first()
@@ -1529,11 +1541,11 @@ def on_agent_line(db: Session, user_id: str, leg_uuid: str) -> tuple[list[dict],
     agent.voice_line_at = _now()
     db.commit()
     if old and old != leg_uuid:
-        vonage.hangup(old)  # a second tab took over the line
-    ncco = agent_room_ncco(user_id)
+        telnyx.hangup(old)  # a second tab took over the line
+    script = agent_room_script(user_id)
     events = [_evt("user", user_id, "voice:line", {"line": True})]
     events += tick(db, tenant_id)
-    return ncco, events
+    return script, events
 
 
 def on_agent_line_ended(db: Session, leg_uuid: str) -> list[dict]:
@@ -1550,14 +1562,14 @@ def on_agent_line_ended(db: Session, leg_uuid: str) -> list[dict]:
         .all()
     )
     for att in live:
-        vonage.hangup(att.call_uuid)
+        telnyx.hangup(att.call_uuid)
     db.commit()
     return events
 
 
 def set_ready(db: Session, tenant_id, user_id: str, on: bool) -> list[dict]:
     """The agent's "Ready for calls" switch. Off closes the line at once, so no
-    Vonage minutes run while they work the regular pool."""
+    carrier minutes run while they work the regular pool."""
     agent = qs._get_or_create_agent(db, tenant_id, user_id)
     agent.voice_ready = bool(on)
     db.commit()
@@ -1571,8 +1583,22 @@ def drop_line(db: Session, tenant_id, user_id: str) -> list[dict]:
     if not agent.voice_leg_uuid:
         return []
     leg = agent.voice_leg_uuid
-    vonage.hangup(leg)
+    telnyx.hangup(leg)
     return on_agent_line_ended(db, leg)
+
+
+def open_line(db: Session, tenant_id, user_id: str) -> None:
+    """Ring the agent's browser for their headset line. The browser answers by itself;
+    on_agent_line runs when our answer URL is asked (?leg=agent&u=).
+    Raises ValueError when the agent may not hold a line right now."""
+    agent = qs._get_or_create_agent(db, tenant_id, user_id)
+    if not agent.voice_ready:
+        raise ValueError("Ready for calls is off")
+    from app.voice_dialer import manual
+
+    if manual.live_call(db, user_id) is not None:
+        raise ValueError("You are on a call")
+    telnyx.dial_browser(user_id, answer_url=_url("answer", leg="agent", u=user_id), event_url=_url("event"))
 
 
 def hangup_customer(db: Session, tenant_id, user_id: str) -> dict:
@@ -1588,11 +1614,11 @@ def hangup_customer(db: Session, tenant_id, user_id: str) -> dict:
     )
     if att is None:
         return {"ok": False, "reason": "no_live_call"}
-    vonage.hangup(att.call_uuid)
-    if vonage.simulating() or str(att.call_uuid or "").startswith("sim-"):
+    telnyx.hangup(att.call_uuid)
+    if telnyx.simulating() or str(att.call_uuid or "").startswith("sim-"):
         from app.voice_dialer import simulator
 
-        simulator.hangup(db, att)  # Vonage would now send the "completed" event
+        simulator.hangup(db, att)  # the carrier would now send the "completed" event
     return {"ok": True}
 
 
@@ -1621,7 +1647,7 @@ def _audio_type(data: bytes) -> str:
 
 
 def save_recording(db: Session, *, tenant_id, user_id, phone: str, when: datetime | None, url: str):
-    """Download a Vonage recording and keep it in OUR storage — exactly where
+    """Download a call recording and keep it in OUR storage — exactly where
     Log Sale keeps its call recordings: a `deal_recordings` row with the audio
     in the S3 bucket under deal-recordings/<tenant>/ (inline on the row only if
     S3 is unavailable, the same fallback Log Sale uses). Returns the flushed
@@ -1631,7 +1657,7 @@ def save_recording(db: Session, *, tenant_id, user_id, phone: str, when: datetim
     from app.calls.s3_storage import s3_storage
     from app.models.compliance import DealRecording
 
-    data = vonage.download(url)
+    data = telnyx.download(url)
     ctype = _audio_type(data)
     ext = {"audio/wav": "wav", "audio/ogg": "ogg"}.get(ctype, "mp3")
     agent_id = None
@@ -1665,15 +1691,15 @@ def save_recording(db: Session, *, tenant_id, user_id, phone: str, when: datetim
 
 
 def store_recording(db: Session, att: VoiceCallAttempt, payload: dict) -> dict:
-    """Vonage finished recording a connected call. Vonage deletes recordings
-    after 30 days, so the audio is copied to our storage right away
+    """The carrier finished recording a connected call. Its copy isn't permanent,
+    so the audio is copied to our storage right away
     (save_recording). Being a deal_recordings row, it can be attached to a
     sale like an uploaded one."""
     url = payload.get("recording_url")
     if not url:
         return {"ok": False}
     if att.recording_id:
-        return {"ok": True, "duplicate": True}  # Vonage retried the webhook
+        return {"ok": True, "duplicate": True}  # the carrier retried the webhook
     try:
         rec = save_recording(db, tenant_id=att.tenant_id, user_id=att.agent_user_id,
                              phone=att.phone_number, when=att.connected_at, url=url)
@@ -1684,6 +1710,38 @@ def store_recording(db: Session, att: VoiceCallAttempt, payload: dict) -> dict:
     att.recording_id = rec.id
     db.commit()
     return {"ok": True, "recording_id": str(rec.id), "storage": rec.storage}
+
+
+def collect_recordings(db: Session, tenant_id) -> None:
+    """Fetch room recordings whose webhook never came. Runs from the tick,
+    at most every RECORDING_CHECK_SECONDS per tenant."""
+    now = time.monotonic()
+    if not settings.CALL_RECORDING_ENABLED or telnyx.simulating() or not telnyx.configured():
+        return
+    if now - _recording_checked.get(str(tenant_id), 0.0) < RECORDING_CHECK_SECONDS:
+        return
+    _recording_checked[str(tenant_id)] = now
+    wall = _now()
+    missing = (
+        db.query(VoiceCallAttempt)
+        .filter(
+            VoiceCallAttempt.tenant_id == tenant_id,
+            VoiceCallAttempt.connected_at.isnot(None),
+            VoiceCallAttempt.recording_id.is_(None),
+            VoiceCallAttempt.ended_at.isnot(None),
+            VoiceCallAttempt.ended_at >= wall - RECORDING_LOOKBACK,
+            VoiceCallAttempt.ended_at <= wall - timedelta(seconds=5),
+        )
+        .order_by(VoiceCallAttempt.ended_at.desc())
+        .limit(3)
+        .all()
+    )
+    for att in missing:
+        room = call_room(att)
+        db.commit()  # no open transaction while we talk to the carrier
+        url = telnyx.conference_recording_url(room)
+        if url:
+            store_recording(db, att, {"recording_url": url})
 
 
 def recording_payload(db: Session, recording_id) -> tuple[str, bytes | str, str]:
@@ -1736,9 +1794,9 @@ def agent_state(db: Session, tenant_id, user_id: str) -> dict:
             call = lead_card(db, lead, att)
     return {
         "enabled": bool(s.enabled),
-        "available": vonage.available(),
-        "configured": vonage.configured(),
-        "simulate": vonage.simulating(),
+        "available": telnyx.available(),
+        "configured": telnyx.configured(),
+        "simulate": telnyx.simulating(),
         "agent": {
             "status": agent.status if agent else "OFFLINE",
             "ready": bool(agent and agent.voice_ready),
@@ -1829,9 +1887,9 @@ def overview(db: Session, tenant_id, period: str = "today", date_from: str | Non
             waiting[r["waiting_for"]] += 1
     return {
         "settings": settings_dict(s),
-        "available": vonage.available(),
-        "configured": vonage.configured(),
-        "simulate": vonage.simulating(),
+        "available": telnyx.available(),
+        "configured": telnyx.configured(),
+        "simulate": telnyx.simulating(),
         "sim_mode": _sim_mode(tenant_id),
         "sim_ignore_hours": _sim_ignore_hours(tenant_id),
         "fleet_size": len(fleet_numbers()),
@@ -1988,7 +2046,7 @@ def _agents_board(db: Session, tenant_id) -> list[dict]:
 def _window_ok(now: datetime, state: str | None, s: VoiceDialerSettings, tenant_id) -> bool:
     """Calling hours in the client's zone. The dev simulator can waive them
     (testing happens outside US hours); production never can."""
-    if vonage.simulating():
+    if telnyx.simulating():
         from app.voice_dialer import simulator
 
         if simulator.get_ignore_hours(tenant_id):
@@ -1997,7 +2055,7 @@ def _window_ok(now: datetime, state: str | None, s: VoiceDialerSettings, tenant_
 
 
 def _sim_mode(tenant_id) -> str | None:
-    if not vonage.simulating():
+    if not telnyx.simulating():
         return None
     from app.voice_dialer import simulator
 
@@ -2005,7 +2063,7 @@ def _sim_mode(tenant_id) -> str | None:
 
 
 def _sim_ignore_hours(tenant_id) -> bool | None:
-    if not vonage.simulating():
+    if not telnyx.simulating():
         return None
     from app.voice_dialer import simulator
 

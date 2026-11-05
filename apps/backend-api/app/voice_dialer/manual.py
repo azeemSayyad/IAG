@@ -4,10 +4,11 @@ Flow:
   1. POST /voice/manual/calls -> start(): validates the number + caller ID,
      logs a `manual_calls` row (DIALING) and, if the caller holds an auto
      dialer headset line, closes it.
-  2. The browser places a Vonage Client SDK call with
-     serverCall({purpose: "manual", mc: <row id>}). Vonage asks our answer URL
-     -> on_answer(): record the conversation and `connect` to the phone,
-     with the recording notice played to the callee as they pick up.
+  2. A browser can't start the call, so start() RINGS the caller's browser
+     (telnyx.dial_browser, ?leg=manual&mc=) and it answers by itself. Telnyx
+     asks our answer URL -> on_answer(): record the conversation and `connect`
+     to the phone, with the recording notice played to the callee as they
+     pick up.
   3. The phone leg's events (connect eventUrl, ?mc=) and the browser leg's
      events (application event URL, matched by app_leg_uuid) -> on_event().
      The first final event ends the call; the recording lands via ?mc= too.
@@ -35,20 +36,21 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.models.sms import ManualCall, VoiceCallAttempt
-from app.voice_dialer import replies, vonage
+from app.voice_dialer import telnyx
+from app.voice_dialer import replies
 
 logger = logging.getLogger(__name__)
 
 IN_FLIGHT = ("DIALING", "RINGING", "ANSWERED")
 RING_SECONDS = 45
-# The browser never reached Vonage this long after start() -> the call is dead.
+# The browser's leg never came up this long after start() -> the call is dead.
 NO_LEG_SECONDS = 90
 # A call "in flight" longer than this lost its final event: stop counting it.
 MAX_CALL_HOURS = 4
 
 MANAGER_ROLES = {"manager", "head", "tenant_admin", "admin", "super_admin", "dev"}
 
-# Vonage call status -> our status, for the PHONE leg.
+# Carrier call status -> our status, for the PHONE leg.
 _CALLEE_FINAL = {
     "busy": "BUSY",
     "timeout": "NO_ANSWER",
@@ -104,7 +106,7 @@ def caller_ids() -> list[str]:
     from app.voice_dialer.service import fleet_numbers
 
     fleet = fleet_numbers()
-    if not fleet and vonage.simulating():
+    if not fleet and telnyx.simulating():
         return ["+15550000000"]
     return fleet
 
@@ -117,8 +119,8 @@ def normalize(raw: str | None) -> str | None:
 def config() -> dict:
     nums = caller_ids()
     return {
-        "available": vonage.available(),
-        "simulate": vonage.simulating(),
+        "available": telnyx.available(),
+        "simulate": telnyx.simulating(),
         "numbers": nums,
         "default": nums[0] if nums else None,
     }
@@ -135,14 +137,14 @@ class ManualCallError(ValueError):
 def start(db: Session, tenant_id, user, to_raw: str, from_raw: str | None) -> tuple[dict, list[dict]]:
     from app.voice_dialer import service
 
-    if not vonage.available():
-        raise ManualCallError("Calling is not set up (Vonage is not configured)", 503)
+    if not telnyx.available():
+        raise ManualCallError("Calling is not set up (Telnyx is not configured)", 503)
     to = normalize(to_raw)
     if not to:
         raise ManualCallError("Enter a 10-digit US phone number")
     nums = caller_ids()
     if not nums:
-        raise ManualCallError("No caller ID numbers are set up (VONAGE_FROM_NUMBERS)", 503)
+        raise ManualCallError("No caller ID numbers are set up (TELNYX_FROM_NUMBERS)", 503)
     frm = replies.normalize_phone(from_raw) if from_raw else nums[0]
     if frm not in nums:
         raise ManualCallError("That caller ID is not one of our numbers")
@@ -181,16 +183,28 @@ def start(db: Session, tenant_id, user, to_raw: str, from_raw: str | None) -> tu
         events += service.drop_line(db, tenant_id, str(user.id))
     events.append(_evt(user.id, "voice:manual", {"id": str(call.id), "status": call.status}))
 
-    if vonage.simulating():
+    if not telnyx.simulating():
+        from app.voice_dialer.service import _url
+
+        try:
+            call.app_leg_uuid = telnyx.dial_browser(
+                user.id, from_=frm,
+                answer_url=_url("answer", leg="manual", mc=call.id),
+                event_url=_url("event", mc=call.id, leg="app"),
+            )
+            db.commit()
+        except Exception as exc:
+            logger.warning("manual call: ringing the browser failed: %s", exc)
+            events += _finish(db, call, "FAILED", error=f"could not reach the browser: {exc}")
+            raise ManualCallError("Could not start the call — try again", 502)
+    elif telnyx.simulating():
         from app.voice_dialer import webhooks
 
-        # Play Vonage: the browser's leg reaches the answer URL, the phone rings.
+        # Play the carrier: the browser's leg reaches the answer URL, the phone rings.
         webhooks.answer(db, {
             "uuid": "sim-app-" + uuid.uuid4().hex,
             "conversation_uuid": f"CON-{call.id}",
-            "from_user": vonage.agent_username(user.id),
-            "custom_data": {"purpose": "manual", "mc": str(call.id)},
-        }, {})
+        }, {"leg": "manual", "mc": str(call.id)})
         events += webhooks.event(db, {"uuid": "sim-" + uuid.uuid4().hex, "status": "ringing"},
                                  {"mc": str(call.id), "leg": "callee"})
         db.refresh(call)
@@ -216,17 +230,17 @@ def find_by_leg(db: Session, leg: str | None) -> ManualCall | None:
 
 
 def _hangup_legs(call: ManualCall) -> None:
-    vonage.hangup(call.callee_leg_uuid)
-    vonage.hangup(call.app_leg_uuid)
+    telnyx.hangup(call.callee_leg_uuid)
+    telnyx.hangup(call.app_leg_uuid)
 
 
 def end(db: Session, call: ManualCall) -> list[dict]:
     """The caller pressed Hang up (or their browser's call dropped). Ends it
-    now rather than waiting for Vonage's events: a lost event must never leave
-    an agent "busy". Vonage's later events only fill in the exact duration."""
+    now rather than waiting for the carrier's events: a lost event must never leave
+    an agent "busy". The carrier's later events only fill in the exact duration."""
     if call.status not in IN_FLIGHT:
         return []
-    if vonage.simulating():
+    if telnyx.simulating():
         from app.voice_dialer import webhooks
 
         events: list[dict] = []
@@ -255,45 +269,47 @@ def sim_answer(db: Session, call: ManualCall) -> list[dict]:
                           {"mc": str(call.id), "leg": "callee"})
 
 
-# ---- Vonage webhooks (called from webhooks.py) ------------------------------------
+# ---- Carrier webhooks (called from webhooks.py) -----------------------------------
 
-def notice_ncco() -> list[dict]:
+def notice_script() -> list[dict]:
     """Played to the person we called the moment they pick up."""
-    if not settings.CALL_RECORDING_ENABLED or not settings.VONAGE_RECORDING_NOTICE:
+    if not settings.CALL_RECORDING_ENABLED or not settings.VOICE_RECORDING_NOTICE:
         return []
-    return [{"action": "talk", "text": settings.VONAGE_RECORDING_NOTICE, "language": "en-US"}]
+    return [{"action": "talk", "text": settings.VOICE_RECORDING_NOTICE, "language": "en-US"}]
 
 
-def on_answer(db: Session, data: dict, custom: dict) -> list[dict]:
-    """The caller's browser reached Vonage: record, then ring the number."""
+def on_answer(db: Session, data: dict, mc) -> list[dict]:
+    """The caller's browser answered our ring: record, then ring the number.
+
+    We placed this leg to the caller's own browser, so the row id on our URL
+    (token/signature checked) is the proof of who it is."""
     from app.voice_dialer.service import _url
 
-    call = find(db, custom.get("mc"))
-    who = data.get("from_user") or data.get("from") or ""
-    if call is None or vonage.user_id_from_username(str(who)) != str(call.user_id):
+    call = find(db, mc)
+    if call is None:
         return [{"action": "talk", "text": "This call could not be placed."}]
     if call.status not in IN_FLIGHT:
         return [{"action": "talk", "text": "This call has ended."}]
     call.app_leg_uuid = data.get("uuid") or call.app_leg_uuid
     db.commit()
-    endpoint: dict = {"type": "phone", "number": replies.vonage_number(call.phone_number)}
-    if notice_ncco():
+    endpoint: dict = {"type": "phone", "number": replies.digits_only(call.phone_number)}
+    if notice_script():
         endpoint["onAnswer"] = {"url": _url("answer", leg="manual_notice", mc=call.id)}
-    ncco: list[dict] = []
+    script: list[dict] = []
     if settings.CALL_RECORDING_ENABLED:
-        ncco.append({
+        script.append({
             "action": "record", "eventUrl": [_url("recording", mc=call.id)], "eventMethod": "POST",
             "split": "conversation", "channels": 2, "format": "mp3",
         })
-    ncco.append({
+    script.append({
         "action": "connect",
-        "from": replies.vonage_number(call.from_number),
+        "from": replies.digits_only(call.from_number),
         "timeout": RING_SECONDS,
         "eventUrl": [_url("event", mc=call.id, leg="callee")],
         "eventMethod": "POST",
         "endpoint": [endpoint],
     })
-    return ncco
+    return script
 
 
 def on_event(db: Session, call: ManualCall, data: dict, leg: str) -> list[dict]:
@@ -302,7 +318,7 @@ def on_event(db: Session, call: ManualCall, data: dict, leg: str) -> list[dict]:
     if leg == "callee" and uuid_ and not call.callee_leg_uuid:
         call.callee_leg_uuid = uuid_
     if call.status not in IN_FLIGHT:
-        # Already ended by Hang up: only take Vonage's exact talk time.
+        # Already ended by Hang up: only take the carrier's exact talk time.
         if leg == "callee" and status == "completed" and call.answered_at and data.get("duration"):
             try:
                 call.duration_seconds = int(float(data["duration"]))
@@ -335,7 +351,7 @@ def on_event(db: Session, call: ManualCall, data: dict, leg: str) -> list[dict]:
 
     # The caller's browser leg ending ends the call (they hung up / closed the tab).
     if status in _ENDED:
-        vonage.hangup(call.callee_leg_uuid)
+        telnyx.hangup(call.callee_leg_uuid)
         return _finish(db, call, "COMPLETED" if call.answered_at else "CANCELLED")
     return []
 
@@ -408,7 +424,7 @@ def call_dict(c: ManualCall, names: dict | None = None, with_recording: bool = F
         if c.recording_id:
             out["recording"] = "stored"
         elif c.answered_at and c.status == "COMPLETED" and settings.CALL_RECORDING_ENABLED:
-            # Vonage posts the file a few seconds after hang-up.
+            # The carrier posts the file a few seconds after hang-up.
             recent = c.ended_at and c.ended_at > _now() - timedelta(minutes=5)
             out["recording"] = "pending" if recent and not c.error else "failed"
         else:

@@ -271,7 +271,7 @@ export default function DialDrawer() {
           <div className="space-y-4">
             {cfg && !cfg.available && (
               <div className="rounded-xl bg-danger/10 px-3.5 py-2.5 text-sm text-danger">
-                Calling isn't set up yet (Vonage is not configured).
+                Calling isn't set up yet (the phone service is not configured).
               </div>
             )}
 

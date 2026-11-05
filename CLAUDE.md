@@ -471,12 +471,11 @@ owns an inactive profile.
   everywhere with history intact.
 - `.localpreview/verify-trash-disabled.mjs` checks both features end to end.
 
-## YES-reply auto dialer (Vonage) — `app/voice_dialer/`, migration 062
+## YES-reply auto dialer (Telnyx) — `app/voice_dialer/`, migration 062
 
 A client who texts YES is called automatically; only a LIVE person is bridged to
 an agent, and the lead card pops on that same agent's screen. Built on the
-**Vonage Communications APIs** (Voice + Messages) — NOT Vonage Business
-(app.vonage.com), which has no webhooks / machine detection / transfers.
+**Telnyx** (TeXML + WebRTC + Messaging) — see "Telnyx carrier" below.
 
 - **Lead states:** a YES makes the lead `READY_TO_CALL`; `DIALING` is the lock
   while a call is in flight. Neither is `QUEUED`, so the pool / offer popup never
@@ -484,13 +483,13 @@ an agent, and the lead card pops on that same agent's screen. Built on the
   Accept/Pass. Out of attempts (`max_total_attempts`) → back to `QUEUED` (pool).
 - **Two switches for the agent in Lead Manager: Join queue and Ready for calls**
   (`sms_queue_agents.voice_ready`, `POST /voice/dialer/ready`). Join queue alone
-  = regular pool only, NO headset line, so no Vonage minutes. Ready for calls
+  = regular pool only, NO headset line, so no carrier minutes. Ready for calls
   opens the line; the dialer only counts agents with it on (`_ready_agents`), and
   `on_agent_line` refuses a line for anyone with it off. The line also closes
   while they work a regular pool lead (reopens when free). Leave / timeout /
   disabling the user switch it off. Manager board shows "Regular pool only".
 - **Agents answer in the portal** (`components/AgentLine.tsx`, `lib/voice.ts`):
-  while Available AND Ready for calls, the browser holds one Vonage Client SDK call parked in the
+  while Available AND Ready for calls, the browser holds one Telnyx WebRTC call parked in the
   agent's room (`iag-agent-<uuid>`); a live customer is TRANSFERRED into it, which
   is why the bridge is instant. Line = `sms_queue_agents.voice_leg_uuid`.
   Leaving the SPA drops the line, so while a customer is connected AgentLine
@@ -529,24 +528,24 @@ an agent, and the lead card pops on that same agent's screen. Built on the
   `_try_assign` skips them and `_reclaim_offers` pulls back an UNACCEPTED offer.
 - "Voicemail" in Lead Manager's disposition list (auto-dialed leads only) puts
   the lead back on the dial list instead of closing it.
-- **Connect on answer** (`VONAGE_CONNECT_ON_ANSWER`, default on — manager's choice
+- **Connect on answer** (`VOICE_CONNECT_ON_ANSWER`, default on — manager's choice
   "Option B"): the customer is bridged on the `answered` event (~1.5 s to the
   agent) while machine detection keeps listening; `human` only stamps
   `human_at`, and a later `machine` runs `_drop_early_voicemail` (hang up, agent
   back to AVAILABLE + their room, lead requeued, `voice:ended` reason voicemail
   closes the agent's card). Off = wait for `human` (~5 s) as before.
-  **Webhook order is not fixed:** with machine detection on, Vonage asks the
-  customer's ANSWER URL only AFTER detection decides (seen live: answered →
-  human → answer, ~4 s later). `webhooks.answer` therefore replies to match
-  where the call already is — CONNECTED → `room_only_ncco` (same call room),
+  **Webhook order is not fixed:** the customer's ANSWER URL can be asked AFTER
+  we bridged (seen live on the previous carrier: answered → human → answer,
+  ~4 s later). `webhooks.answer` therefore replies to match
+  where the call already is — CONNECTED → `room_only_script` (same call room),
   ABANDONED → abandon message, ended → "Goodbye", still in flight → bridge via
-  `ncco_out`. Replying with the hold room after a bridge pulled the customer
+  `script_out`. Replying with the hold room after a bridge pulled the customer
   out: both sides connected, total silence (happened twice).
 - **Bridge latency:** each call gets its own room (`call_room`) — recording a
-  room is what Vonage does, and the agent's all-shift room gave 1-second files.
+  room is how recording works, and the agent's all-shift room gave 1-second files.
   Agent and customer legs are transferred IN PARALLEL over one pooled keep-alive
-  httpx client (`vonage._http`); the notice is `VONAGE_RECORDING_NOTICE`
-  ("This call is recorded.", spoken in the customer's NCCO before the room) —
+  httpx client (`telnyx._http`); the notice is `VOICE_RECORDING_NOTICE`
+  ("This call is recorded.", spoken in the customer's call script before the room) —
   every word there is delay.
 - **Each call keeps the agent's result**: `voice_call_attempts.disposition` is set
   from Mark… (`end_call_for_lead`, called by both agent and manager
@@ -562,12 +561,9 @@ an agent, and the lead card pops on that same agent's screen. Built on the
   The header's abandoned-calls warning only fires on Today.
 - The "Sorry we missed you" follow-up text from the spec is deliberately NOT
   sent — the first-template-only lockdown forbids it.
-- Webhooks (public, `?k=VONAGE_WEBHOOK_TOKEN` or Vonage's signed JWT): Voice app
-  answer `/api/v1/voice/vonage/answer`, event `/voice/vonage/event`; Messages
-  inbound `/voice/vonage/inbound-sms`, status `/voice/vonage/sms-status`. Per-call
-  URLs are built from `VOICE_CALLBACK_BASE_URL`. Env: `VONAGE_APPLICATION_ID`,
-  `VONAGE_PRIVATE_KEY` (or `_PATH`), `VONAGE_SIGNATURE_SECRET`,
-  `VONAGE_WEBHOOK_TOKEN`, `VONAGE_FROM_NUMBERS`, `VONAGE_TENANT_ID`.
+- Webhooks (public, `?k=VOICE_WEBHOOK_TOKEN` or Telnyx's Ed25519 signature):
+  `/api/v1/voice/telnyx/{answer,event,inbound-sms,recording,hold,optout}`. Per-call
+  URLs are built from `VOICE_CALLBACK_BASE_URL`. Env: see "Telnyx carrier".
 - **Managers/admins have their own page, `/sms/#/dialer` ("Auto Dialer",
   `pages/AutoDialer.tsx`)** — switch, today's numbers, agents on the line, calls
   in progress, dial list, outcomes, recent calls, rules. Same audience as SMS
@@ -581,15 +577,19 @@ an agent, and the lead card pops on that same agent's screen. Built on the
   the loop could release (1,000+ `QueuePool limit` errors).
 - **Webhook parsing lives in ONE place, `webhooks.py`** — the HTTP routes in
   `router.py` are thin shells (trust check → `webhooks.*` → flush events).
-- **Simulator (`simulator.py`):** with no Vonage keys and `APP_ENV != production`
-  it plays Vonage — builds Vonage-format payloads (Messages inbound, Voice
-  answer/event, AMD human/machine, record event) and feeds them to `webhooks.py`,
+- **Simulator (`simulator.py`):** with no Telnyx keys and `APP_ENV != production`
+  it plays the carrier — builds the payloads `webhooks.py` reads (inbound text,
+  Voice answer/event, AMD human/machine, record event) and feeds them to it,
   so tests run the production code path. "Test it" box on the Auto Dialer page:
   send a text; "When the dialer calls" (live person after 2 s by default /
   voicemail / no answer / busy / let me choose); "Ignore calling hours while
   testing" (default on — testing happens outside US hours). Production never
   simulates.
-- **Recordings:** Vonage deletes them after 30 days, so `store_recording` copies
+- **Recordings arrive two ways:** the room's webhook, or `collect_recordings` (in
+  the tick, every 15 s, calls that ended in the last 6 h with no recording), which
+  looks the room up by name. Telnyx recorded a live call and never sent the
+  webhook, so don't rely on it alone.
+- **Recordings:** the carrier's copy isn't permanent, so `store_recording` copies
   each one to the SAME place Log Sale keeps call recordings — a `deal_recordings`
   row (kind `recording`) with the audio in the Railway S3 bucket under
   `deal-recordings/<tenant>/` (inline on the row only if S3 is unavailable, Log
@@ -606,7 +606,7 @@ an agent, and the lead card pops on that same agent's screen. Built on the
   Removal never re-dials — only a new YES does. Both actions go to the audit log.
   Today's card shows "N opted out" for the period.
 - **Inbox** on the Auto Dialer page (`inbox.py`, `/voice/dialer/inbox[/{lead}]`):
-  everyone who texted our Vonage numbers, newest first; one read-only timeline
+  everyone who texted our numbers, newest first; one read-only timeline
   per client mixing their texts with our calls (result, agent, talk, recording).
 - Switched on per tenant from the Auto Dialer page (off by default). Celery
   beat `voice-dialer-tick` (3 s) is the safety net; webhooks, agent actions and
@@ -616,19 +616,19 @@ an agent, and the lead card pops on that same agent's screen. Built on the
 
 ## Manual dialing (Dial drawer) — `app/voice_dialer/manual.py`, migration 063
 
-Anyone signed in can call ANY number from the browser over Vonage. The **Dial**
+Anyone signed in can call ANY number from the browser over Telnyx. The **Dial**
 button opens a right-hand drawer that overlays the page (does not resize it):
 on the **Auto Dialer** page for manager-class, on **Lead Manager** for agents.
 `components/DialDrawer.tsx` is mounted ONCE in `PortalShell` (opened by the
 `dial:open` window event), so a call survives SMS route changes; with the drawer
 closed a mini dock keeps Hang up reachable.
 
-- Flow: `POST /voice/manual/calls` logs a `manual_calls` row → the browser does
-  `serverCall({purpose:"manual", mc})` → `webhooks.answer` sees `custom_data`
-  → `manual.on_answer` returns `record` + `connect` (phone; recording notice via
+- Flow: `POST /voice/manual/calls` logs a `manual_calls` row and rings the
+  caller's browser (`telnyx.dial_browser`) → it answers by itself → `webhooks.answer`
+  sees `?leg=manual&mc=` → `manual.on_answer` returns `record` + `connect` (phone; recording notice via
   the endpoint's `onAnswer` → `?leg=manual_notice`). Phone-leg events carry
   `?mc=`; the browser leg is matched by `app_leg_uuid`. Hang up ends the row
-  immediately (`/end`) — Vonage's later events only fill in the exact duration.
+  immediately (`/end`) — the carrier's later events only fill in the exact duration.
 - **Busy while dialing, no UI change:** an in-flight manual call (derived from the
   row — `live_clause`, nothing stored) is excluded in
   `queue_service._available_agents` (no pool offer, no dialer bridge),
@@ -643,7 +643,7 @@ closed a mini dock keeps Hang up reachable.
   filter + ▶ recording (`GET /voice/manual/calls/{id}/recording?token=`,
   manager-class only). Recordings use `service.save_recording` (same S3
   `deal-recordings/` store as the dialer).
-- Caller ID: dropdown of `VONAGE_FROM_NUMBERS`, first = default, last pick kept
+- Caller ID: dropdown of `TELNYX_FROM_NUMBERS`, first = default, last pick kept
   in `localStorage.manualDialFrom`. Keypad sends DTMF during a call.
 - One SDK session (`lib/voice.ts` `sdk()`) serves both the headset line and
   manual calls. Simulator (no keys, non-prod): `start` plays the answer webhook,
@@ -669,9 +669,9 @@ copy is the **"How calls work"** drawer on the Auto Dialer page,
   until `max_hold_seconds` (default 300), then anyone; owner **away** / none →
   first free agent; nobody free → `HOLDING` for anyone; **nobody taking calls
   at all** → no hold, callback.
-- Hold = NCCO loop `talk` + `stream` (bargeIn, ~45 s generated soft loop at
-  `/voice/vonage/hold-music.wav`, or `VONAGE_HOLD_MUSIC_URL`) + 1-digit `input`
-  → `/voice/vonage/hold`. **1 = call me back.** The dialer tick
+- Hold = call-script loop `talk` + `stream` (bargeIn, ~45 s generated soft loop at
+  `/voice/telnyx/hold-music.wav`, or `VOICE_HOLD_MUSIC_URL`) + 1-digit `input`
+  → `/voice/telnyx/hold`. **1 = call me back.** The dialer tick
   (`serve_holding`, before outbound) bridges held callers longest-first and ends
   holds past the limit if their webhook never came. `HOLDING → BRIDGING` is the
   lock so the tick and the hold webhook never both bridge one caller.
@@ -687,6 +687,55 @@ copy is the **"How calls work"** drawer on the Auto Dialer page,
   "ring the owner for N seconds" step.
 - Tests: `tests/unit/test_voice_dialer.py` (hours); scenario + UI checks in
   `.localpreview/verify-inbound-routing.mjs`.
+
+## Telnyx carrier — `app/voice_dialer/telnyx.py`
+
+The dialer, Dial drawer and inbound routing run on **Telnyx**, the only carrier
+(Vonage was removed 2026-11; old `sms_messages.provider='vonage'` rows stay as
+history, which is why `inbox.py` still reads both values).
+
+- **Call scripts are carrier-neutral lists of steps.** `telnyx.to_texml()`
+  translates them: `talk` → `<Say>`, `stream` → `<Play>`, `conversation` →
+  `<Dial><Conference>` (record → `record-from-start` +
+  `recordingStatusCallback`), `record`+`connect` →
+  `<Dial record="record-from-answer-dual"><Number url=notice>`, `input` →
+  `<Gather>` holding the bargeIn prompts **followed by a `<Redirect>` to the same
+  URL** (a TeXML Gather that times out falls through; the hold loop needs to see
+  "no digits"). `transfer` = TeXML call update
+  (`POST /texml/Accounts/{account}/Calls/{sid}` with `Texml=`).
+- **Webhooks:** `/api/v1/voice/telnyx/{answer,event,recording,hold,optout,inbound-sms,hold-music.wav}`.
+  `telnyx.normalize()` turns TeXML form fields into the dict `webhooks.py` reads
+  (CallSid→uuid, CallStatus in-progress→answered / no-answer→timeout /
+  canceled→cancelled, AnsweredBy→human|machine, Digits→dtmf,
+  RecordingUrl→recording_url); replies are TeXML. Trust = our `?k=` token or
+  Telnyx's Ed25519 signature (`telnyx-signature-ed25519` over
+  `"<timestamp>|<body>"`, 5-min window, `TELNYX_PUBLIC_KEY`). Inbound texts:
+  Messaging v2 `message.received` envelope.
+- **Agents' browsers are RUNG, not dialing out.** A browser can't start a
+  TeXML call, so `POST /voice/dialer/line {on:true}` and
+  `POST /voice/manual/calls` make the server call `sip:<gencred…>@sip.telnyx.com`
+  (`telnyx.dial_browser`, answer URL `?leg=agent&u=` / `?leg=manual&mc=`) and
+  `lib/voice.ts` answers it by itself — it registers the expectation BEFORE
+  asking and refuses any call nobody asked for. One telephony credential per
+  agent (named `iag_<user hex>`, created on first token request) under
+  `TELNYX_CREDENTIAL_CONNECTION_ID` (SIP URI calls: `internal` only). WebRTC
+  legs are $0.002/min, so the always-open headset line stays.
+- **Setup:** `venv/bin/python -m app.voice_dialer.telnyx_setup [--dry-run]`
+  creates/refreshes (by name) the outbound voice profile (US only), TeXML app,
+  credential connection and messaging profile, points their webhooks at
+  `VOICE_CALLBACK_BASE_URL`, attaches every account number, and prints the
+  `.env` lines. Rerun it when the ngrok URL changes. `TELNYX_ACCOUNT_SID` is
+  learned from webhooks / credentials if blank.
+- **Env:** `TELNYX_API_KEY`, `TELNYX_PUBLIC_KEY`, `TELNYX_TEXML_APP_ID`,
+  `TELNYX_CREDENTIAL_CONNECTION_ID`, `TELNYX_FROM_NUMBERS`, `VOICE_CALLBACK_BASE_URL`,
+  `VOICE_WEBHOOK_TOKEN`, `VOICE_TENANT_ID`, plus call behaviour:
+  `VOICE_MACHINE_DETECTION` (async AMD: `AsyncAmdStatusCallback` → event),
+  `VOICE_CONNECT_ON_ANSWER`, `VOICE_RECORDING_NOTICE`, `VOICE_HOLD_MUSIC_URL`,
+  `VOICE_TEST_NUMBERS`, `VOICE_SIMULATE`.
+- Tests: `tests/unit/test_telnyx.py`. End-to-end without a Telnyx account: run
+  the API with `TELNYX_API_BASE_URL` pointed at a fake REST server and post
+  TeXML-format webhooks (agent line → YES text → dial → bridge → hang-up →
+  recording → manual call → inbound call) — done 2026-10-30, all passing.
 
 ## Verifying UI changes (headless Chrome over CDP)
 

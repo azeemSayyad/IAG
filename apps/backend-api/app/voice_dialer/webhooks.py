@@ -1,53 +1,42 @@
-"""Vonage webhook handling — ONE place that reads Vonage's payloads.
+"""Carrier webhook handling — ONE place that reads call and text payloads.
 
 The HTTP routes (router.py) and the dev simulator (simulator.py) both call
-these, so the simulator exercises exactly the code a real Vonage request hits.
-Each function takes the parsed payload (JSON body merged with query params)
-plus our own query params (`a` = attempt id, `leg`), and returns what Vonage
-expects back plus socket events for the caller to flush.
+these, so the simulator exercises exactly the code a real Telnyx request hits.
+Each function takes a parsed payload in our own shape — telnyx.normalize() /
+telnyx.inbound_message() build it from Telnyx's fields — plus our own query
+params (`a` = attempt id, `leg`), and returns the call script to run (router.py
+answers it as TeXML) plus socket events for the caller to flush.
 
-Payload shapes (Vonage docs):
-  answer        {uuid, conversation_uuid, from, to, from_user?}        -> NCCO list
+Payload shapes:
+  answer        {uuid, conversation_uuid, from, to}                    -> call script
   event         {uuid, status, direction, timestamp, duration?, ...}   status: started |
                 ringing | answered | human | machine | completed | busy | timeout |
                 unanswered | failed | rejected | cancelled
-  inbound-sms   Messages API {message_uuid, from, to, text, channel:"sms", message_type:"text"}
-                (legacy SMS API {msisdn, to, text, messageId} also accepted)
+  inbound-sms   {message_uuid, from, to, text}
   recording     {recording_url, recording_uuid, start_time, end_time, size, conversation_uuid}
   optout input  {dtmf: {digits, timed_out}, uuid}
 """
 from __future__ import annotations
 
-import json
-
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.voice_dialer import manual, service, vonage
-
-
-def _custom(data: dict) -> dict:
-    """The Client SDK's serverCall(context) arrives as `custom_data` — an
-    object, or (depending on the SDK) its JSON text."""
-    c = data.get("custom_data")
-    if isinstance(c, str):
-        try:
-            c = json.loads(c)
-        except ValueError:
-            return {}
-    return c if isinstance(c, dict) else {}
+from app.voice_dialer import manual, service
 
 
 def answer(db: Session, data: dict, params: dict) -> tuple[list[dict], list[dict]]:
     leg = data.get("uuid") or data.get("call_uuid") or ""
 
     # 0) Manual dialing (Dial drawer): the person we called picked up — the
-    #    recording notice — or the caller's browser starting the call.
+    #    recording notice. WE ring the agent's browser (it can't start the call
+    #    itself), so the purpose and the person ride on our own URL —
+    #    signed/token-checked.
     if params.get("leg") == "manual_notice":
-        return manual.notice_ncco(), []
-    custom = _custom(data)
-    if custom.get("purpose") == "manual":
-        return manual.on_answer(db, data, custom), []
+        return manual.notice_script(), []
+    if params.get("leg") == "manual" and params.get("mc"):
+        return manual.on_answer(db, data, params["mc"]), []
+    if params.get("leg") == "agent" and params.get("u"):
+        return service.on_agent_line(db, params["u"], leg)
 
     # 1) Our outbound call to a customer was answered: hold them silently while
     #    machine detection decides (the "human" event bridges them).
@@ -57,36 +46,30 @@ def answer(db: Session, data: dict, params: dict) -> tuple[list[dict], list[dict
             return [{"action": "talk", "text": "Goodbye."}], []
         att.call_uuid = att.call_uuid or leg
         # The answer URL may come BEFORE or AFTER we bridged (with machine
-        # detection on, Vonage asks it only once detection decides). Whatever
+        # detection on, the carrier may ask it only once detection decides). Whatever
         # the order, the reply must match where the call already is.
         if att.status == "CONNECTED":
             db.commit()
-            return service.room_only_ncco(att), []
+            return service.room_only_script(att), []
         if att.status == "ABANDONED":
-            return service.abandon_ncco(service.get_settings(db, str(att.tenant_id)), att), []
+            return service.abandon_script(service.get_settings(db, str(att.tenant_id)), att), []
         if att.status not in service.IN_FLIGHT:
             return [{"action": "talk", "text": "Goodbye."}], []  # voicemail / cancelled: we are hanging up
-        if settings.VONAGE_CONNECT_ON_ANSWER or not settings.VONAGE_MACHINE_DETECTION:
+        if settings.VOICE_CONNECT_ON_ANSWER or not settings.VOICE_MACHINE_DETECTION:
             # Straight into the call room with an agent, in this very reply.
             # With detection on it keeps listening and may still pull them
             # apart; with it off a pickup counts as a person.
-            ncco: list[dict] = []
-            events = service.connect_human(db, att, early=settings.VONAGE_MACHINE_DETECTION, ncco_out=ncco)
-            return (ncco or service.hold_ncco(att)), events
+            script: list[dict] = []
+            events = service.connect_human(db, att, early=settings.VOICE_MACHINE_DETECTION, script_out=script)
+            return (script or service.hold_script(att)), events
         if att.status in ("DIALING", "RINGING"):
             att.status = "ANSWERED"
             att.answered_at = service._now()
             att.call_uuid = att.call_uuid or leg
             db.commit()
-        return service.hold_ncco(att), []
+        return service.hold_script(att), []
 
-    # 2) An agent's browser opening its headset line (Vonage Client SDK).
-    who = data.get("from_user") or data.get("from") or ""
-    user_id = vonage.user_id_from_username(who if isinstance(who, str) else "")
-    if user_id:
-        return service.on_agent_line(db, user_id, leg)
-
-    # 3) A client calling one of our numbers back.
+    # 2) A client calling one of our numbers back.
     tenant_id = service.owner_tenant_id(db)
     if not tenant_id:
         return [{"action": "talk", "text": "Thank you for calling. Goodbye."}], []
@@ -96,7 +79,8 @@ def answer(db: Session, data: dict, params: dict) -> tuple[list[dict], list[dict
 def event(db: Session, data: dict, params: dict) -> list[dict]:
     if params.get("mc"):
         call = manual.find(db, params.get("mc"))
-        return manual.on_event(db, call, data, "callee") if call is not None else []
+        leg = "app" if params.get("leg") == "app" else "callee"  # app = our call to the browser
+        return manual.on_event(db, call, data, leg) if call is not None else []
     if data.get("recording_url") and not params.get("a"):
         # A room recording delivered to the application's event URL instead
         # of the room's own eventUrl: match it to its call by time.

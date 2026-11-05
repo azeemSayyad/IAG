@@ -45,8 +45,8 @@ type Campaign = {
 };
 
 // Provider chips per campaign. Sinch and Engage Cloud are wired to real, INDEPENDENT
-// backend pipelines (own account/numbers); Telnyx/Twilio/Vonage are placeholders.
-const PROVIDERS = ["Telnyx", "Twilio", "Sinch", "Engage Cloud", "Vonage"];
+// backend pipelines (own account/numbers); Telnyx/Twilio are placeholders.
+const PROVIDERS = ["Telnyx", "Twilio", "Sinch", "Engage Cloud"];
 // The provider shown pre-selected/highlighted by default.
 const DEFAULT_PROVIDER = "Sinch";
 // Chip label <-> backend provider key (only these two are real backends).

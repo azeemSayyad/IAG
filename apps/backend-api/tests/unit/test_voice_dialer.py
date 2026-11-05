@@ -1,12 +1,9 @@
 """YES-reply auto dialer — the pure rules (no DB, no network)."""
-import hashlib
-import time
 from datetime import datetime, timezone
 
-import jwt
 import pytest
 
-from app.voice_dialer import replies, rules, vonage
+from app.voice_dialer import replies, rules, telnyx
 
 
 @pytest.mark.parametrize("text", [
@@ -46,7 +43,7 @@ def test_phone_normalisation():
     assert replies.normalize_phone("16789887287") == "+16789887287"
     assert replies.normalize_phone("+1 678 988 7287") == "+16789887287"
     assert replies.normalize_phone("98872") is None
-    assert replies.vonage_number("+16789887287") == "16789887287"
+    assert replies.digits_only("+16789887287") == "16789887287"
 
 
 def _utc(h, m=0):
@@ -70,41 +67,18 @@ def test_split_and_unknown_states_take_the_strict_side():
     assert rules.in_call_window(_utc(15, 30), None)       # 11:30 ET / 8:30 PT
 
 
-def test_agent_username_round_trip():
-    uid = "5d60f98a-fe0f-4a86-a11f-054049a5b315"
-    assert vonage.user_id_from_username(vonage.agent_username(uid)) == uid
-    assert vonage.user_id_from_username("15615550100") is None
-
-
-def test_webhook_trust(monkeypatch):
-    from app.core.config import settings
-
-    monkeypatch.setattr(settings, "VONAGE_WEBHOOK_TOKEN", "tok123")
-    monkeypatch.setattr(settings, "VONAGE_SIGNATURE_SECRET", "sigsecret")
-    body = b'{"status":"answered"}'
-    assert vonage.webhook_trusted({}, body, "tok123")
-    assert not vonage.webhook_trusted({}, body, "wrong")
-    good = jwt.encode({"iat": int(time.time()), "payload_hash": hashlib.sha256(body).hexdigest()}, "sigsecret", algorithm="HS256")
-    assert vonage.webhook_trusted({"authorization": f"Bearer {good}"}, body, None)
-    bad = jwt.encode({"iat": int(time.time()), "payload_hash": "x"}, "sigsecret", algorithm="HS256")
-    assert not vonage.webhook_trusted({"authorization": f"Bearer {bad}"}, body, None)
-    forged = jwt.encode({"iat": int(time.time())}, "not-the-secret", algorithm="HS256")
-    assert not vonage.webhook_trusted({"authorization": f"Bearer {forged}"}, body, None)
-
-
 def test_production_never_simulates(monkeypatch):
     from app.core.config import settings
 
-    monkeypatch.setattr(settings, "VONAGE_APPLICATION_ID", "")
-    monkeypatch.setattr(settings, "VONAGE_PRIVATE_KEY", "")
-    monkeypatch.setattr(settings, "VONAGE_PRIVATE_KEY_PATH", "")
+    monkeypatch.setattr(settings, "TELNYX_API_KEY", "")
+    monkeypatch.setattr(settings, "TELNYX_TEXML_APP_ID", "")
     monkeypatch.setattr(settings, "APP_ENV", "production")
-    assert not vonage.simulating()
-    assert not vonage.available()
+    assert not telnyx.simulating()
+    assert not telnyx.available()
     # …and with nothing configured, production trusts no webhook.
-    monkeypatch.setattr(settings, "VONAGE_WEBHOOK_TOKEN", "")
-    monkeypatch.setattr(settings, "VONAGE_SIGNATURE_SECRET", "")
-    assert not vonage.webhook_trusted({}, b"{}", None)
+    monkeypatch.setattr(settings, "VOICE_WEBHOOK_TOKEN", "")
+    monkeypatch.setattr(settings, "TELNYX_PUBLIC_KEY", "")
+    assert not telnyx.webhook_trusted({}, b"{}", None)
 
 
 # ---- Manual dialing (Dial drawer) ----
@@ -128,26 +102,15 @@ def test_manual_answer_records_then_connects(monkeypatch):
     uid = _uuid.uuid4()
     call = SimpleNamespace(id=_uuid.uuid4(), user_id=uid, status="DIALING", app_leg_uuid=None,
                            phone_number="+16789887287", from_number="+15615550100")
-    monkeypatch.setattr(manual, "find", lambda db, cid: call)
+    monkeypatch.setattr(manual, "find", lambda db, cid: call if cid == call.id else None)
     db = SimpleNamespace(commit=lambda: None)
-    ncco = manual.on_answer(db, {"uuid": "leg-1", "from_user": vonage.agent_username(uid)}, {"mc": str(call.id)})
+    script = manual.on_answer(db, {"uuid": "leg-1"}, call.id)
     assert call.app_leg_uuid == "leg-1"
-    actions = [n["action"] for n in ncco]
-    assert actions[-1] == "connect" and ncco[-1]["endpoint"][0]["number"] == "16789887287"
-    assert ncco[-1]["from"] == "15615550100"
-    # Someone else's browser can't place this call.
-    call.app_leg_uuid = None
-    assert manual.on_answer(db, {"uuid": "x", "from_user": vonage.agent_username(_uuid.uuid4())},
-                            {"mc": str(call.id)})[0]["action"] == "talk"
-
-
-def test_custom_data_object_or_json_text():
-    from app.voice_dialer import webhooks
-
-    assert webhooks._custom({"custom_data": {"purpose": "manual"}}) == {"purpose": "manual"}
-    assert webhooks._custom({"custom_data": '{"purpose": "manual", "mc": "1"}'})["mc"] == "1"
-    assert webhooks._custom({"custom_data": "not json"}) == {}
-    assert webhooks._custom({}) == {}
+    actions = [n["action"] for n in script]
+    assert actions[-1] == "connect" and script[-1]["endpoint"][0]["number"] == "16789887287"
+    assert script[-1]["from"] == "15615550100"
+    # A row we don't know can't place a call.
+    assert manual.on_answer(db, {"uuid": "x"}, _uuid.uuid4())[0]["action"] == "talk"
 
 
 # ---- Inbound: open hours ----
@@ -218,11 +181,11 @@ def test_non_us_text_is_kept_not_dialed(monkeypatch):
 def test_listed_test_number_counts_as_dialable(monkeypatch):
     from app.core.config import settings
 
-    monkeypatch.setattr(settings, "VONAGE_TEST_NUMBERS", "+91 96763 41652")
+    monkeypatch.setattr(settings, "VOICE_TEST_NUMBERS", "+91 96763 41652")
     assert replies.normalize_phone("919676341652") == "+919676341652"
     assert replies.is_test_number("+919676341652")
     assert replies.normalize_phone("+447700900123") is None  # not listed
-    monkeypatch.setattr(settings, "VONAGE_TEST_NUMBERS", "")
+    monkeypatch.setattr(settings, "VOICE_TEST_NUMBERS", "")
     assert replies.normalize_phone("919676341652") is None   # list emptied = off
 
 

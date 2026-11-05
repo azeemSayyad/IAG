@@ -11,7 +11,7 @@ import { getSocket } from "../lib/socket";
    Agents never come here: they take these calls inside Lead Manager. This page
    is for whoever runs the floor: is it on, who is on the line, who is waiting
    to be called and why, how today went, and the dialing rules. In dev without
-   Vonage keys it also carries the simulator. Data: GET /voice/dialer/overview
+   Telnyx keys it also carries the simulator. Data: GET /voice/dialer/overview
    (polled every 4 s + nudged by voice:/sms: socket events). */
 
 type Settings = {
@@ -777,7 +777,7 @@ function InboxPanel() {
   return (
     <Card collapsible defaultOpen title="Inbox" sub={list ? `${list.length} clients texted back` : undefined}>
       {list && list.length === 0 ? (
-        <Empty>No texts yet. Replies to our Vonage numbers appear here.</Empty>
+        <Empty>No texts yet. Replies to our dialer numbers appear here.</Empty>
       ) : (
         <div className="grid overflow-hidden rounded-xl border border-hairline-soft md:grid-cols-[19rem_1fr]" style={{ height: "30rem" }}>
           {/* list */}
@@ -1038,10 +1038,10 @@ export default function AutoDialer() {
   ];
   const maxOutcome = Math.max(1, ...outcomes.map((o) => o.n));
   const mode = ov.configured
-    ? { label: "Vonage connected", tone: "bg-success/12 text-success" }
+    ? { label: "Telnyx connected", tone: "bg-success/12 text-success" }
     : ov.simulate
-      ? { label: "Simulator · no Vonage keys", tone: "bg-pending/12 text-pending" }
-      : { label: "Vonage not configured", tone: "bg-danger/10 text-danger" };
+      ? { label: "Simulator · no Telnyx keys", tone: "bg-pending/12 text-pending" }
+      : { label: "Telnyx not configured", tone: "bg-danger/10 text-danger" };
 
   return (
     <div className="space-y-5">

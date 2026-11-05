@@ -22,7 +22,7 @@ Callers on hold come BEFORE outbound dialing: while anyone holds, the dialer
 starts no new calls and the regular pool leaves agents on a line alone.
 
 A held caller is an inbound `voice_call_attempts` row with status HOLDING
-(hold_for_user_id = the owner they wait for, or NULL). Their hold is an NCCO
+(hold_for_user_id = the owner they wait for, or NULL). Their hold is a call script
 loop — music (barge-in) + a 1-digit input — that re-asks the `hold` webhook
 every clip, so the hold limit and "press 1" are checked every ~45 s; the
 dialer tick (every 2–3 s) bridges them the moment an agent frees up.
@@ -41,7 +41,8 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.models.sms import SmsLead, SmsQueueAgent, VoiceCallAttempt, VoiceClientOwner, VoiceDialerSettings
-from app.voice_dialer import replies, vonage
+from app.voice_dialer import telnyx
+from app.voice_dialer import replies
 
 logger = logging.getLogger(__name__)
 
@@ -203,7 +204,7 @@ def _biz(s: VoiceDialerSettings) -> str:
     return s.business_name or DEFAULT_BUSINESS
 
 
-def closed_ncco(s: VoiceDialerSettings) -> list[dict]:
+def closed_script(s: VoiceDialerSettings) -> list[dict]:
     return [{"action": "talk", "language": "en-US", "text": (
         f"Thank you for calling {_biz(s)}. Unfortunately, we are closed right now. "
         f"Our normal hours are {hours_label(s)}. Please call us back then. Goodbye.")}]
@@ -216,7 +217,7 @@ _music: bytes | None = None
 
 def hold_music() -> bytes:
     """A soft, slow chord loop (generated, royalty-free) — used unless
-    VONAGE_HOLD_MUSIC_URL points at a real track."""
+    VOICE_HOLD_MUSIC_URL points at a real track."""
     global _music
     if _music is not None:
         return _music
@@ -245,10 +246,10 @@ def hold_music() -> bytes:
 def _music_url() -> str:
     from app.voice_dialer.service import _url
 
-    return (settings.VONAGE_HOLD_MUSIC_URL or "").strip() or _url("hold-music.wav")
+    return (settings.VOICE_HOLD_MUSIC_URL or "").strip() or _url("hold-music.wav")
 
 
-def hold_ncco(att: VoiceCallAttempt, first: bool) -> list[dict]:
+def hold_script(att: VoiceCallAttempt, first: bool) -> list[dict]:
     from app.voice_dialer.service import _url
 
     talk = ("Thank you for calling. All of our agents are helping other customers. "
@@ -263,7 +264,7 @@ def hold_ncco(att: VoiceCallAttempt, first: bool) -> list[dict]:
     ]
 
 
-def callback_ncco(timed_out: bool) -> list[dict]:
+def callback_script(timed_out: bool) -> list[dict]:
     text = ("Sorry for the wait. All of our agents are still busy. "
             "We will call you back as soon as it is your turn. Goodbye."
             if timed_out else
@@ -271,7 +272,7 @@ def callback_ncco(timed_out: bool) -> list[dict]:
     return [{"action": "talk", "text": text, "language": "en-US"}]
 
 
-def nobody_ncco(s: VoiceDialerSettings) -> list[dict]:
+def nobody_script(s: VoiceDialerSettings) -> list[dict]:
     return [{"action": "talk", "language": "en-US", "text": (
         f"Thank you for calling {_biz(s)}. All of our agents are busy right now. "
         "We will call you back as soon as one is free. Goodbye.")}]
@@ -332,8 +333,8 @@ def route(db: Session, tenant_id, phone: str) -> tuple[str, object]:
 
 
 def connect(db: Session, att: VoiceCallAttempt, lead: SmsLead, agent: SmsQueueAgent,
-            ncco_out: list | None) -> list[dict]:
-    """Bridge an inbound caller to a claimed agent. ncco_out: we are inside the
+            script_out: list | None) -> list[dict]:
+    """Bridge an inbound caller to a claimed agent. script_out: we are inside the
     caller's own webhook (answer / hold) — their instructions go back in that
     reply; otherwise (the tick) the caller is transferred."""
     from concurrent.futures import ThreadPoolExecutor
@@ -355,14 +356,14 @@ def connect(db: Session, att: VoiceCallAttempt, lead: SmsLead, agent: SmsQueueAg
     agent_leg = agent.voice_leg_uuid
     try:
         with ThreadPoolExecutor(max_workers=2) as pool:
-            fa = pool.submit(vonage.transfer, agent_leg, service.agent_call_ncco(agent.user_id, att)) if agent_leg else None
-            fc = None if ncco_out is not None else pool.submit(
-                vonage.transfer, att.call_uuid, service.connect_ncco(agent.user_id, att))
+            fa = pool.submit(telnyx.transfer, agent_leg, service.agent_call_script(agent.user_id, att)) if agent_leg else None
+            fc = None if script_out is not None else pool.submit(
+                telnyx.transfer, att.call_uuid, service.connect_script(agent.user_id, att))
             for f in (fa, fc):
                 if f is not None:
                     f.result()
-        if ncco_out is not None:
-            ncco_out.extend(service.connect_ncco(agent.user_id, att))
+        if script_out is not None:
+            script_out.extend(service.connect_script(agent.user_id, att))
     except Exception as exc:
         logger.warning("inbound: bridge failed: %s", exc)
         att.status = "FAILED"
@@ -373,11 +374,11 @@ def connect(db: Session, att: VoiceCallAttempt, lead: SmsLead, agent: SmsQueueAg
         lead.status = "QUEUED"
         lead.assigned_agent_id = None
         db.commit()
-        if ncco_out is not None:
-            ncco_out.clear()
-            ncco_out.append({"action": "talk", "text": "Sorry, please hold on. We will call you right back."})
+        if script_out is not None:
+            script_out.clear()
+            script_out.append({"action": "talk", "text": "Sorry, please hold on. We will call you right back."})
         else:
-            vonage.hangup(att.call_uuid)
+            telnyx.hangup(att.call_uuid)
         return []
     set_owner(db, tenant_id, att.phone_number, agent.user_id)
     card = service.lead_card(db, lead, att)
@@ -408,7 +409,7 @@ def _unlock(db: Session, att: VoiceCallAttempt) -> None:
 
 
 def _try_serve(db: Session, att: VoiceCallAttempt, s: VoiceDialerSettings, now: datetime,
-               ncco_out: list | None) -> tuple[bool, list[dict]]:
+               script_out: list | None) -> tuple[bool, list[dict]]:
     """Give a held caller to an agent if the rules allow one now."""
     from app.voice_dialer import service
 
@@ -427,7 +428,7 @@ def _try_serve(db: Session, att: VoiceCallAttempt, s: VoiceDialerSettings, now: 
     if agent is None:
         _unlock(db, att)
         return False, []
-    return True, connect(db, att, lead, agent, ncco_out)
+    return True, connect(db, att, lead, agent, script_out)
 
 
 def serve_holding(db: Session, tenant_id, s: VoiceDialerSettings) -> list[dict]:
@@ -442,10 +443,10 @@ def serve_holding(db: Session, tenant_id, s: VoiceDialerSettings) -> list[dict]:
             continue
         if _held_seconds(att, now) >= _max_hold(s) + HOLD_GRACE_SECONDS and _lock(db, att):
             try:
-                vonage.transfer(att.call_uuid, callback_ncco(timed_out=True))
+                telnyx.transfer(att.call_uuid, callback_script(timed_out=True))
             except Exception as exc:
                 logger.info("inbound: hold timeout message: %s", exc)
-                vonage.hangup(att.call_uuid)
+                telnyx.hangup(att.call_uuid)
             events += schedule_callback(db, att, s, "hold time limit — call back")
     return events
 
@@ -456,20 +457,20 @@ def on_hold_input(db: Session, att: VoiceCallAttempt | None, digits: str | None)
 
     if att is None or att.status != "HOLDING":
         if att is not None and att.status == "CONNECTED":
-            return service.room_only_ncco(att), []
+            return service.room_only_script(att), []
         return [{"action": "talk", "text": "Goodbye."}], []
     s = service.get_settings(db, str(att.tenant_id))
     if (digits or "").strip() == "1" and _lock(db, att):
-        return callback_ncco(timed_out=False), schedule_callback(db, att, s, "asked for a call back")
+        return callback_script(timed_out=False), schedule_callback(db, att, s, "asked for a call back")
     now = _now()
     if _held_seconds(att, now) >= _max_hold(s):
-        ncco: list[dict] = []
-        done, events = _try_serve(db, att, s, now, ncco)  # any free agent may take them now
+        script: list[dict] = []
+        done, events = _try_serve(db, att, s, now, script)  # any free agent may take them now
         if done:
-            return ncco, events
+            return script, events
         if _lock(db, att):
-            return callback_ncco(timed_out=True), schedule_callback(db, att, s, "hold time limit — call back")
-    return hold_ncco(att, first=False), []
+            return callback_script(timed_out=True), schedule_callback(db, att, s, "hold time limit — call back")
+    return hold_script(att, first=False), []
 
 
 def on_call(db: Session, tenant_id, phone: str, to_raw: str | None, leg_uuid: str) -> tuple[list[dict], list[dict]]:
@@ -503,32 +504,32 @@ def on_call(db: Session, tenant_id, phone: str, to_raw: str | None, leg_uuid: st
         att.error = "closed"
         att.ended_at = now
         db.commit()
-        return closed_ncco(s), []
+        return closed_script(s), []
     if qs.is_dnc(db, tenant_id, phone) or lead.status in ("IN_PROGRESS", "ASSIGNED", "DIALING"):
         # On Do-Not-Call, or already being worked / dialed right now.
         att.status = "MISSED"
         att.ended_at = now
         db.commit()
-        return nobody_ncco(s), []
+        return nobody_script(s), []
 
     kind, who = route(db, tenant_id, phone)
     if kind == "claim":
         agent = service._claim_agent(db, tenant_id, lead, only_user_id=who) if who else None
         agent = agent or service._claim_agent(db, tenant_id, lead)
         if agent is not None:
-            ncco: list[dict] = []
-            events = connect(db, att, lead, agent, ncco)
-            return ncco, events
+            script: list[dict] = []
+            events = connect(db, att, lead, agent, script)
+            return script, events
         who = None
     if not anyone_taking_calls(db, tenant_id):
-        return nobody_ncco(s), schedule_callback(db, att, s, "nobody taking calls — call back")
+        return nobody_script(s), schedule_callback(db, att, s, "nobody taking calls — call back")
     att.status = "HOLDING"
     att.hold_for_user_id = who
     db.commit()
     events = [_evt("tenant", tenant_id, "voice:dialer_updated", {"reason": "caller_holding"})]
     if who:
         events.append(_evt("user", who, "voice:holding", {"phone_number": phone, "customer_name": lead.customer_name}))
-    return hold_ncco(att, first=True), events
+    return hold_script(att, first=True), events
 
 
 def caller_hung_up(db: Session, att: VoiceCallAttempt) -> list[dict]:
@@ -647,7 +648,7 @@ def settings_part(s: VoiceDialerSettings) -> dict:
         "hours_label": hours_label(s),
         # Read-only facts the notes drawer shows (not editable on the page).
         "hold_offer_seconds": MUSIC_SECONDS,
-        "recording_notice": settings.VONAGE_RECORDING_NOTICE if settings.CALL_RECORDING_ENABLED else "",
+        "recording_notice": settings.VOICE_RECORDING_NOTICE if settings.CALL_RECORDING_ENABLED else "",
     }
 
 

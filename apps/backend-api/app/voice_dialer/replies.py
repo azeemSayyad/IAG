@@ -115,13 +115,13 @@ def classify(text: str | None) -> str:
 
 
 def test_numbers() -> set[str]:
-    """TESTING ONLY (VONAGE_TEST_NUMBERS): non-US numbers the dialer treats like
+    """TESTING ONLY (VOICE_TEST_NUMBERS): non-US numbers the dialer treats like
     a US client — texts, auto-dial, callbacks, manual dial — with no calling
     hours. Empty the setting to switch it off."""
     from app.core.config import settings
 
     out = set()
-    for raw in (getattr(settings, "VONAGE_TEST_NUMBERS", "") or "").split(","):
+    for raw in (getattr(settings, "VOICE_TEST_NUMBERS", "") or "").split(","):
         d = re.sub(r"\D", "", raw)
         if 8 <= len(d) <= 15:
             out.add("+" + d)
@@ -144,8 +144,8 @@ def normalize_phone(raw: str | None) -> str | None:
     return "+1" + digits
 
 
-def vonage_number(e164: str | None) -> str:
-    """Vonage wants E.164 without the plus: 15615550100."""
+def digits_only(e164: str | None) -> str:
+    """E.164 without the plus: 15615550100."""
     return re.sub(r"\D", "", str(e164 or ""))
 
 

@@ -1,7 +1,7 @@
-"""Auto Dialer → Inbox: every client who texted our Vonage numbers, newest first,
+"""Auto Dialer → Inbox: every client who texted our numbers, newest first,
 and one timeline per client mixing their texts with our calls (outcome, agent,
-talk time, recording). Read-only — the outreach texts are sent from Vonage, not
-from the portal, so the thread holds what came IN plus what we did about it.
+talk time, recording). Read-only — the outreach texts are not sent from
+the portal, so the thread holds what came IN plus what we did about it.
 """
 from __future__ import annotations
 
@@ -19,6 +19,10 @@ STAGE = {
     "ASSIGNED": "Offered to an agent",
     "DISPOSITIONED": "Closed",
 }
+
+
+# "vonage" is the previous carrier: rows it wrote stay part of each client's history.
+DIALER_PROVIDERS = ("vonage", "telnyx")
 
 
 def _stage(l: SmsLead) -> str:
@@ -50,7 +54,7 @@ def conversations(db: Session, tenant_id, limit: int = 80) -> list[dict]:
             func.max(SmsMessage.created_at).label("last_at"),
             func.count(SmsMessage.id).label("n"),
         )
-        .filter(SmsMessage.tenant_id == tenant_id, SmsMessage.provider == "vonage", SmsMessage.sms_lead_id.isnot(None))
+        .filter(SmsMessage.tenant_id == tenant_id, SmsMessage.provider.in_(DIALER_PROVIDERS), SmsMessage.sms_lead_id.isnot(None))
         .group_by(SmsMessage.sms_lead_id)
         .subquery()
     )

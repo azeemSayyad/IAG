@@ -1,4 +1,4 @@
-"""YES-reply auto dialer with screen pop (Vonage Voice + Messages APIs).
+"""YES-reply auto dialer with screen pop (Telnyx TeXML + Messaging).
 
 A client who texts YES is called automatically; only when a live person
 answers are they bridged onto the first free agent's open headset line, and
