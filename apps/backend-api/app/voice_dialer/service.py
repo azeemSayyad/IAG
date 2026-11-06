@@ -756,6 +756,13 @@ def _tick(db: Session, tenant_id) -> list[dict]:
     s = get_settings(db, tenant_id)
     events = _housekeeping(db, tenant_id, s)
     try:
+        from app.voice_dialer import monitor
+
+        events += monitor.sweep(db, tenant_id)
+    except Exception as exc:
+        db.rollback()
+        logger.warning("voice dialer: closing ended listen-ins failed: %s", exc)
+    try:
         collect_recordings(db, tenant_id)
     except Exception as exc:
         db.rollback()
@@ -1140,6 +1147,9 @@ def _end_live_calls(db: Session, *, lead_id=None, agent_user_id=None) -> int:
     rows = q.all()
     now = _now()
     _hangup_after_commit(db, [att.call_uuid for att in rows])
+    from app.voice_dialer import monitor
+
+    monitor.end_for_attempts(db, [att.id for att in rows])
     for att in rows:
         att.status = "COMPLETED"
         att.ended_at = att.ended_at or now
@@ -1438,9 +1448,12 @@ def on_call_event(db: Session, att: VoiceCallAttempt, payload: dict) -> list[dic
         # The customer (or the agent's Hang up) ended a bridged call. The agent
         # keeps the lead until they set the result with Mark…
         att.status = "COMPLETED"
+        from app.voice_dialer import monitor
+
+        events = monitor.end_for_attempts(db, [att.id])  # or the room never empties
         db.commit()
         _return_agent_line(db, att)
-        return [_evt("user", att.agent_user_id, "voice:ended", {"attempt_id": str(att.id), "sms_lead_id": str(att.sms_lead_id)})]
+        return events + [_evt("user", att.agent_user_id, "voice:ended", {"attempt_id": str(att.id), "sms_lead_id": str(att.sms_lead_id)})]
     if att.status in IN_FLIGHT:
         att.status = final
         events = _requeue(db, _lead_of(db, att), s)
@@ -1533,8 +1546,8 @@ def on_agent_line(db: Session, user_id: str, leg_uuid: str) -> tuple[list[dict],
         return [{"action": "talk", "text": "Ready for calls is off."}], []
     from app.voice_dialer import manual
 
-    if manual.live_call(db, user_id) is not None:
-        # Busy on a call they dialed by hand; the line reopens when it ends.
+    if manual.live_call(db, user_id) is not None or monitor_live(db, user_id):
+        # Busy on a call they dialed by hand (or listening in); the line reopens when it ends.
         return [{"action": "talk", "text": "You are on a call."}], []
     old = agent.voice_leg_uuid
     agent.voice_leg_uuid = leg_uuid
@@ -1598,6 +1611,8 @@ def open_line(db: Session, tenant_id, user_id: str) -> None:
 
     if manual.live_call(db, user_id) is not None:
         raise ValueError("You are on a call")
+    if monitor_live(db, user_id):
+        raise ValueError("You are listening in on a call")
     telnyx.dial_browser(user_id, answer_url=_url("answer", leg="agent", u=user_id), event_url=_url("event"))
 
 
@@ -1812,7 +1827,13 @@ def agent_state(db: Session, tenant_id, user_id: str) -> dict:
 def manual_live(db: Session, user_id) -> bool:
     from app.voice_dialer import manual
 
-    return manual.live_call(db, user_id) is not None
+    return manual.live_call(db, user_id) is not None or monitor_live(db, user_id)
+
+
+def monitor_live(db: Session, user_id) -> bool:
+    from app.voice_dialer import monitor
+
+    return monitor.live_for_user(db, user_id) is not None
 
 
 def overview(db: Session, tenant_id, period: str = "today", date_from: str | None = None,
@@ -1932,11 +1953,15 @@ def call_rows(db: Session, attempts: list[VoiceCallAttempt]) -> list[dict]:
     lead_names = dict(
         db.query(SmsLead.id, SmsLead.customer_name).filter(SmsLead.id.in_(lead_ids)).all()
     ) if lead_ids else {}
+    from app.voice_dialer import monitor
+
+    heard_by = monitor.listeners(db, [a.id for a in attempts if a.status == "CONNECTED"])
     return [
         {**attempt_dict(a), "agent_name": names.get(a.agent_user_id),
          "hold_for_name": names.get(a.hold_for_user_id),
          "customer_name": lead_names.get(a.sms_lead_id),
-         "recording": "stored" if a.recording_id else None}
+         "recording": "stored" if a.recording_id else None,
+         "listeners": heard_by.get(a.id, [])}
         for a in attempts
     ]
 

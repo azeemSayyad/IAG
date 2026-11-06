@@ -14,6 +14,8 @@ Two groups, both under /api/v1:
   and the dev-only simulator.
 * /voice/manual/*  the Dial drawer: anyone signed in calls any number
   (manual.py). Its own log, apart from the dialer's.
+* /voice/dialer/monitor*  managers listen in on / whisper into a live call
+  (monitor.py).
 """
 from __future__ import annotations
 
@@ -31,7 +33,7 @@ from app.core.database import get_db
 from app.core.deps import get_current_active_user, get_tenant_id, require_role
 from app.models.user import User
 from app.realtime.websocket import emit_to_agent, emit_to_tenant, emit_to_user
-from app.voice_dialer import inbox, manual, optouts, service, simulator, telnyx, webhooks
+from app.voice_dialer import inbox, manual, monitor, optouts, service, simulator, telnyx, webhooks
 
 logger = logging.getLogger(__name__)
 
@@ -531,6 +533,79 @@ def _audio_response(request: Request, data: bytes, ctype: str, name: str) -> Res
 # ---- Manual dialing (Dial drawer) ----
 # Open to every signed-in role. The call log is the caller's own for agents;
 # manager-class sees everyone's and plays the recordings.
+
+# ---- Listen in / whisper (managers) ----
+
+@router.get("/voice/dialer/monitor")
+def monitor_current(
+    db: Session = Depends(get_db),
+    user: User = Depends(_require_manager),
+):
+    """The call this manager is listening in on right now (or null)."""
+    m = monitor.live_for_user(db, user.id)
+    return {"monitor": monitor.monitor_dict(db, m) if m else None}
+
+
+@router.post("/voice/dialer/monitor")
+async def monitor_start(
+    attempt_id: str = Body(..., embed=True),
+    db: Session = Depends(get_db),
+    tenant_id: str = Depends(get_tenant_id),
+    user: User = Depends(_require_manager),
+):
+    """Ring this manager's browser into a live call's room, muted."""
+    try:
+        data, events = await _run(monitor.start, db, tenant_id, user, attempt_id)
+    except monitor.MonitorError as exc:
+        raise HTTPException(status_code=exc.status, detail=str(exc))
+    _audit(tenant_id, user, "call_monitor_started", {"attempt_id": attempt_id}, "voice_call")
+    await _flush(events)
+    return data
+
+
+def _own_monitor(db: Session, tenant_id: str, user: User, monitor_id: str):
+    m = monitor.find(db, monitor_id)
+    if m is None or str(m.tenant_id) != str(tenant_id) or str(m.user_id) != str(user.id):
+        raise HTTPException(status_code=404, detail="Not found")
+    return m
+
+
+@router.post("/voice/dialer/monitor/{monitor_id}/mode")
+async def monitor_mode(
+    monitor_id: str,
+    mode: str = Body(..., embed=True),
+    db: Session = Depends(get_db),
+    tenant_id: str = Depends(get_tenant_id),
+    user: User = Depends(_require_manager),
+):
+    """listen = hear both sides, nobody hears you; whisper = only the agent hears you."""
+    def go():
+        return monitor.set_mode(db, _own_monitor(db, tenant_id, user, monitor_id), mode)
+
+    try:
+        data = await _run(go)
+    except monitor.MonitorError as exc:
+        raise HTTPException(status_code=exc.status, detail=str(exc))
+    _audit(tenant_id, user, "call_monitor_mode", {"monitor_id": monitor_id, "mode": data["mode"]}, "voice_call")
+    return data
+
+
+@router.post("/voice/dialer/monitor/{monitor_id}/end")
+async def monitor_end(
+    monitor_id: str,
+    db: Session = Depends(get_db),
+    tenant_id: str = Depends(get_tenant_id),
+    user: User = Depends(_require_manager),
+):
+    def go():
+        m = _own_monitor(db, tenant_id, user, monitor_id)
+        events = monitor.end(db, m)
+        return monitor.monitor_dict(db, m), events
+
+    data, events = await _run(go)
+    await _flush(events)
+    return data
+
 
 @router.get("/voice/manual/config")
 def manual_config(user: User = Depends(get_current_active_user)):

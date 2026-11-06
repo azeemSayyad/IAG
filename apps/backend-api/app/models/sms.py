@@ -378,6 +378,33 @@ class ManualCall(Base):
     )
 
 
+class VoiceMonitor(Base):
+    """A manager listening in on (or whispering into) one live dialer call.
+
+    The manager's browser is rung and joins the call's room muted; whisper
+    lets only the agent hear them. One row per session — also the record of
+    who listened to which call (voice_dialer/monitor.py)."""
+
+    __tablename__ = "voice_monitors"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)     # the manager
+    attempt_id = Column(UUID(as_uuid=True), ForeignKey("voice_call_attempts.id", ondelete="CASCADE"), nullable=False)
+    mode = Column(String(10), nullable=False, default="listen")   # listen | whisper
+    leg_uuid = Column(String(64), nullable=True)                   # the manager's browser leg
+    # RINGING -> LIVE -> ENDED
+    status = Column(String(10), nullable=False, default="RINGING")
+    created_at = Column(DateTime(timezone=True), nullable=False, default=_now)
+    joined_at = Column(DateTime(timezone=True), nullable=True)
+    ended_at = Column(DateTime(timezone=True), nullable=True)
+
+    __table_args__ = (
+        Index("idx_voice_monitors_attempt", "attempt_id"),
+        Index("idx_voice_monitors_user", "user_id", "created_at"),
+    )
+
+
 class VoiceDialerSettings(Base):
     """Per-tenant auto-dialer switch + dialing rules (edited on SMS Manager)."""
 

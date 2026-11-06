@@ -651,6 +651,31 @@ closed a mini dock keeps Hang up reachable.
 - `.localpreview/verify-manual-dial.mjs` checks the drawer UI per role (never
   presses Call — with real keys that rings a real phone).
 
+## Listen in / whisper — `app/voice_dialer/monitor.py`, migration 065
+
+Managers (`_require_manager`) can join a CONNECTED dialer or inbound call from
+**Auto Dialer → Live calls → 🎧 Listen** (`components/ListenIn.tsx`, state in
+`lib/voice.ts`). One `voice_monitors` row per session (also who-listened-to-what;
+start + mode changes go to `audit_logs`).
+
+- Flow: `POST /voice/dialer/monitor {attempt_id}` rings the manager's browser
+  (`dial_browser`, `?leg=monitor&sv=`), which answers by itself → `monitor.on_answer`
+  joins `call_room(att)` **muted**, `startOnEnter=false`, `endOnExit=false`, no beep.
+- **Whisper** (`/monitor/{id}/mode`): TeXML `<Conference>` has no coach attribute,
+  so it is a REST participant update — `Coaching=true` + `CallSidToCoach=<agent's
+  voice_leg_uuid>` FIRST, and only if Telnyx's reply says `coaching` true is the
+  manager unmuted. Anything else → stays muted ("listening only"). The browser
+  also mutes its own mic in listen mode. A whisper must never reach the client.
+- The call ending (`on_call_event` completed, `_end_live_calls`) hangs every
+  listener up — otherwise the room never empties and its recording never lands;
+  `monitor.sweep` in the tick catches the rest. Leaving the Auto Dialer page ends it.
+- Listening = busy like a manual call: excluded in `_available_agents`, no
+  headset line (`open_line` / `on_agent_line` refuse; `agent_state.manual` true).
+- NOT for manual (Dial drawer) calls — those are a direct `<Dial><Number>`, no room.
+- Not yet proven on a real call: whether a muted participant hears the room,
+  the exact `coaching` field in Telnyx's reply, and whether the whisper is in
+  the room recording. `.localpreview/verify-listen-in.mjs` covers the simulator flow.
+
 ## Inbound calls: client owners + hold queue — `app/voice_dialer/inbound.py`, migration 064
 
 Team-agreed rules for a client calling one of our numbers (the admin-facing

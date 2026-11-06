@@ -25,6 +25,8 @@ type Phone = {
   /** Place a manual call: `create` logs it on the server (which also
    *  rings us); resolves once our leg is up. */
   manual(create: () => Promise<{ id: string }>): Promise<string>;
+  /** Listen in on a call: `start` asks the server, which rings us. */
+  monitor(start: () => Promise<unknown>): Promise<string>;
   hangup(id: string): Promise<void>;
   mute(id: string, muted: boolean): Promise<void>;
   dtmf(id: string, digits: string): Promise<void>;
@@ -126,6 +128,7 @@ async function telnyxPhone(token: string): Promise<Phone> {
   return {
     line: () => rungBy(() => api("/voice/dialer/line", { method: "POST", body: JSON.stringify({ on: true }) })),
     manual: (create) => rungBy(create),
+    monitor: (start) => rungBy(start),
     async hangup(id) {
       await calls.get(id)?.hangup();
     },
@@ -172,6 +175,9 @@ function callEnded(id: string) {
   } else if (id === manualSdkId) {
     manualSdkId = null;
     manualDropped();
+  } else if (id === monitorSdkId) {
+    monitorSdkId = null;
+    monitorDropped();
   }
 }
 
@@ -182,6 +188,10 @@ function sessionLost() {
   if (manualSdkId) {
     manualSdkId = null;
     manualDropped();
+  }
+  if (monitorSdkId) {
+    monitorSdkId = null;
+    monitorDropped();
   }
 }
 
@@ -443,4 +453,144 @@ export async function muteManual(muted: boolean): Promise<void> {
 export async function sendManualDigits(digits: string): Promise<void> {
   if (!phone || !manualSdkId) return;
   await phone.dtmf(manualSdkId, digits).catch(() => undefined);
+}
+
+/* ===== Listen in / whisper (managers, Auto Dialer → Live calls) =====
+
+   The server rings this browser into the call's room MUTED (POST
+   /voice/dialer/monitor); it answers by itself, like a manual call. Whisper
+   is switched server-side (only the agent hears you). As a second lock the
+   browser also mutes its own microphone whenever the mode is "listen", so
+   nothing is sent even if the carrier side went wrong. The session ends when
+   the call does (the server hangs us up) or on Leave. */
+
+export type MonitorMode = "listen" | "whisper";
+export type Monitor = {
+  id: string;
+  user_id: string;
+  attempt_id: string;
+  mode: MonitorMode;
+  status: string; // RINGING | LIVE | ENDED
+  agent_name: string | null;
+  customer_phone: string | null;
+  call_status: string | null;
+  simulated: boolean;
+};
+/** target = the call last acted on (where an error is shown). */
+export type MonitorState = { monitor: Monitor | null; starting: string | null; target: string | null; switching: boolean; error: string | null };
+
+const MONITOR_POLL_MS = 2000;
+let monitorSdkId: string | null = null;
+let vState: MonitorState = { monitor: null, starting: null, target: null, switching: false, error: null };
+let vListeners: ((s: MonitorState) => void)[] = [];
+let vTimer: number | null = null;
+
+function setMon(patch: Partial<MonitorState>) {
+  vState = { ...vState, ...patch };
+  vListeners.forEach((l) => l(vState));
+}
+
+export function onMonitor(cb: (s: MonitorState) => void): () => void {
+  vListeners.push(cb);
+  cb(vState);
+  return () => {
+    vListeners = vListeners.filter((l) => l !== cb);
+  };
+}
+
+function monitorGone() {
+  if (vTimer !== null) window.clearInterval(vTimer);
+  vTimer = null;
+  const id = monitorSdkId;
+  monitorSdkId = null;
+  if (phone && id) phone.hangup(id).catch(() => undefined);
+  setMon({ monitor: null, switching: false });
+}
+
+async function pollMonitor() {
+  try {
+    const { monitor } = await api<{ monitor: Monitor | null }>("/voice/dialer/monitor");
+    if (!monitor) monitorGone();
+    else setMon({ monitor });
+  } catch {
+    /* transient — next tick */
+  }
+}
+
+function startMonitorPoll() {
+  if (vTimer !== null) window.clearInterval(vTimer);
+  vTimer = window.setInterval(pollMonitor, MONITOR_POLL_MS);
+}
+
+function monitorDropped() {
+  // Our leg ended on its own (network, tab) — close the session server-side.
+  const id = vState.monitor?.id;
+  if (id) api(`/voice/dialer/monitor/${id}/end`, { method: "POST" }).catch(() => undefined);
+  monitorGone();
+}
+
+/** Socket nudge ("voice:monitor"). */
+export function nudgeMonitor() {
+  if (vState.monitor) pollMonitor();
+}
+
+export async function startMonitor(attemptId: string): Promise<void> {
+  if (vState.starting) return;
+  if (vState.monitor) await endMonitor();
+  setMon({ starting: attemptId, target: attemptId, error: null });
+  try {
+    const simulate = (await api<{ simulate: boolean }>("/voice/manual/config")).simulate;
+    let monitor: Monitor | null = null;
+    const ask = async () => {
+      monitor = await api<Monitor>("/voice/dialer/monitor", {
+        method: "POST",
+        body: JSON.stringify({ attempt_id: attemptId }),
+      });
+      setMon({ monitor });
+      return monitor;
+    };
+    if (simulate) {
+      await ask();
+    } else {
+      if (!(await micAllowed())) {
+        setMon({ starting: null, error: "Microphone blocked — allow it in the browser to listen in" });
+        return;
+      }
+      const p = await sdk();
+      monitorSdkId = await p.monitor(ask);
+      await p.mute(monitorSdkId, true); // listen = our mic sends nothing
+    }
+    startMonitorPoll();
+    await pollMonitor();
+    setMon({ starting: null });
+  } catch (e) {
+    setMon({ starting: null, error: errorText(e) });
+    if (vState.monitor) await endMonitor();
+  }
+}
+
+export async function setMonitorMode(mode: MonitorMode): Promise<void> {
+  const m = vState.monitor;
+  if (!m || vState.switching || m.mode === mode) return;
+  setMon({ switching: true, error: null });
+  try {
+    if (mode === "listen" && phone && monitorSdkId) await phone.mute(monitorSdkId, true);
+    const next = await api<Monitor>(`/voice/dialer/monitor/${m.id}/mode`, {
+      method: "POST",
+      body: JSON.stringify({ mode }),
+    });
+    // Unmute only after the server confirmed only the agent can hear us.
+    if (next.mode === "whisper" && phone && monitorSdkId) await phone.mute(monitorSdkId, false);
+    setMon({ monitor: next, switching: false });
+  } catch (e) {
+    if (phone && monitorSdkId) await phone.mute(monitorSdkId, true).catch(() => undefined);
+    setMon({ switching: false, error: errorText(e) });
+    await pollMonitor();
+  }
+}
+
+export async function endMonitor(): Promise<void> {
+  const id = vState.monitor?.id;
+  monitorGone();
+  if (id) await api(`/voice/dialer/monitor/${id}/end`, { method: "POST" }).catch(() => undefined);
 }

@@ -265,10 +265,12 @@ def _available_agents(db: Session, tenant_id: str, exclude_user_id: str | None =
             active_user_clause(),
         )
     )
-    # On a call they dialed by hand (Dial drawer) = busy: no offer, no bridge.
-    from app.voice_dialer.manual import busy_user_ids
+    # On a call they dialed by hand (Dial drawer), or listening in on one = busy:
+    # no offer, no bridge.
+    from app.voice_dialer import manual, monitor
 
-    q = q.filter(SmsQueueAgent.user_id.notin_(db.query(busy_user_ids(db, tenant_id))))
+    q = q.filter(SmsQueueAgent.user_id.notin_(db.query(manual.busy_user_ids(db, tenant_id))))
+    q = q.filter(SmsQueueAgent.user_id.notin_(db.query(monitor.busy_user_ids(db, tenant_id))))
     if exclude_user_id:
         q = q.filter(SmsQueueAgent.user_id != exclude_user_id)
     return q.order_by(SmsQueueAgent.last_active_at.asc().nullsfirst()).all()

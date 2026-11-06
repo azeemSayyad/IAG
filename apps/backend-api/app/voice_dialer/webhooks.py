@@ -35,6 +35,10 @@ def answer(db: Session, data: dict, params: dict) -> tuple[list[dict], list[dict
         return manual.notice_script(), []
     if params.get("leg") == "manual" and params.get("mc"):
         return manual.on_answer(db, data, params["mc"]), []
+    if params.get("leg") == "monitor" and params.get("sv"):
+        from app.voice_dialer import monitor
+
+        return monitor.on_answer(db, data, params["sv"]), []
     if params.get("leg") == "agent" and params.get("u"):
         return service.on_agent_line(db, params["u"], leg)
 
@@ -77,6 +81,11 @@ def answer(db: Session, data: dict, params: dict) -> tuple[list[dict], list[dict
 
 
 def event(db: Session, data: dict, params: dict) -> list[dict]:
+    if params.get("sv"):
+        from app.voice_dialer import monitor
+
+        m = monitor.find(db, params["sv"])
+        return monitor.on_event(db, m, data) if m is not None else []
     if params.get("mc"):
         call = manual.find(db, params.get("mc"))
         leg = "app" if params.get("leg") == "app" else "callee"  # app = our call to the browser

@@ -285,6 +285,24 @@ def conference_recording_url(name: str) -> str | None:
     return None
 
 
+def live_conference_sid(name: str) -> str | None:
+    """The running room with this name (a name is reused only after it ended)."""
+    base = f"/texml/Accounts/{account_sid()}/Conferences"
+    rooms = _request("GET", base, params={"FriendlyName": name, "Status": "in-progress"}).get("conferences") or []
+    return rooms[0]["sid"] if rooms else None
+
+
+def update_participant(room: str, call_sid: str, form: dict) -> dict:
+    """Change one person in a live room (mute, coach). `call_sid` is their leg.
+    Returns the participant as Telnyx now has it."""
+    if simulating() or str(call_sid).startswith("sim-"):
+        return {}
+    sid = live_conference_sid(room)
+    if not sid:
+        raise TelnyxError(f"room {room} is not running")
+    return _request("POST", f"/texml/Accounts/{account_sid()}/Conferences/{sid}/Participants/{call_sid}", form=form)
+
+
 def download(url: str) -> bytes:
     if url.startswith("sim://"):
         from app.voice_dialer.simulator import fake_audio
@@ -343,6 +361,10 @@ def _conference(item: dict) -> str:
         "beep": "false",
         "waitUrl": _wait_url(),
         "waitMethod": "GET",
+        # A manager listening in joins muted (whisper is switched on later
+        # with update_participant — TeXML's <Conference> has no coach attribute).
+        "muted": "true" if item.get("muted") else None,
+        "participantLabel": item.get("label") or None,
     }
     rec = _url0(item.get("eventUrl")) if item.get("record") else None
     if rec:

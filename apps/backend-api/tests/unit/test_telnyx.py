@@ -155,3 +155,30 @@ def test_room_recording_lookup(monkeypatch):
     assert telnyx.conference_recording_url("iag-call-1") == "https://r/yes"
     monkeypatch.setattr(telnyx, "_request", lambda *a, **k: {"conferences": []})
     assert telnyx.conference_recording_url("iag-call-1") is None
+
+
+def test_listener_joins_the_call_room_muted():
+    conf = _xml([{"action": "conversation", "name": "iag-call-1", "startOnEnter": False, "endOnExit": False,
+                  "muted": True, "label": "sv-1"}]).find("Dial/Conference")
+    assert conf.text == "iag-call-1" and conf.get("muted") == "true" and conf.get("participantLabel") == "sv-1"
+    assert conf.get("startConferenceOnEnter") == "false" and conf.get("record") is None
+    # Everyone else is unchanged: no muted attribute at all.
+    assert _xml([{"action": "conversation", "name": "iag-call-1"}]).find("Dial/Conference").get("muted") is None
+
+
+def test_participant_update_targets_the_live_room(monkeypatch):
+    monkeypatch.setattr(telnyx, "simulating", lambda: False)
+    monkeypatch.setattr(telnyx, "account_sid", lambda: "acc")
+    seen = []
+
+    def fake(method, path, **kw):
+        seen.append((method, path, kw.get("params"), kw.get("form")))
+        if path.endswith("/Conferences"):
+            return {"conferences": [{"sid": "c1"}]}
+        return {"coaching": True}
+
+    monkeypatch.setattr(telnyx, "_request", fake)
+    assert telnyx.update_participant("iag-call-1", "v3:sv", {"Muted": "true"}) == {"coaching": True}
+    assert seen[0][2] == {"FriendlyName": "iag-call-1", "Status": "in-progress"}
+    assert seen[1][:2] == ("POST", "/texml/Accounts/acc/Conferences/c1/Participants/v3:sv")
+    assert seen[1][3] == {"Muted": "true"}

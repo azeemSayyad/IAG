@@ -217,3 +217,56 @@ def test_clear_yes_words_that_opt_back_in(text):
 @pytest.mark.parametrize("text", ["Cool", "hi", "who is this?", "thanks", "lol"])
 def test_vague_texts_do_not_opt_back_in(text):
     assert replies.classify(text) == replies.REPLY
+
+
+# ---- Listen in / whisper ----
+
+def _monitor_fixture(monkeypatch, coaching_reply):
+    import uuid as _uuid
+    from types import SimpleNamespace
+
+    from app.voice_dialer import monitor
+
+    att = SimpleNamespace(id=_uuid.uuid4(), tenant_id="t1", agent_user_id="a1", status="CONNECTED", phone_number="+1")
+    m = SimpleNamespace(id=_uuid.uuid4(), attempt_id=att.id, status="LIVE", mode="listen", leg_uuid="v3:sv", user_id="m1")
+    agent = SimpleNamespace(voice_leg_uuid="v3:agent")
+
+    class Q:
+        def filter(self, *a, **k): return self
+        def first(self): return agent
+
+    db = SimpleNamespace(query=lambda *a: Q(), commit=lambda: None)
+    monkeypatch.setattr(monitor, "_attempt", lambda db, m: att)
+    monkeypatch.setattr(monitor, "monitor_dict", lambda db, m: {"mode": m.mode})
+    monkeypatch.setattr(telnyx, "simulating", lambda: False)
+    calls = []
+
+    def update(room, sid, form):
+        calls.append(form)
+        return coaching_reply if "Coaching" in form and form["Coaching"] == "true" else {}
+
+    monkeypatch.setattr(telnyx, "update_participant", update)
+    return monitor, db, m, calls
+
+
+def test_whisper_coaches_the_agent_before_unmuting(monkeypatch):
+    monitor, db, m, calls = _monitor_fixture(monkeypatch, {"coaching": True})
+    assert monitor.set_mode(db, m, "whisper") == {"mode": "whisper"}
+    assert calls == [{"Coaching": "true", "CallSidToCoach": "v3:agent"}, {"Muted": "false"}]
+
+
+def test_unconfirmed_whisper_stays_muted(monkeypatch):
+    """If Telnyx doesn't confirm coaching, the manager is never unmuted —
+    otherwise the CUSTOMER would hear the whisper."""
+    monitor, db, m, calls = _monitor_fixture(monkeypatch, {"coaching": False})
+    with pytest.raises(monitor.MonitorError):
+        monitor.set_mode(db, m, "whisper")
+    assert {"Muted": "false"} not in calls
+    assert m.mode == "listen"
+
+
+def test_back_to_listening_mutes(monkeypatch):
+    monitor, db, m, calls = _monitor_fixture(monkeypatch, {"coaching": True})
+    m.mode = "whisper"
+    monitor.set_mode(db, m, "listen")
+    assert calls == [{"Muted": "true", "Coaching": "false"}]

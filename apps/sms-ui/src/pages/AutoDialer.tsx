@@ -3,8 +3,10 @@ import { api } from "../lib/api";
 import { getAccessToken, isAdminClass } from "../lib/auth";
 import { DialButton } from "../components/DialDrawer";
 import DialerNotes from "../components/DialerNotes";
+import ListenIn, { type Listener } from "../components/ListenIn";
 import { formatPhone } from "../lib/phone";
 import { getSocket } from "../lib/socket";
+import { endMonitor, nudgeMonitor } from "../lib/voice";
 
 /* Auto Dialer (manager / admin) — the YES-reply auto dialer at a glance.
 
@@ -51,6 +53,7 @@ type Attempt = {
   error: string | null;
   recording: "stored" | "pending" | "failed" | null;
   hold_for_name?: string | null;
+  listeners?: Listener[];
 };
 type ReadyLead = {
   id: string;
@@ -903,11 +906,16 @@ export default function AutoDialer() {
     const nudge = () => load();
     const evts = ["voice:dialer_updated", "sms:queue_updated"];
     evts.forEach((e) => s.on(e, nudge));
+    s.on("voice:monitor", nudgeMonitor);
     return () => {
       clearInterval(id);
       evts.forEach((e) => s.off(e, nudge));
+      s.off("voice:monitor", nudgeMonitor);
     };
   }, [load]);
+
+  // Listening in has no controls off this page — leaving it leaves the call.
+  useEffect(() => () => { endMonitor(); }, []);
 
   // First page (or every loaded row, on refresh) — keeps statuses fresh without
   // throwing away what the manager already scrolled through.
@@ -1226,6 +1234,9 @@ export default function AutoDialer() {
                         ? <>called in · waiting for <span className="font-semibold text-ink-soft">{a.hold_for_name || "the next free agent"}</span> · {clock(a.created_at)} on hold</>
                         : <>from {formatPhone(a.from_number)} · {clock(a.created_at)}</>}
                   </div>
+                  {a.status === "CONNECTED" && (
+                    <ListenIn attemptId={a.id} agentName={a.agent_name} listeners={a.listeners || []} />
+                  )}
                   {ov.simulate && ov.sim_mode === "manual" && a.status !== "CONNECTED" && (
                     <div className="mt-2 flex flex-wrap items-center gap-1.5">
                       <span className="text-xs font-semibold text-pending">Simulate:</span>
