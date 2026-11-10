@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../lib/api";
-import { getAccessToken, isAdminClass } from "../lib/auth";
+import { getAccessToken, isAdminClass, isOwner } from "../lib/auth";
 import { DialButton } from "../components/DialDrawer";
 import DialerNotes from "../components/DialerNotes";
 import ListenIn, { type Listener } from "../components/ListenIn";
+import TextCampaigns from "../components/TextCampaigns";
 import { formatPhone } from "../lib/phone";
 import { getSocket } from "../lib/socket";
 import { endMonitor, nudgeMonitor } from "../lib/voice";
@@ -366,19 +367,22 @@ function RecordingPlayer({ attemptId, status }: { attemptId: string; status: str
 }
 
 type Convo = {
-  lead_id: string;
-  customer_name: string | null;
   phone_number: string;
+  lead_id: string | null;
+  customer_name: string | null;
   last_message: string | null;
+  last_from_us: boolean;
   last_at: string | null;
   texts: number;
+  replied: boolean;
   stage: string;
   last_call_status: string | null;
 };
+type ConvoPage = { items: Convo[]; has_more: boolean; total: number | null };
 type ThreadItem =
-  | { kind: "text"; at: string | null; direction: string; body: string; consent?: "opted_out" | "opted_in" | null }
+  | { kind: "text"; at: string | null; direction: string; body: string; consent?: "opted_out" | "opted_in" | null; campaign?: string; sent_by?: string | null; delivery?: string | null }
   | { kind: "call"; at: string | null; attempt_id: string; status: string; disposition: string | null; direction: string; agent_name: string | null; duration_seconds: number | null; has_recording: boolean };
-type Thread = { lead_id: string; customer_name: string | null; phone_number: string; state: string | null; stage: string; disposition: string | null; items: ThreadItem[] };
+type Thread = { lead_id: string | null; customer_name: string | null; phone_number: string; state: string | null; stage: string; disposition: string | null; opted_out: boolean; items: ThreadItem[] };
 
 // ---- Opted out: the Do-Not-Call list ---------------------------------------
 
@@ -731,125 +735,204 @@ function ClientOwnersPanel({ canEdit }: { canEdit: boolean }) {
 
 function InboxPanel() {
   const [list, setList] = useState<Convo[] | null>(null);
-  const [sel, setSel] = useState<string | null>(null);
+  const [total, setTotal] = useState<number | null>(null);
+  const [more, setMore] = useState(false);
+  const [sel, setSel] = useState<string | null>(null); // phone number
   const [thread, setThread] = useState<Thread | null>(null);
   const [q, setQ] = useState("");
+  const [draft, setDraft] = useState("");
+  const [sending, setSending] = useState(false);
+  const [sendErr, setSendErr] = useState("");
+  const listRef = useRef<Convo[]>([]);
+  const bottomRef = useRef<HTMLDivElement | null>(null);
+  const qs = q.trim() ? `&q=${encodeURIComponent(q.trim())}` : "";
 
+  // Refresh keeps every row already loaded (scrolling isn't thrown away).
   const loadList = useCallback(async () => {
     try {
-      const r = await api<{ items: Convo[] }>("/voice/dialer/inbox");
+      const n = Math.max(60, listRef.current.length);
+      const r = await api<ConvoPage>(`/voice/dialer/inbox?limit=${n}${qs}`);
+      listRef.current = r.items;
       setList(r.items);
-      setSel((cur) => (cur && r.items.some((c) => c.lead_id === cur) ? cur : r.items[0]?.lead_id ?? null));
+      setMore(r.has_more);
+      setTotal(r.total);
+      setSel((cur) => (cur && r.items.some((c) => c.phone_number === cur) ? cur : cur ?? r.items[0]?.phone_number ?? null));
     } catch {
       /* transient */
     }
-  }, []);
+  }, [qs]);
+  const loadMore = async () => {
+    const last = listRef.current[listRef.current.length - 1];
+    if (!last?.last_at) return;
+    try {
+      const r = await api<ConvoPage>(`/voice/dialer/inbox?limit=60&before=${encodeURIComponent(last.last_at)}${qs}`);
+      const seen = new Set(listRef.current.map((c) => c.phone_number));
+      listRef.current = [...listRef.current, ...r.items.filter((c) => !seen.has(c.phone_number))];
+      setList(listRef.current);
+      setMore(r.has_more);
+    } catch {
+      /* transient */
+    }
+  };
   const loadThread = useCallback(async () => {
     if (!sel) return setThread(null);
     try {
-      setThread(await api<Thread>(`/voice/dialer/inbox/${sel}`));
+      setThread(await api<Thread>(`/voice/dialer/inbox/${encodeURIComponent(sel)}`));
     } catch {
       setThread(null);
     }
   }, [sel]);
 
   useEffect(() => {
-    loadList();
+    listRef.current = [];
+    const t = window.setTimeout(loadList, q ? 300 : 0);
     const id = setInterval(loadList, 6000);
     const s = getSocket();
     const nudge = () => loadList();
     const evts = ["sms:new_message", "voice:dialer_updated"];
     evts.forEach((e) => s.on(e, nudge));
     return () => {
+      window.clearTimeout(t);
       clearInterval(id);
       evts.forEach((e) => s.off(e, nudge));
     };
-  }, [loadList]);
+  }, [loadList, q]);
   useEffect(() => {
+    setDraft("");
+    setSendErr("");
     loadThread();
     const id = setInterval(loadThread, 6000);
     return () => clearInterval(id);
   }, [loadThread]);
+  // Newest message in view when a thread opens or grows.
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ block: "end" });
+  }, [thread?.phone_number, thread?.items.length]);
 
-  const shown = (list || []).filter((c) => {
-    const k = q.trim().toLowerCase();
-    if (!k) return true;
-    return (c.customer_name || "").toLowerCase().includes(k) || c.phone_number.replace(/\D/g, "").includes(k.replace(/\D/g, "") || "~");
-  });
+  const send = async () => {
+    if (!sel || !draft.trim() || sending) return;
+    setSending(true);
+    setSendErr("");
+    try {
+      await api("/voice/dialer/inbox/send", { method: "POST", body: JSON.stringify({ phone: sel, text: draft }) });
+      setDraft("");
+      await Promise.all([loadThread(), loadList()]);
+    } catch (e) {
+      const m = String(e instanceof Error ? e.message : e).match(/\{.*\}$/s);
+      let msg = "Not sent";
+      try { msg = m ? JSON.parse(m[0]).detail || msg : msg; } catch { /* not JSON */ }
+      setSendErr(msg);
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const seg = draft.length <= 160 ? 1 : Math.ceil(draft.length / 153);
 
   return (
-    <Card collapsible defaultOpen title="Inbox" sub={list ? `${list.length} clients texted back` : undefined}>
-      {list && list.length === 0 ? (
-        <Empty>No texts yet. Replies to our dialer numbers appear here.</Empty>
-      ) : (
-        <div className="grid overflow-hidden rounded-xl border border-hairline-soft md:grid-cols-[19rem_1fr]" style={{ height: "30rem" }}>
-          {/* list */}
-          <div className="flex min-h-0 flex-col border-b border-hairline-soft md:border-b-0 md:border-r">
-            <div className="p-2">
-              <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search name or number" className={inputCls} />
-            </div>
-            <ul className="min-h-0 flex-1 overflow-y-auto">
-              {shown.map((c) => (
-                <li key={c.lead_id}>
-                  <button onClick={() => setSel(c.lead_id)}
-                    className={`block w-full px-3 py-2.5 text-left ${sel === c.lead_id ? "bg-accent/10" : "hover:bg-black/5"}`}>
-                    <div className="flex items-baseline justify-between gap-2">
-                      <span className="truncate text-sm font-semibold text-ink">{c.customer_name || formatPhone(c.phone_number)}</span>
-                      <span className="flex-shrink-0 text-[11px] text-ink-faint">{when(c.last_at)}</span>
-                    </div>
-                    <div className="mt-0.5 flex items-center justify-between gap-2">
-                      <span className="truncate text-xs text-ink-muted">{c.last_message || "—"}</span>
-                      <span className="flex-shrink-0 rounded-full bg-black/5 px-1.5 py-0.5 text-[10px] font-semibold text-ink-muted">{c.stage}</span>
-                    </div>
-                  </button>
-                </li>
-              ))}
-            </ul>
+    <Card collapsible defaultOpen title="Inbox"
+      sub={total != null ? `${total.toLocaleString()} ${total === 1 ? "person" : "people"} · texted, replied or called · latest activity first` : undefined}>
+      <div className="grid overflow-hidden rounded-xl border border-hairline-soft md:grid-cols-[19rem_1fr]" style={{ height: "34rem" }}>
+        {/* list */}
+        <div className="flex min-h-0 flex-col border-b border-hairline-soft md:border-b-0 md:border-r">
+          <div className="p-2">
+            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search name or number" className={inputCls} />
           </div>
-          {/* thread */}
-          <div className="flex min-h-0 flex-col">
-            {!thread ? (
-              <div className="m-auto text-sm text-ink-faint">Pick a conversation</div>
-            ) : (
-              <>
-                <div className="flex flex-wrap items-center gap-2 border-b border-hairline-soft px-4 py-3">
-                  <span className="font-semibold text-ink">{thread.customer_name || "Unknown"}</span>
-                  <span className="text-sm tabular-nums text-ink-muted">{formatPhone(thread.phone_number)}</span>
-                  {thread.state && <span className="text-sm text-ink-faint">· {thread.state}</span>}
-                  <span className="ml-auto rounded-full bg-black/5 px-2 py-0.5 text-xs font-semibold text-ink-muted">
-                    {thread.stage}{thread.disposition ? ` · ${thread.disposition.replace(/_/g, " ").toLowerCase()}` : ""}
-                  </span>
-                </div>
-                <div className="min-h-0 flex-1 space-y-2.5 overflow-y-auto px-4 py-3">
-                  {thread.items.map((it, i) =>
-                    it.kind === "text" ? (
-                      <div key={i} className={`flex ${it.direction === "OUTBOUND" ? "justify-end" : "justify-start"}`}>
-                        <div className={`max-w-[75%] rounded-2xl px-3 py-2 text-sm ${it.direction === "OUTBOUND" ? "bg-accent text-white" : "border border-hairline-soft bg-white text-ink"}`}>
-                          {it.body}
-                          <div className={`mt-0.5 text-[10px] ${it.direction === "OUTBOUND" ? "text-white/70" : "text-ink-faint"}`}>{when(it.at)}</div>
-                          {it.consent && (
-                            <div className={`mt-1 inline-block rounded-full px-2 py-0.5 text-[10px] font-bold ${it.consent === "opted_in" ? "bg-success/15 text-success" : "bg-danger/10 text-danger"}`}>
-                              {it.consent === "opted_in" ? "✓ Opted back in by text" : "Opted out"}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    ) : (
-                      <div key={i} className="flex flex-wrap items-center justify-center gap-2 py-1 text-xs text-ink-muted">
-                        <span>📞 {it.direction === "inbound" ? "They called us" : "We called"} · {when(it.at)}</span>
-                        <span className={`rounded-full px-2 py-0.5 font-semibold ${outcome(it).tone}`}>{outcome(it).label}</span>
-                        {it.agent_name && <span>with {it.agent_name}</span>}
-                        {it.duration_seconds != null && <span className="tabular-nums">{mmss(it.duration_seconds)}</span>}
-                        {it.has_recording && <RecordingPlayer attemptId={it.attempt_id} status="stored" />}
-                      </div>
-                    ),
-                  )}
-                </div>
-              </>
-            )}
-          </div>
+          <ul className="min-h-0 flex-1 overflow-y-auto" data-testid="inbox-list"
+            onScroll={(e) => {
+              const el = e.currentTarget;
+              if (more && el.scrollTop + el.clientHeight > el.scrollHeight - 120) loadMore();
+            }}>
+            {list && list.length === 0 && <li className="px-3 py-8 text-center text-sm text-ink-faint">{q ? "Nobody matches." : "Nobody yet. Campaign texts, replies and calls appear here."}</li>}
+            {(list || []).map((c) => (
+              <li key={c.phone_number}>
+                <button onClick={() => setSel(c.phone_number)}
+                  className={`block w-full px-3 py-2.5 text-left ${sel === c.phone_number ? "bg-accent/10" : "hover:bg-black/5"}`}>
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className={`truncate text-sm text-ink ${c.replied ? "font-bold" : "font-semibold"}`}>{c.customer_name || formatPhone(c.phone_number)}</span>
+                    <span className="flex-shrink-0 text-[11px] text-ink-faint">{when(c.last_at)}</span>
+                  </div>
+                  <div className="mt-0.5 flex items-center justify-between gap-2">
+                    <span className="truncate text-xs text-ink-muted">{c.last_from_us && c.last_message ? "You: " : ""}{c.last_message || (c.last_call_status ? "📞 Call" : "—")}</span>
+                    <span className={`flex-shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${c.replied ? "bg-success/12 text-success" : "bg-black/5 text-ink-muted"}`}>{c.stage}</span>
+                  </div>
+                </button>
+              </li>
+            ))}
+            {more && <li className="py-2 text-center text-[11px] text-ink-faint">Scroll for more…</li>}
+          </ul>
         </div>
-      )}
+        {/* thread */}
+        <div className="flex min-h-0 flex-col">
+          {!thread ? (
+            <div className="m-auto text-sm text-ink-faint">Pick a conversation</div>
+          ) : (
+            <>
+              <div className="flex flex-wrap items-center gap-2 border-b border-hairline-soft px-4 py-3">
+                <span className="font-semibold text-ink">{thread.customer_name || "Unknown"}</span>
+                <span className="text-sm tabular-nums text-ink-muted">{formatPhone(thread.phone_number)}</span>
+                {thread.state && <span className="text-sm text-ink-faint">· {thread.state}</span>}
+                <span className="ml-auto rounded-full bg-black/5 px-2 py-0.5 text-xs font-semibold text-ink-muted">
+                  {thread.stage}{thread.disposition ? ` · ${thread.disposition.replace(/_/g, " ").toLowerCase()}` : ""}
+                </span>
+              </div>
+              <div className="min-h-0 flex-1 space-y-2.5 overflow-y-auto px-4 py-3">
+                {thread.items.map((it, i) =>
+                  it.kind === "text" ? (
+                    <div key={i} className={`flex ${it.direction === "OUTBOUND" ? "justify-end" : "justify-start"}`}>
+                      <div className={`max-w-[75%] rounded-2xl px-3 py-2 text-sm ${it.direction === "OUTBOUND" ? "bg-accent text-white" : "border border-hairline-soft bg-white text-ink"}`}>
+                        <span className="whitespace-pre-wrap">{it.body}</span>
+                        <div className={`mt-0.5 text-[10px] ${it.direction === "OUTBOUND" ? "text-white/70" : "text-ink-faint"}`}>
+                          {it.campaign ? `💬 ${it.campaign} · ` : it.sent_by ? `${it.sent_by} · ` : ""}{when(it.at)}
+                          {it.direction === "OUTBOUND" && it.delivery && (it.delivery === "FAILED" ? " · ⚠ not delivered" : it.delivery === "DELIVERED" ? " · ✓✓" : " · ✓")}
+                        </div>
+                        {it.consent && (
+                          <div className={`mt-1 inline-block rounded-full px-2 py-0.5 text-[10px] font-bold ${it.consent === "opted_in" ? "bg-success/15 text-success" : "bg-danger/10 text-danger"}`}>
+                            {it.consent === "opted_in" ? "✓ Opted back in by text" : "Opted out"}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <div key={i} className="flex flex-wrap items-center justify-center gap-2 py-1 text-xs text-ink-muted">
+                      <span>📞 {it.direction === "inbound" ? "They called us" : "We called"} · {when(it.at)}</span>
+                      <span className={`rounded-full px-2 py-0.5 font-semibold ${outcome(it).tone}`}>{outcome(it).label}</span>
+                      {it.agent_name && <span>with {it.agent_name}</span>}
+                      {it.duration_seconds != null && <span className="tabular-nums">{mmss(it.duration_seconds)}</span>}
+                      {it.has_recording && <RecordingPlayer attemptId={it.attempt_id} status="stored" />}
+                    </div>
+                  ),
+                )}
+                <div ref={bottomRef} />
+              </div>
+              {/* composer */}
+              <div className="border-t border-hairline-soft p-2.5">
+                {thread.opted_out ? (
+                  <div className="rounded-lg bg-danger/8 px-3 py-2 text-xs font-medium text-danger">They opted out (Do-Not-Call) — texting them is blocked.</div>
+                ) : (
+                  <>
+                    <div className="flex items-end gap-2">
+                      <textarea value={draft} onChange={(e) => setDraft(e.target.value)} rows={1} maxLength={1000}
+                        data-testid="inbox-composer"
+                        onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
+                        placeholder={`Text ${thread.customer_name || formatPhone(thread.phone_number)}…`}
+                        className={`${inputCls} max-h-32 min-h-[2.4rem] resize-none`} />
+                      <button onClick={send} disabled={sending || !draft.trim()} data-testid="inbox-send"
+                        className="h-[2.4rem] flex-shrink-0 rounded-lg bg-accent px-4 text-sm font-bold text-white hover:bg-accent-hover disabled:opacity-40">
+                        {sending ? "Sending…" : "Send"}
+                      </button>
+                    </div>
+                    <div className="mt-1 flex justify-between text-[10px] text-ink-faint">
+                      <span className={sendErr ? "font-semibold text-danger" : ""}>{sendErr || "Enter to send · Shift+Enter for a new line"}</span>
+                      {draft && <span>{draft.length} chars · {seg} {seg === 1 ? "text" : "texts"}</span>}
+                    </div>
+                  </>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+      </div>
     </Card>
   );
 }
@@ -1254,6 +1337,9 @@ export default function AutoDialer() {
           )}
         </Card>
       </div>
+
+      {/* ===== Text campaigns (super admin) ===== */}
+      {isOwner() && <TextCampaigns />}
 
       {/* ===== Simulator (dev only) ===== */}
       {ov.simulate && (

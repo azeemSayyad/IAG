@@ -8,6 +8,7 @@ import SalesDashboard from "./pages/SalesDashboard";
 import Expenses from "./pages/Expenses";
 import Contacts from "./pages/Contacts";
 import Training from "./pages/Training";
+import HealthSherpa from "./pages/HealthSherpa";
 import {
   isAdmin,
   isAdminClass,
@@ -55,6 +56,9 @@ export default function App() {
           path="/training"
           element={canSeeTraining() ? <Training /> : <Navigate to={home} replace />}
         />
+        {/* HealthSherpa authorizations: every signed-in role (the server
+            scopes rows — agents see their own + unassigned ones). */}
+        <Route path="/healthsherpa" element={<HealthSherpa />} />
         {/* SMS Manager: manager-class + admin + dev. */}
         <Route
           path="/manager"

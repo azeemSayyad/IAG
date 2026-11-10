@@ -165,6 +165,10 @@ class Settings(BaseSettings):
     # on the dial list). Off by default until it has been proven on real calls.
     VOICE_MACHINE_DETECTION: bool = False
     VOICE_SIMULATE: bool = True         # dev only — never honoured in production
+    # Text campaigns (Auto Dialer page): most texts per Eastern day across ALL
+    # campaigns. T-Mobile caps our 10DLC brand (tier LOW) at 2,000/day; over it
+    # T-Mobile users stop getting our texts. Raise only if the brand tier rises.
+    TEXT_DAILY_CAP: int = 2000
 
     # AWS / storage  (call recordings are downloaded from Sinch and stored here
     # permanently — Sinch is NOT the permanent store).

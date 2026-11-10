@@ -349,6 +349,13 @@ def on_inbound_sms(
         provider_message_id=message_id,
     )
     db.add(msg)
+    try:
+        # A reply to one of our text campaigns: mark it, and fill in who they are.
+        from app.voice_dialer import campaigns
+
+        campaigns.on_reply(db, tenant_id, phone, text, kind, lead)
+    except Exception as exc:  # never lose the reply itself over campaign bookkeeping
+        logger.warning("text campaigns: reply bookkeeping failed: %s", exc)
     lead.last_message = text
     lead.message_count = (lead.message_count or 0) + 1
     lead.updated_at = now

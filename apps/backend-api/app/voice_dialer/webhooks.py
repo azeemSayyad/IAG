@@ -131,6 +131,13 @@ def inbound_sms(db: Session, data: dict) -> tuple[dict, list[dict]]:
     return service.on_inbound_sms(db, tenant_id, str(frm), to, text, msg_id)
 
 
+def sms_status(db: Session, data: dict) -> dict:
+    """Delivery report for a campaign text (message.sent / message.finalized)."""
+    from app.voice_dialer import campaigns
+
+    return campaigns.on_status(db, data)
+
+
 def recording(db: Session, data: dict, params: dict) -> dict:
     if params.get("mc"):
         call = manual.find(db, params.get("mc"))

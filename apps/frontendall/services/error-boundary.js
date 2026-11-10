@@ -254,6 +254,11 @@
       if (canQueue) {
         items.push({ href: '/sms/#/queue', label: 'Lead Manager', svg: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M8 9h8M8 13h5"/>' });
       }
+      // HealthSherpa 2027 authorizations (Chrome extension) — every role:
+      // agents run clients, admins upload lists and watch statuses.
+      if (role) {
+        items.push({ href: '/sms/#/healthsherpa', label: 'HealthSherpa Auth', svg: '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/>' });
+      }
       if (canManager) {
         items.push({ href: '/sms/#/manager', label: 'SMS Manager', svg: '<circle cx="9" cy="7" r="4"/><path d="M3 21c0-3.5 3-6 6-6s6 2.5 6 6"/><path d="M16 3.5a4 4 0 0 1 0 7.5"/><path d="M22 21c0-3-2-5-5-5.5"/>' });
       }

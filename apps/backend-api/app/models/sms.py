@@ -378,6 +378,69 @@ class ManualCall(Base):
     )
 
 
+class TextCampaign(Base):
+    """A Telnyx text blast from the Auto Dialer page: one CSV, one message.
+
+    Separate from the SMS Manager's (Sinch) `campaigns` on purpose — nothing is
+    shared. Replies land in the dialer's inbound handler like any other text, so
+    a positive reply is called (voice_dialer/campaigns.py)."""
+
+    __tablename__ = "text_campaigns"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False)
+    name = Column(String(120), nullable=False)
+    template = Column(Text, nullable=False)                    # {name} = first name
+    # DRAFT -> RUNNING <-> PAUSED -> COMPLETED | STOPPED
+    status = Column(String(12), nullable=False, default="DRAFT")
+    pause_reason = Column(Text, nullable=True)                  # set when WE paused it
+    file_name = Column(String(255), nullable=True)
+    # What the upload threw away (shown once, on the campaign).
+    rows_in_file = Column(Integer, nullable=False, default=0)
+    skipped_invalid = Column(Integer, nullable=False, default=0)
+    skipped_duplicate = Column(Integer, nullable=False, default=0)
+    skipped_dnc = Column(Integer, nullable=False, default=0)
+    created_by = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=_now)
+    started_at = Column(DateTime(timezone=True), nullable=True)
+    finished_at = Column(DateTime(timezone=True), nullable=True)
+
+    __table_args__ = (Index("idx_text_campaigns_tenant_created", "tenant_id", "created_at"),)
+
+
+class TextCampaignRecipient(Base):
+    """One person in a text campaign — and the record of the text they got."""
+
+    __tablename__ = "text_campaign_recipients"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    campaign_id = Column(UUID(as_uuid=True), ForeignKey("text_campaigns.id", ondelete="CASCADE"), nullable=False)
+    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False)
+    position = Column(Integer, nullable=False, default=0)      # row order in the file (send order)
+    phone_number = Column(String(32), nullable=False)          # +1XXXXXXXXXX
+    first_name = Column(String(120), nullable=True)
+    state = Column(String(4), nullable=True)                   # texting hours follow it
+    fields = Column(JSONB, nullable=True)                      # the whole CSV row [[label, value], …]
+    # QUEUED -> SENDING -> SENT -> DELIVERED | FAILED; SKIPPED (DNC by send time);
+    # CANCELLED (campaign stopped first)
+    status = Column(String(12), nullable=False, default="QUEUED")
+    from_number = Column(String(32), nullable=True)
+    body = Column(Text, nullable=True)                          # exactly what was sent
+    provider_message_id = Column(String(64), nullable=True)
+    error = Column(Text, nullable=True)
+    sent_at = Column(DateTime(timezone=True), nullable=True)
+    delivered_at = Column(DateTime(timezone=True), nullable=True)
+    replied_at = Column(DateTime(timezone=True), nullable=True)  # their FIRST reply
+    reply_text = Column(Text, nullable=True)
+    reply_kind = Column(String(12), nullable=True)               # replies.classify(): YES | REPLY | STOP | …
+
+    __table_args__ = (
+        Index("idx_text_recipients_campaign_status", "campaign_id", "status"),
+        Index("idx_text_recipients_phone", "tenant_id", "phone_number"),
+        Index("idx_text_recipients_message", "provider_message_id"),
+    )
+
+
 class VoiceMonitor(Base):
     """A manager listening in on (or whispering into) one live dialer call.
 

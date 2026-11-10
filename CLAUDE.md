@@ -605,9 +605,15 @@ an agent, and the lead card pops on that same agent's screen. Built on the
   (`OPTED_OUT`) needs `?confirm_stop=true` (409 otherwise) and the UI asks first.
   Removal never re-dials — only a new YES does. Both actions go to the audit log.
   Today's card shows "N opted out" for the period.
-- **Inbox** on the Auto Dialer page (`inbox.py`, `/voice/dialer/inbox[/{lead}]`):
-  everyone who texted our numbers, newest first; one read-only timeline
-  per client mixing their texts with our calls (result, agent, talk, recording).
+- **Inbox** on the Auto Dialer page (`inbox.py`, `/voice/dialer/inbox[/{phone}]`):
+  ONE ROW PER PHONE (not per lead — a campaign contact who never replied has no
+  lead), latest activity first, paged with `?before=`, server search `?q=`.
+  Sources: dialer texts (`sms_messages` provider telnyx/vonage), campaign texts
+  (`text_campaign_recipients`) and calls. The thread mixes all of them, and a
+  composer sends a custom one-to-one text (`POST /voice/dialer/inbox/send`,
+  manager-class): from the number they know, refused on DNC, counted in
+  `TEXT_DAILY_CAP`, stored as an OUTBOUND `sms_messages` row (provider telnyx,
+  `agent_id` = sender), delivery via the same `/sms-status` webhook.
 - Switched on per tenant from the Auto Dialer page (off by default). Celery
   beat `voice-dialer-tick` (3 s) is the safety net; webhooks, agent actions and
   the agent's `/voice/dialer/state` poll also tick.
@@ -650,6 +656,43 @@ closed a mini dock keeps Hang up reachable.
   the drawer calls `/sim-answer` after 2 s.
 - `.localpreview/verify-manual-dial.mjs` checks the drawer UI per role (never
   presses Call — with real keys that rings a real phone).
+
+## Text campaigns (Telnyx) — `app/voice_dialer/campaigns.py`, migration 066
+
+Super admin (`require_role("super_admin")`, UI `isOwner()`) uploads a CSV on the
+**Auto Dialer page → Text campaigns** card (`components/TextCampaigns.tsx`: New
+campaign drawer + per-campaign drawer with stats, message, recipients), writes
+ONE message (`{name}` = first name, "there" if missing) and presses Start. It is
+built from scratch and shares NOTHING with the SMS Manager's Sinch `campaigns`
+(own tables `text_campaigns` / `text_campaign_recipients`).
+
+- **Replies need no new code path:** they arrive at `/voice/telnyx/inbound-sms`
+  → `service.on_inbound_sms` (positive → dial list, negative → DNC) which calls
+  `campaigns.on_reply` to mark the recipient and give an "Unknown" lead the CSV
+  name + row (`lead.details`). The Auto Dialer inbox thread shows the campaign
+  text (`texts_for_phone`).
+- **Pacing = what keeps the numbers safe** (limits read from our 10DLC
+  registration on 2026-11-10: AT&T 240/min per campaign, T-Mobile 2,000/day for
+  the brand, tier LOW): one text per sending number per `SEND_GAP_SECONDS` (4 s,
+  Redis slot `text:num:<n>`), `TEXT_DAILY_CAP` (2,000) per Eastern day across all
+  campaigns, only inside the dialer's calling window in the client's zone (CSV
+  state; unknown = strict), DNC checked at upload AND before each send,
+  "Reply STOP to opt out." appended if the message lacks STOP.
+- Sender = `fleet_numbers()`; a client always gets the same number (their
+  lead's `dial_from`, else a stable hash of their phone).
+- **Auto-pause:** spam codes 40002/40003, unregistered 40010, or `FAIL_STREAK`
+  (10) failures in a row → PAUSED with `pause_reason`. 40300 (they texted STOP) →
+  DNC. A send with no carrier answer for 5 min is FAILED, never re-sent.
+- One text per person per campaign, no follow-ups (the SMS Manager's
+  first-template-only rule). The same number in a later campaign IS texted again.
+- Driver: Celery beat `text-campaign-tick` (5 s); locally the page's 5 s refresh
+  of `GET /voice/dialer/campaigns` ticks. Delivery reports: per-text
+  `webhook_url` → `/voice/telnyx/sms-status` (the inbound-sms route also accepts
+  them as a fallback).
+- Before live use, each sending number must be on the **IAG Dialer messaging
+  profile** in Telnyx and listed in `TELNYX_FROM_NUMBERS`.
+- Tests: `tests/unit/test_text_campaigns.py`; `.localpreview/verify-text-campaigns.mjs`
+  (simulator: upload → send → replies → pause/stop).
 
 ## Listen in / whisper — `app/voice_dialer/monitor.py`, migration 065
 

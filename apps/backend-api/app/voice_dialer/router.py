@@ -16,6 +16,8 @@ Two groups, both under /api/v1:
   (manual.py). Its own log, apart from the dialer's.
 * /voice/dialer/monitor*  managers listen in on / whisper into a live call
   (monitor.py).
+* /voice/dialer/campaigns*  text campaigns — CSV + one message, sent through
+  Telnyx in paced batches (campaigns.py). Super admin only.
 """
 from __future__ import annotations
 
@@ -24,7 +26,7 @@ import logging
 import time
 from urllib.parse import parse_qs
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Body, Depends, File, Form, HTTPException, Query, Request, UploadFile
 from starlette.concurrency import run_in_threadpool
 from fastapi.responses import RedirectResponse, Response
 from sqlalchemy.orm import Session
@@ -33,7 +35,7 @@ from app.core.database import get_db
 from app.core.deps import get_current_active_user, get_tenant_id, require_role
 from app.models.user import User
 from app.realtime.websocket import emit_to_agent, emit_to_tenant, emit_to_user
-from app.voice_dialer import inbox, manual, monitor, optouts, service, simulator, telnyx, webhooks
+from app.voice_dialer import campaigns, inbox, manual, monitor, optouts, service, simulator, telnyx, webhooks
 
 logger = logging.getLogger(__name__)
 
@@ -135,12 +137,21 @@ async def telnyx_event(request: Request, db: Session = Depends(get_db)):
 
 @router.api_route("/voice/telnyx/inbound-sms", methods=["GET", "POST"])
 async def telnyx_inbound_sms(request: Request, db: Session = Depends(get_db)):
-    msg = telnyx.inbound_message(await _telnyx_trusted(request))
+    data = await _telnyx_trusted(request)
+    msg = telnyx.inbound_message(data)
     if not msg.get("from"):
-        return {"ok": True, "ignored": True}  # delivery receipts and other message events
+        # A delivery report that came to the profile webhook instead of the
+        # text's own (campaign texts name /sms-status; this is the fallback).
+        return await _run(webhooks.sms_status, db, data)
     result, events = await _run(webhooks.inbound_sms, db, msg)
     await _flush(events)
     return result
+
+
+@router.api_route("/voice/telnyx/sms-status", methods=["GET", "POST"])
+async def telnyx_sms_status(request: Request, db: Session = Depends(get_db)):
+    """Delivery reports for campaign texts."""
+    return await _run(webhooks.sms_status, db, await _telnyx_trusted(request))
 
 
 @router.api_route("/voice/telnyx/recording", methods=["GET", "POST"])
@@ -434,24 +445,47 @@ def dialer_owner_remove(
 
 @router.get("/voice/dialer/inbox")
 def dialer_inbox(
+    q: str | None = Query(None),
+    before: str | None = Query(None),
+    limit: int = Query(60),
     db: Session = Depends(get_db),
     tenant_id: str = Depends(get_tenant_id),
     _user: User = Depends(_require_manager),
 ):
-    """Everyone who texted our numbers, latest activity first."""
-    return {"items": inbox.conversations(db, tenant_id)}
+    """Everyone we texted (campaigns, one-to-one), who texted us, or we called —
+    one row per phone, latest activity first, paged with ?before=<last_at>."""
+    return inbox.conversations(db, tenant_id, q, before, limit)
 
 
-@router.get("/voice/dialer/inbox/{lead_id}")
-def dialer_inbox_thread(
-    lead_id: str,
+@router.post("/voice/dialer/inbox/send")
+async def dialer_inbox_send(
+    phone: str = Body(..., embed=True),
+    text: str = Body(..., embed=True),
     db: Session = Depends(get_db),
     tenant_id: str = Depends(get_tenant_id),
-    _user: User = Depends(_require_manager),
+    user: User = Depends(_require_manager),
 ):
+    """One custom text to one person, from their inbox thread."""
     try:
-        t = inbox.thread(db, tenant_id, lead_id)
+        out = await _run(inbox.send_text, db, tenant_id, user, phone, text)
+    except inbox.InboxError as exc:
+        raise HTTPException(status_code=exc.status, detail=str(exc))
+    _audit(tenant_id, user, "inbox_text_sent", {"phone": phone, "from": out["from_number"]}, "inbox")
+    return out
+
+
+@router.get("/voice/dialer/inbox/{key}")
+def dialer_inbox_thread(
+    key: str,
+    db: Session = Depends(get_db),
+    tenant_id: str = Depends(get_tenant_id),
+    _user: User = Depends(_require_manager),
+):
+    """One conversation — `key` is the phone number (a lead id still works)."""
+    try:
+        t = inbox.thread(db, tenant_id, key)
     except Exception:
+        logger.exception("inbox thread %s", key)
         t = None
     if t is None:
         raise HTTPException(status_code=404, detail="conversation not found")
@@ -533,6 +567,121 @@ def _audio_response(request: Request, data: bytes, ctype: str, name: str) -> Res
 # ---- Manual dialing (Dial drawer) ----
 # Open to every signed-in role. The call log is the caller's own for agents;
 # manager-class sees everyone's and plays the recordings.
+
+# ---- Text campaigns (super admin) ----
+
+_require_owner = require_role("super_admin")
+
+
+def _campaign_call(fn, *args):
+    try:
+        return fn(*args)
+    except campaigns.CampaignError as exc:
+        raise HTTPException(status_code=exc.status, detail=str(exc))
+
+
+@router.get("/voice/dialer/campaigns")
+async def campaigns_overview(
+    db: Session = Depends(get_db),
+    tenant_id: str = Depends(get_tenant_id),
+    _user: User = Depends(_require_owner),
+):
+    """Every campaign with its numbers, plus today's sending limits. Also sends
+    the next batch — locally (no Celery) the page's refresh is what drives it."""
+    def go():
+        campaigns.tick(db, tenant_id)
+        return campaigns.overview(db, tenant_id)
+
+    return await _run(go)
+
+
+@router.post("/voice/dialer/campaigns")
+async def campaigns_create(
+    name: str = Form(""),
+    template: str = Form(...),
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    tenant_id: str = Depends(get_tenant_id),
+    user: User = Depends(_require_owner),
+):
+    """Upload the CSV: a DRAFT campaign (nothing is sent until Start)."""
+    raw = await file.read()
+    c = await _run(_campaign_call, campaigns.create, db, tenant_id, user, name, template, file.filename, raw)
+    _audit(tenant_id, user, "text_campaign_created", {"campaign_id": str(c.id), "name": c.name}, "text_campaign")
+    return await _run(lambda: campaigns.campaign_dict(c, campaigns._counts(db, [c.id])[c.id]))
+
+
+@router.get("/voice/dialer/campaigns/{campaign_id}/recipients")
+def campaigns_recipients(
+    campaign_id: str,
+    filter: str = Query("all"),
+    q: str | None = Query(None),
+    offset: int = Query(0),
+    limit: int = Query(50),
+    db: Session = Depends(get_db),
+    tenant_id: str = Depends(get_tenant_id),
+    _user: User = Depends(_require_owner),
+):
+    c = _campaign_call(campaigns.find, db, tenant_id, campaign_id)
+    return campaigns.recipients(db, c, filter, q, offset, limit)
+
+
+@router.put("/voice/dialer/campaigns/{campaign_id}")
+async def campaigns_update(
+    campaign_id: str,
+    name: str | None = Body(None, embed=True),
+    template: str | None = Body(None, embed=True),
+    db: Session = Depends(get_db),
+    tenant_id: str = Depends(get_tenant_id),
+    _user: User = Depends(_require_owner),
+):
+    def go():
+        c = _campaign_call(campaigns.find, db, tenant_id, campaign_id)
+        _campaign_call(campaigns.update, db, c, name, template)
+        return {"ok": True}
+
+    return await _run(go)
+
+
+@router.post("/voice/dialer/campaigns/{campaign_id}/{action}")
+async def campaigns_action(
+    campaign_id: str,
+    action: str,
+    db: Session = Depends(get_db),
+    tenant_id: str = Depends(get_tenant_id),
+    user: User = Depends(_require_owner),
+):
+    """start (also resume) | pause | stop."""
+    fn = {"start": campaigns.start, "pause": campaigns.pause, "stop": campaigns.stop}.get(action)
+    if fn is None:
+        raise HTTPException(status_code=404, detail="Unknown action")
+
+    def go():
+        c = _campaign_call(campaigns.find, db, tenant_id, campaign_id)
+        _campaign_call(fn, db, c)
+        if action == "start":
+            campaigns.tick(db, tenant_id)  # first texts go now, not on the next beat
+        return c.name
+
+    name = await _run(go)
+    _audit(tenant_id, user, f"text_campaign_{action}", {"campaign_id": campaign_id, "name": name}, "text_campaign")
+    return {"ok": True}
+
+
+@router.delete("/voice/dialer/campaigns/{campaign_id}")
+async def campaigns_delete(
+    campaign_id: str,
+    db: Session = Depends(get_db),
+    tenant_id: str = Depends(get_tenant_id),
+    _user: User = Depends(_require_owner),
+):
+    def go():
+        c = _campaign_call(campaigns.find, db, tenant_id, campaign_id)
+        _campaign_call(campaigns.delete, db, c)
+        return {"ok": True}
+
+    return await _run(go)
+
 
 # ---- Listen in / whisper (managers) ----
 

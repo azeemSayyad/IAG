@@ -144,6 +144,12 @@ celery_app.conf.update(
             "schedule": 3.0,
             "options": {"expires": 3},
         },
+        # Text campaigns (Auto Dialer page): next batch, ≤1 text per number.
+        "text-campaign-tick": {
+            "task": "workers.tasks.sms.text_campaign_tick",
+            "schedule": 5.0,
+            "options": {"expires": 5},
+        },
         "auto-assign-sms-queue": {
             "task": "workers.tasks.sms.auto_assign_queue",
             "schedule": 10.0,

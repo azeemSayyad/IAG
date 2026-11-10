@@ -1,0 +1,29 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body { width: 320px; margin: 0; font: 13px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; color: #1a1f2a; }
+    header { display: flex; align-items: center; gap: 8px; padding: 12px 14px; background: #0f2a4d; color: #fff; }
+    header b { font-size: 14px; } header span { opacity: .7; font-size: 11px; margin-left: auto; }
+    main { padding: 12px 14px; }
+    .idle { color: #5b6472; }
+    .job { font-weight: 700; font-size: 14px; }
+    .phase { color: #5b6472; margin: 2px 0 10px; }
+    button { cursor: pointer; border: 1px solid #dc2626; color: #dc2626; background: #fff; border-radius: 8px; padding: 6px 12px; font-weight: 700; }
+    button:hover { background: #fef2f2; }
+    details { margin-top: 12px; } summary { cursor: pointer; color: #5b6472; font-size: 12px; }
+    pre { max-height: 200px; overflow: auto; background: #f4f6fa; border-radius: 8px; padding: 8px; font-size: 11px; white-space: pre-wrap; }
+    p.help { color: #5b6472; font-size: 12px; margin: 10px 0 0; }
+  </style>
+</head>
+<body>
+  <header><b>IAG HealthSherpa</b><span id="ver"></span></header>
+  <main>
+    <div id="state" class="idle">Loading…</div>
+    <p class="help">Start a client from the portal's <b>HealthSherpa Auth</b> page. Stay logged in to HealthSherpa in this Chrome.</p>
+    <details><summary>Activity log</summary><pre id="log"></pre></details>
+  </main>
+  <script src="popup.js"></script>
+</body>
+</html>

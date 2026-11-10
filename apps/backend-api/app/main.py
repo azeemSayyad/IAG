@@ -45,6 +45,7 @@ from app.applicant_inbox.router import router as applicant_inbox_router
 from app.direct_messages.router import router as direct_messages_router
 from app.training.router import router as training_router
 from app.voice_dialer.router import router as voice_dialer_router
+from app.hs_auth.router import router as hs_auth_router
 
 
 def _cors_origins() -> list[str]:
@@ -134,6 +135,7 @@ app.include_router(applicant_inbox_router, prefix="/api/v1")
 app.include_router(direct_messages_router, prefix="/api/v1")
 app.include_router(training_router, prefix="/api/v1")
 app.include_router(voice_dialer_router, prefix="/api/v1")
+app.include_router(hs_auth_router, prefix="/api/v1")
 
 
 @app.get("/health")

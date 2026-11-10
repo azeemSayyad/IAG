@@ -476,6 +476,58 @@ def normalize(data: dict) -> dict:
     return out
 
 
+# ---- Texts (Messaging v2) -------------------------------------------------------------
+
+class SendError(TelnyxError):
+    """A text Telnyx refused. `code` is Telnyx's error code ("40010"…), if any."""
+
+    def __init__(self, message: str, code: str | None = None, status: int | None = None):
+        super().__init__(message)
+        self.code = code
+        self.status = status
+
+
+def send_sms(*, from_: str, to: str, text: str, webhook_url: str | None = None) -> str:
+    """Send one text. Returns Telnyx's message id; raises SendError.
+    Delivery reports go to `webhook_url` (message.sent / message.finalized)."""
+    if simulating():
+        return "sim-msg-" + uuid.uuid4().hex
+    body: dict = {"from": e164(from_), "to": e164(to), "text": text}
+    if webhook_url:
+        body.update({"webhook_url": webhook_url, "use_profile_webhooks": False})
+    try:
+        r = _http().post("/messages", json=body, headers=_auth())
+    except httpx.HTTPError as exc:
+        raise SendError(f"network: {exc}") from exc
+    data = r.json() if r.content else {}
+    if r.status_code >= 400:
+        err = ((data or {}).get("errors") or [{}])[0]
+        raise SendError(err.get("detail") or err.get("title") or f"HTTP {r.status_code}",
+                        code=str(err.get("code") or "") or None, status=r.status_code)
+    mid = ((data or {}).get("data") or {}).get("id")
+    if not mid:
+        raise SendError(f"no message id in {str(data)[:200]}")
+    return str(mid)
+
+
+def message_status(data: dict) -> dict:
+    """A delivery report -> {id, status, error_code, error}. status: sent |
+    delivered | failed (anything else = still on its way: {})."""
+    d = (data or {}).get("data") or {}
+    if d.get("event_type") not in ("message.sent", "message.finalized"):
+        return {}
+    p = d.get("payload") or {}
+    to = (p.get("to") or [{}])[0]
+    raw = str(to.get("status") or "").lower()
+    status = {"sent": "sent", "delivered": "delivered", "delivery_failed": "failed",
+              "sending_failed": "failed", "delivery_unconfirmed": "sent"}.get(raw)
+    if not status or not p.get("id"):
+        return {}
+    err = (p.get("errors") or [{}])[0]
+    return {"id": str(p["id"]), "status": status, "error_code": str(err.get("code") or "") or None,
+            "error": err.get("detail") or err.get("title")}
+
+
 def inbound_message(data: dict) -> dict:
     """Messaging v2 `message.received` -> {from, to, text, message_uuid}."""
     ev = data.get("data") if isinstance(data.get("data"), dict) else data

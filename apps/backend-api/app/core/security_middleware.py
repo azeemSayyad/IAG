@@ -41,6 +41,8 @@ XSS_PATTERNS = [
 ]
 
 # Path traversal patterns
+JWT_SHAPE = re.compile(r"^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$")
+
 PATH_TRAVERSAL_PATTERNS = [
     r"(\.\./)",
     r"(\.\.\\)",
@@ -119,6 +121,13 @@ class SecurityMiddleware(BaseHTTPMiddleware):
         # Validate query parameters
         if self.block_sql_injection:
             for key, value in request.query_params.items():
+                if key == "token" and JWT_SHAPE.match(value):
+                    # ?token= carries the login JWT for <audio>/<video>/download
+                    # links. Base64url can contain "--" (an SQL comment to the
+                    # patterns below), which rejected ~1 in 170 tokens — every
+                    # recording failed for that token's 30 minutes. Its signature
+                    # is verified by the route, so the pattern check adds nothing.
+                    continue
                 if self._contains_sql_injection(value):
                     return JSONResponse(
                         status_code=400,

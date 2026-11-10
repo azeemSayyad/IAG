@@ -73,6 +73,8 @@ const APPOINTMENTS_LINK: PortalLink = { href: "/appointments.html", label: "Appo
 //   Queue → agents + dev · Manager → manager-class + admin + dev · Monitoring → dev only.
 const SMS_LINKS: { to: string; label: string; icon: string; show: () => boolean }[] = [
   { to: "/queue", label: "Lead Manager", icon: "queue", show: canSeeQueue },
+  // HealthSherpa 2027 authorizations (Chrome extension): every signed-in role.
+  { to: "/healthsherpa", label: "HealthSherpa Auth", icon: "shield", show: () => !!getRole() },
   { to: "/manager", label: "SMS Manager", icon: "users", show: canSeeManager },
   { to: "/dialer", label: "Auto Dialer", icon: "phone", show: canSeeManager },
   { to: "/monitoring", label: "SMS Monitoring", icon: "activity", show: canSeeMonitoring },

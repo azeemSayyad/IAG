@@ -441,3 +441,26 @@ def voice_dialer_tick(self) -> Dict:
         return {"tenants": len(tenant_ids), "started": started}
     finally:
         db.close()
+
+
+@celery_app.task(
+    name="workers.tasks.sms.text_campaign_tick",
+    bind=True,
+)
+def text_campaign_tick(self) -> Dict:
+    """Text campaigns (app/voice_dialer/campaigns.py): send the next batch for
+    every tenant with a running campaign. Pacing, texting hours and the daily
+    cap live in campaigns.tick — this is only the heartbeat."""
+    from app.models.sms import TextCampaign
+    from app.voice_dialer import campaigns
+
+    db = next(get_db())
+    try:
+        tenant_ids = [
+            str(r[0]) for r in db.query(TextCampaign.tenant_id)
+            .filter(TextCampaign.status == "RUNNING").distinct().all()
+        ]
+        sent = sum(campaigns.tick(db, tid) for tid in tenant_ids)
+        return {"tenants": len(tenant_ids), "sent": sent}
+    finally:
+        db.close()
