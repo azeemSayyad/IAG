@@ -1600,12 +1600,41 @@ def on_agent_line_ended(db: Session, leg_uuid: str) -> list[dict]:
 
 
 def set_ready(db: Session, tenant_id, user_id: str, on: bool) -> list[dict]:
-    """The agent's "Ready for calls" switch. Off closes the line at once, so no
-    carrier minutes run while they work the regular pool."""
+    """The agent's "Taking calls" switch — phones only, no pool leads.
+
+    On: works from Offline too (it puts them online — no Join queue first),
+    and a pool lead only OFFERED to them goes back to the pool. A lead they
+    already accepted stays theirs; the line opens once it is done.
+    Off: closes the line at once (no carrier minutes) and they are back on the
+    regular pool, so the next pool lead is offered straight away."""
     agent = qs._get_or_create_agent(db, tenant_id, user_id)
     agent.voice_ready = bool(on)
+    events: list[dict] = []
+    if on:
+        if agent.status == "OFFLINE":
+            agent.status = "AVAILABLE"
+            agent.last_active_at = _now()
+            agent.consecutive_misses = 0
+        offered = (
+            db.query(SmsLead)
+            .filter(SmsLead.tenant_id == tenant_id, SmsLead.assigned_agent_id == user_id,
+                    SmsLead.status == "ASSIGNED")
+            .all()
+        )
+        for lead in offered:
+            lead.status = "QUEUED"
+            lead.assigned_agent_id = None
+            if str(agent.current_lead_id) == str(lead.id):
+                agent.current_lead_id = None
+        if offered:
+            events.append(_evt("agent", user_id, "sms:queue_updated", {"reason": "offer_returned_taking_calls"}))
+            db.flush()
+            events += qs._try_assign(db, tenant_id)  # someone else in the pool gets it
     db.commit()
-    events: list[dict] = [] if on else drop_line(db, tenant_id, user_id)
+    if not on:
+        events += drop_line(db, tenant_id, user_id)
+        events += qs._try_assign(db, tenant_id)  # back on the pool: offer them a lead now
+        db.commit()
     events.append(_evt("user", user_id, "voice:line", {"ready": bool(on)}))
     return events + tick(db, tenant_id)
 
@@ -2115,9 +2144,12 @@ def _sim_ignore_hours(tenant_id) -> bool | None:
 
 
 def dialer_reserves_agents(db: Session, tenant_id) -> bool:
-    """While the dialer has work, agents holding an open line are kept for it:
-    the regular offer popup skips them, so a live customer always finds the
-    agent the pacing counted on."""
+    """True while agents who switched on "Taking calls" belong to the phones
+    alone — the dialer is on, or a caller is on hold. The regular pool then
+    never offers them a lead (queue_service._try_assign): Stan's agents were
+    handed a pool lead the moment they logged in, and its popup sat on top of
+    the very switch they needed. With the dialer off, "Taking calls" means
+    nothing, so those agents work the pool as before instead of sitting idle."""
     held = (
         db.query(VoiceCallAttempt.id)
         .filter(VoiceCallAttempt.tenant_id == tenant_id, VoiceCallAttempt.status == "HOLDING")
@@ -2126,14 +2158,7 @@ def dialer_reserves_agents(db: Session, tenant_id) -> bool:
     if held is not None:
         return True  # a caller on hold gets the next agent on a line
     s = db.query(VoiceDialerSettings.enabled).filter(VoiceDialerSettings.tenant_id == tenant_id).first()
-    if not s or not s[0]:
-        return False
-    return (
-        db.query(SmsLead.id)
-        .filter(SmsLead.tenant_id == tenant_id, SmsLead.status.in_(("READY_TO_CALL", "DIALING")))
-        .first()
-        is not None
-    )
+    return bool(s and s[0])
 
 
 def requeue_voicemail(db: Session, lead: SmsLead) -> bool:

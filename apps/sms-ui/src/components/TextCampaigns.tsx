@@ -64,7 +64,7 @@ function errText(e: unknown): string {
 /** What the client will actually get (mirrors campaigns.render on the server). */
 function render(template: string, name: string, stopLine: string): string {
   const first = (name.trim().split(" ")[0] || "there").replace(/^\w/, (c) => c.toUpperCase());
-  const text = template.replace(/\{\s*(first_?name|name)\s*\}/gi, first).trim();
+  const text = template.replace(/[{[<]+\s*(first[\s_]?name|name)\s*[}\]>]+/gi, first).trim();
   return /STOP/i.test(text) ? text : `${text} ${stopLine}`;
 }
 
@@ -256,7 +256,7 @@ function MessageBox({ value, onChange, ov, disabled }: {
         <p className="whitespace-pre-wrap text-[13px] leading-relaxed text-ink">{preview}</p>
       </div>
       <ul className="space-y-0.5 text-[11px] text-ink-faint">
-        <li>{"{name}"} becomes each person's first name ("there" if the file has none).</li>
+        <li>{"{name}"} or [Name] becomes each person's first name ("there" if the file has none).</li>
         <li>"{ov.stop_line}" is added when the message doesn't mention STOP.</li>
         {value && !value.toLowerCase().includes(biz.toLowerCase()) && (
           <li className="font-semibold text-pending">Start with "{biz}:" — carriers expect the business name, and texts without it get filtered.</li>

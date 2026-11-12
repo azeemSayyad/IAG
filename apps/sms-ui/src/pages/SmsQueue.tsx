@@ -403,9 +403,9 @@ export default function SmsQueue() {
   const st = status?.status ?? "OFFLINE";
   const admin = isAdmin(); // admins never join the queue or take leads
 
-  // "Ready for calls" — the auto dialer's switch, separate from Join queue.
-  // Off: regular pool only, no headset line (no carrier minutes). On: live
-  // YES-reply calls are put straight through to this agent.
+  // "Taking calls" — the auto dialer's switch. On = phones only: live callers
+  // are put straight through and NO pool leads are offered (it also works from
+  // Offline — no Join queue first). Off = the regular pool, no headset line.
   const [dialer, setDialer] = useState<{ enabled: boolean; available: boolean; agent: { ready: boolean } } | null>(null);
   const [readyBusy, setReadyBusy] = useState(false);
   useEffect(() => {
@@ -434,6 +434,7 @@ export default function SmsQueue() {
       );
       setDialer(d);
       window.dispatchEvent(new Event("voice:ready"));
+      await refresh(); // switching on from Offline puts them online; a returned offer disappears
     } catch {
       /* transient */
     } finally {
@@ -447,7 +448,9 @@ export default function SmsQueue() {
       aria-checked={callsReady}
       onClick={toggleReady}
       disabled={readyBusy}
-      title={callsReady ? "You are taking live YES-reply calls. Click to stop." : "You are not taking calls. Click to start taking live YES-reply calls."}
+      title={callsReady
+        ? "Taking live calls only — no pool leads. Click to stop and go back to pool leads."
+        : "Click to take live calls only. You won't be offered pool leads while this is on."}
       className={`flex h-9 items-center gap-2.5 rounded-lg border pl-3 pr-2 text-sm font-semibold shadow-sm transition-all hover:-translate-y-px hover:shadow-md disabled:translate-y-0 disabled:opacity-50 ${
         callsReady
           ? "ready-on border-transparent text-white"
@@ -488,7 +491,7 @@ export default function SmsQueue() {
             <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-accent opacity-75" />
             <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-accent" />
           </span>
-          Waiting for the next lead…
+          {callsReady && dialer?.enabled ? "Waiting for a live call…" : "Waiting for the next lead…"}
         </div>
       )}
       {/* Control bar — turns amber while on break (matches the reference design) */}
@@ -535,6 +538,7 @@ export default function SmsQueue() {
               <span className="h-2 w-2 rounded-full bg-ink-faint" /> Offline
             </span>
             <div className="ml-auto flex items-center gap-2">
+              {readySwitch}
               <DialButton />
               {muteBtn}
               <button

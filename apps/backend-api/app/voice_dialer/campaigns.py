@@ -77,11 +77,12 @@ def _now() -> datetime:
 
 # ---- The message ------------------------------------------------------------------
 
-_NAME = re.compile(r"\{\s*(first_?name|name)\s*\}", re.IGNORECASE)
+# {name}, [Name], {{first name}}, <First_Name> … — admins type it every way.
+_NAME = re.compile(r"[\{\[<]+\s*(first[\s_]?name|name)\s*[\}\]>]+", re.IGNORECASE)
 
 
 def render(template: str, first_name: str | None) -> str:
-    """{name} -> their first name ("there" when the file has none), and the
+    """{name} / [Name] -> their first name ("there" when the file has none), and the
     opt-out line if the message doesn't mention STOP."""
     name = (first_name or "").strip().split(" ")[0].title() or "there"
     text = _NAME.sub(name, template or "").strip()

@@ -744,7 +744,7 @@ function InboxPanel() {
   const [sending, setSending] = useState(false);
   const [sendErr, setSendErr] = useState("");
   const listRef = useRef<Convo[]>([]);
-  const bottomRef = useRef<HTMLDivElement | null>(null);
+  const threadRef = useRef<HTMLDivElement | null>(null);
   const qs = q.trim() ? `&q=${encodeURIComponent(q.trim())}` : "";
 
   // Refresh keeps every row already loaded (scrolling isn't thrown away).
@@ -804,9 +804,11 @@ function InboxPanel() {
     const id = setInterval(loadThread, 6000);
     return () => clearInterval(id);
   }, [loadThread]);
-  // Newest message in view when a thread opens or grows.
+  // Newest message in view when a thread opens or grows — scroll only the
+  // thread box (scrollIntoView also moved the whole page on every click).
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ block: "end" });
+    const el = threadRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
   }, [thread?.phone_number, thread?.items.length]);
 
   const send = async () => {
@@ -876,7 +878,7 @@ function InboxPanel() {
                   {thread.stage}{thread.disposition ? ` · ${thread.disposition.replace(/_/g, " ").toLowerCase()}` : ""}
                 </span>
               </div>
-              <div className="min-h-0 flex-1 space-y-2.5 overflow-y-auto px-4 py-3">
+              <div ref={threadRef} className="min-h-0 flex-1 space-y-2.5 overflow-y-auto px-4 py-3">
                 {thread.items.map((it, i) =>
                   it.kind === "text" ? (
                     <div key={i} className={`flex ${it.direction === "OUTBOUND" ? "justify-end" : "justify-start"}`}>
@@ -903,7 +905,6 @@ function InboxPanel() {
                     </div>
                   ),
                 )}
-                <div ref={bottomRef} />
               </div>
               {/* composer */}
               <div className="border-t border-hairline-soft p-2.5">

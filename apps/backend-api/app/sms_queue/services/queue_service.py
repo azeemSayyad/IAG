@@ -290,9 +290,9 @@ def _try_assign(db: Session, tenant_id: str, exclude_user_id: str | None = None)
 
     reserved = dialer_reserves_agents(db, tenant_id)
     for agent in _available_agents(db, tenant_id, exclude_user_id):
-        # An agent on an open headset line is held for the YES-reply dialer
-        # while it has people to call, so a live customer always finds them.
-        if reserved and agent.voice_leg_uuid:
+        # "Taking calls" = phones only: while the dialer is on (or a caller is
+        # on hold) these agents are never offered a pool lead.
+        if reserved and agent.voice_ready:
             continue
         lead = _next_queued_lead(
             db, tenant_id, exclude_lead_ids=_passed_lead_ids(db, tenant_id, agent.user_id)
