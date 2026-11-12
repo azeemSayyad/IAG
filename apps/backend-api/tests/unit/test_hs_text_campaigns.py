@@ -407,3 +407,17 @@ def test_fixing_an_invalid_row_queues_its_text(env):
     service.update(env.db, env.tenant, env.stan, str(ed.id), {"dob": "12/12/1980"})
     ed = _row(env, "Ed")
     assert (ed.convo, ed.status, ed.dob) == ("QUEUED", "TEXTING", date(1980, 12, 12))
+
+
+def test_extension_diagnostic_is_kept_in_history(env):
+    """A page that didn't look as expected: the extension's value-free field
+    description is stored (longer than a normal step) so it can be fixed."""
+    _campaign(env)
+    _blast_all(env)
+    _reply(env, "+13055550101", "yes")
+    _reply(env, "+13055550101", "Aetna")
+    job = hc.next_job(env.db, env.tenant, env.stan)["job"]
+    diag = "url /person_search\n" + "input type=text name=person[first_name] filled=no\n" * 40
+    service.report(env.db, job["id"], job["token"], {"step": "fill", "detail": "Couldn't fill the first name", "diag": diag})
+    ev = [e for e in _row(env, "Ana").events if e["step"] == "diagnostic"]
+    assert len(ev) == 1 and len(ev[0]["detail"]) > 500 and "person[first_name]" in ev[0]["detail"]

@@ -550,7 +550,7 @@ function ClientDrawer({ c, stages, onClose, onEdit, onRequeue, onStop }: {
                 <span className="font-bold text-ink">{ev.status || ev.step}</span>
                 <span className="tabular-nums text-ink-faint">{new Date(ev.at).toLocaleString()}</span>
               </div>
-              {ev.detail && <div className="mt-0.5 text-ink-muted">{ev.detail}</div>}
+              {ev.detail && <div className={`mt-0.5 text-ink-muted ${ev.step === "diagnostic" ? "whitespace-pre-wrap break-words font-mono text-[0.62rem]" : ""}`}>{ev.detail}</div>}
             </div>
           ))}
         </div>

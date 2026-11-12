@@ -108,9 +108,10 @@ def _hash(token: str) -> str:
     return hashlib.sha256(token.encode()).hexdigest()
 
 
-def _event(row: HsAuthRequest, step: Optional[str], status: Optional[str], detail: Optional[str]) -> None:
+def _event(row: HsAuthRequest, step: Optional[str], status: Optional[str], detail: Optional[str],
+           limit: int = 500) -> None:
     ev = list(row.events or [])
-    ev.append({"at": _now().isoformat(), "step": step, "status": status, "detail": (detail or "")[:500]})
+    ev.append({"at": _now().isoformat(), "step": step, "status": status, "detail": (detail or "")[:limit]})
     row.events = ev[-MAX_EVENTS:]
 
 
@@ -536,6 +537,10 @@ def report(db: Session, request_id: str, token: str, data: dict) -> dict:
     row.last_report_at = now
     if data.get("hs_app_id"):
         row.hs_app_id = str(data["hs_app_id"])[:40]
+    if data.get("diag"):
+        # The extension's value-free description of HealthSherpa's form fields,
+        # sent when a page didn't look as expected — shown in History.
+        _event(row, "diagnostic", None, "Page structure (for support): " + str(data["diag"]), limit=4000)
     if data.get("link_sent"):
         row.link_sends = (row.link_sends or 0) + 1
         row.link_sent_at = now  # each send gives the client a fresh 15 minutes

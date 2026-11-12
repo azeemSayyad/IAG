@@ -115,7 +115,10 @@ export default function HealthSherpa() {
   const [agents, setAgents] = useState<Agent[]>([]);
   const [, tick] = useState(0);
   const [tab, setTab] = useState<"clients" | "campaigns">(() => {
-    try { return localStorage.getItem("hsTab") === "campaigns" ? "campaigns" : "clients"; } catch { return "clients"; }
+    // Text campaigns is the main flow (texts first, starts from a YES); the
+    // manual list is opened on purpose. ("hsTab2": older browsers remembered
+    // the manual tab under "hsTab".)
+    try { return localStorage.getItem("hsTab2") === "clients" ? "clients" : "campaigns"; } catch { return "campaigns"; }
   });
   const [hsOverview, setHsOverview] = useState<HsOverview | null>(null);
 
@@ -163,7 +166,7 @@ export default function HealthSherpa() {
   }, [loadOverview, tab, auto.active]);
   const pickTab = (t: "clients" | "campaigns") => {
     setTab(t);
-    try { localStorage.setItem("hsTab", t); } catch { /* private window */ }
+    try { localStorage.setItem("hsTab2", t); } catch { /* private window */ }
   };
   const showCampaigns = !!hsOverview && tab === "campaigns";
 
@@ -266,7 +269,7 @@ export default function HealthSherpa() {
 
       {hsOverview && (
         <div className="flex gap-1 border-b border-hairline" role="tablist">
-          {([["clients", "Clients (Start by hand)"], ["campaigns", "Text campaigns"]] as const).map(([k, label]) => (
+          {([["campaigns", "Text campaigns"], ["clients", "Manual start (no texting)"]] as const).map(([k, label]) => (
             <button key={k} role="tab" aria-selected={tab === k} onClick={() => pickTab(k)}
                     className={`-mb-px border-b-2 px-3 py-2 text-xs font-bold ${tab === k ? "border-accent text-accent" : "border-transparent text-ink-muted hover:text-ink"}`}>
               {label}
@@ -295,6 +298,13 @@ export default function HealthSherpa() {
       )}
 
       {!showCampaigns && <>
+      {hsOverview && (
+        <div className="rounded-lg border border-pending/30 bg-pending/10 px-3 py-2 text-xs text-ink-soft">
+          <b className="text-pending">This list never texts anyone.</b> You press Start for each client yourself.
+          To text clients and start from their YES reply, use{" "}
+          <button className="font-bold text-accent underline" onClick={() => pickTab("campaigns")}>Text campaigns</button>.
+        </div>
+      )}
       <UploadCard isManager={!!data?.is_manager} agents={agents}
                   onDone={(msg) => { setNote(msg); setErr(null); load(); }} onError={setErr} />
 
@@ -475,7 +485,7 @@ export default function HealthSherpa() {
                   </span>
                   <span className="tabular-nums text-ink-faint">{new Date(ev.at).toLocaleString()}</span>
                 </div>
-                {ev.detail && <div className="mt-0.5 text-ink-muted">{ev.detail}</div>}
+                {ev.detail && <div className={`mt-0.5 text-ink-muted ${ev.step === "diagnostic" ? "whitespace-pre-wrap break-words font-mono text-[0.62rem]" : ""}`}>{ev.detail}</div>}
               </div>
             ))}
           </div>

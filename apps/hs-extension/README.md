@@ -39,6 +39,18 @@ Auto jobs don't pull the Chrome window to the front. The popup shows
 "Auto mode: ON" and has **Turn off**. Keep the portal tab open, the computer
 awake, and HealthSherpa logged in. Backend: `app/hs_auth/campaigns.py`.
 
+## What the real site taught us (v1.1.1)
+
+- `healthsherpa.com/` lands a logged-in agent on the public consumer page, so jobs
+  open `/person_search?use_case=fetch&_agent_id=<id>` directly. The agent id is
+  picked up from any HealthSherpa URL the extension sees (first job: it reads it
+  from the consumer page's `?_agent_id=` and goes on from there).
+- Fields are typed with `document.execCommand("insertText")` — real, trusted
+  typing — because a value set by script was thrown away by HealthSherpa's form.
+  All fields are re-checked right before Search.
+- If a page doesn't look as expected, the report carries a value-free
+  description of the form (`diag`), visible in the client's History.
+
 ## When it stops on purpose (status → what the agent does)
 
 | Status | Why |

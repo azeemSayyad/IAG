@@ -104,12 +104,24 @@ does the agent's clicks inside a logged-in HealthSherpa tab.
 - Build the agent zip: `scripts/build-hs-extension.sh` (live host
   `portal.iagplans.com`, localhost stripped). Bump `version` in `manifest.json`
   AND `common.js` on every change.
-- Test: `.localpreview/fake-healthsherpa/server.py 8443` + `.localpreview/verify-hs-extension.mjs`.
-  The real HealthSherpa pages have not been seen yet — watch the first live run.
+- **Learned from the first live run (2026-11-13):** `healthsherpa.com/` sends a
+  logged-in agent to the PUBLIC consumer page (no "Search Marketplace" menu), so
+  the extension opens `/person_search?use_case=fetch&_agent_id=<id>` directly
+  (the agent id, e.g. `stanley-loseille-pklxww`, is learned from any HealthSherpa
+  URL and kept in `chrome.storage.local`). Setting an input's `.value` by script
+  looked filled but HealthSherpa's form threw the names away — fields are typed
+  with `document.execCommand("insertText")` (the browser's own, trusted typing)
+  and re-checked right before Search. Florida can be preselected. On any page
+  that doesn't look as expected the extension sends a value-free description of
+  the form (`diag`) that shows in the client's History ("diagnostic") — use it to
+  fix selectors.
+- Test: `.localpreview/fake-healthsherpa/server.py 8443` + `.localpreview/verify-hs-extension.mjs`
+  (`ONLY=Naji` runs one client). The fake copies the behaviour above.
 
 ## HealthSherpa text campaigns — `app/hs_auth/campaigns.py` (migration 068)
 
-The **Text campaigns** tab on the HealthSherpa page (`components/hs/HsCampaigns.tsx`).
+The **Text campaigns** tab on the HealthSherpa page (`components/hs/HsCampaigns.tsx`) —
+the page's DEFAULT tab; the other one is "Manual start (no texting)".
 **Completely separate from the Auto Dialer's text campaigns** — own tables
 (`hs_text_campaigns`, `hs_campaign_texts`, conversation columns on
 `hs_auth_requests`), and its replies are **never dialed, pooled or made into a lead.**

@@ -9,6 +9,14 @@
 importScripts("common.js");
 
 var HS_HOME = "https://www.healthsherpa.com/";
+// The site root sends a logged-in AGENT to the public consumer page (no
+// "Search Marketplace" menu) — so go straight to the search page. The agent's
+// HealthSherpa id (`_agent_id`, e.g. stanley-loseille-pklxww) is learned from
+// any HealthSherpa page hs.js sees and kept in chrome.storage.local.
+var AGENT_KEY = "iagHsAgentId";
+function hsStartUrl(agentId) {
+  return HS_HOME + "person_search?use_case=fetch" + (agentId ? "&_agent_id=" + encodeURIComponent(agentId) : "");
+}
 var STATE_KEY = "iagJob";
 var LOG_KEY = "iagLog";
 var AUTO_KEY = "iagAuto";   // {on, at} — set by the portal page's Auto mode switch
@@ -86,7 +94,7 @@ function openHsTab(state) {
     var go = function (tabId, windowId) {
       state.tabId = tabId;
       setState(state).then(function () {
-        chrome.tabs.update(tabId, { url: HS_HOME, active: true }, function () {
+        chrome.tabs.update(tabId, { url: hsStartUrl(state.agentId), active: true }, function () {
           // Auto mode runs unattended: don't pull the window in front of whatever
           // the person is doing. (The tab stays the active one in its window, so
           // Chrome doesn't throttle its timers.)
@@ -128,10 +136,12 @@ chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
         sendResponse({ ok: false, reason: "The extension is already running " + cur.job.first_name + " " + cur.job.last_name + ". Stop it first." });
         return;
       }
-      chrome.storage.session.get("iagLastTab").then(function (r) {
+      Promise.all([chrome.storage.session.get("iagLastTab"), chrome.storage.local.get(AGENT_KEY)]).then(function (got) {
+        var r = got[0];
         var state = {
           job: job, apiBase: apiBase, phase: "nav", tabId: r.iagLastTab || null,
-          startedAt: Date.now(), linkSends: 0, searchTries: 0, stopped: false,
+          startedAt: Date.now(), linkSends: 0, searchTries: 0, navTries: 0, stopped: false,
+          agentId: got[1][AGENT_KEY] || null,
         };
         return openHsTab(state).then(function (tabId) {
           lastTabId = tabId;
@@ -208,6 +218,15 @@ chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
 
   /* ---- from hs.js (the HealthSherpa tab) ---- */
 
+  if (kind === "hs-agent-id") {
+    var aid = String(msg.id || "");
+    if (/^[a-z0-9-]{3,80}$/i.test(aid) && sender.tab) {
+      var o2 = {}; o2[AGENT_KEY] = aid;
+      chrome.storage.local.set(o2);
+    }
+    return;
+  }
+
   if (kind === "get-job") {
     getState().then(function (s) {
       var tabId = sender.tab && sender.tab.id;
@@ -233,7 +252,7 @@ chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
       var body = msg.body || {};
       if (body.detail || body.step) log((body.status ? "[" + body.status + "] " : "") + (body.step || "") + " — " + (body.detail || ""));
       broadcast({ id: s.job.id, step: body.step, status: body.status, detail: body.detail, waiting_login: !!body.waiting_login });
-      var serverBody = { step: body.step, status: body.status, detail: body.detail, hs_app_id: body.hs_app_id, link_sent: body.link_sent };
+      var serverBody = { step: body.step, status: body.status, detail: body.detail, hs_app_id: body.hs_app_id, link_sent: body.link_sent, diag: body.diag };
       report(s, serverBody).then(function (res) {
         var stop = !!(res && res.stop);
         if (body.status && FINAL.indexOf(body.status) !== -1) {

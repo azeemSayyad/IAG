@@ -80,29 +80,68 @@
   }
   function pageHas(re, root) { return re.test(text(root || document.body)); }
 
-  /* An <input>/<select> by its visible label. */
-  function fieldByLabel(re) {
-    var tags = "input:not([type=hidden]):not([type=checkbox]):not([type=radio]), select, textarea, [role=combobox]";
-    var labels = document.querySelectorAll("label");
+  var FIELD_TAGS = "input:not([type=hidden]):not([type=checkbox]):not([type=radio]):not([type=submit]):not([type=button]), select, textarea, [role=combobox]";
+
+  /* An <input>/<select> by its visible label (a <label>, or any short text
+     element — real pages don't always use <label for>), then by its own
+     name / id / autocomplete. Within a container holding several fields, the
+     field that FOLLOWS the label wins (not just the container's first one). */
+  function fieldByLabel(re, attrRe) {
+    var labels = Array.prototype.slice.call(document.querySelectorAll("label, legend, span, div, p, strong"))
+      .filter(function (el) {
+        if (el.tagName !== "LABEL" && el.childElementCount > 2) return false;
+        var t = norm(el.textContent);
+        return t.length < 60 && re.test(t) && visible(el);
+      });
     for (var i = 0; i < labels.length; i++) {
       var lab = labels[i];
-      if (!re.test(norm(lab.textContent))) continue;
-      if (lab.htmlFor) { var byFor = document.getElementById(lab.htmlFor); if (byFor) return byFor; }
-      var inner = lab.querySelector(tags);
-      if (inner) return inner;
+      if (lab.htmlFor) { var byFor = document.getElementById(lab.htmlFor); if (byFor && visible(byFor)) return byFor; }
+      if (lab.id) {
+        var byAria = document.querySelector("[aria-labelledby~='" + lab.id.replace(/'/g, "") + "']");
+        if (byAria && byAria.matches(FIELD_TAGS)) return byAria;
+      }
+      var inner = lab.querySelector(FIELD_TAGS);
+      if (inner && visible(inner)) return inner;
       var p = lab.parentElement;
-      for (var k = 0; k < 3 && p; k++, p = p.parentElement) {
-        var cand = p.querySelector(tags);
-        if (cand) return cand;
+      for (var k = 0; k < 4 && p; k++, p = p.parentElement) {
+        var cands = Array.prototype.slice.call(p.querySelectorAll(FIELD_TAGS)).filter(visible);
+        if (!cands.length) continue;
+        var after = cands.filter(function (c) { return lab.compareDocumentPosition(c) & Node.DOCUMENT_POSITION_FOLLOWING; });
+        if (cands.length === 1) return cands[0];
+        if (after.length) return after[0];
       }
     }
-    // aria-label / placeholder fallback
-    var all = document.querySelectorAll(tags);
+    var all = Array.prototype.slice.call(document.querySelectorAll(FIELD_TAGS)).filter(visible);
     for (var j = 0; j < all.length; j++) {
       var a = norm(all[j].getAttribute("aria-label") || all[j].getAttribute("placeholder"));
       if (a && re.test(a)) return all[j];
     }
+    if (attrRe) {
+      for (var m = 0; m < all.length; m++) {
+        var at = [all[m].name, all[m].id, all[m].getAttribute("autocomplete"), all[m].getAttribute("data-testid")].join(" ");
+        if (attrRe.test(at)) return all[m];
+      }
+    }
     return null;
+  }
+
+  /* A compact, value-free description of the page's form fields — sent with a
+     failure report so the real HealthSherpa markup can be fixed against (we
+     can't open HealthSherpa from outside the US). No client data in it. */
+  function formSnapshot() {
+    var out = ["url " + location.pathname];
+    var heads = Array.prototype.slice.call(document.querySelectorAll("h1,h2,label")).filter(visible).slice(0, 25);
+    out.push("labels: " + heads.map(function (h) { return h.tagName.toLowerCase() + (h.htmlFor ? "[for=" + h.htmlFor + "]" : "") + "“" + norm(h.textContent).slice(0, 40) + "”"; }).join(" | "));
+    Array.prototype.slice.call(document.querySelectorAll(FIELD_TAGS + ", input[type=checkbox], [role=checkbox]")).filter(visible).slice(0, 20).forEach(function (el) {
+      var bits = [el.tagName.toLowerCase()];
+      ["type", "id", "name", "autocomplete", "placeholder", "aria-label", "aria-labelledby", "role", "class"].forEach(function (k) {
+        var v = el.getAttribute(k); if (v) bits.push(k + "=" + String(v).slice(0, 40));
+      });
+      if (el.tagName === "SELECT") bits.push("options=" + el.options.length + " [" + Array.prototype.slice.call(el.options, 0, 4).map(function (o) { return norm(o.textContent) + "/" + o.value; }).join(",") + "…]");
+      bits.push("filled=" + (el.value ? "yes" : "no"));
+      out.push(bits.join(" "));
+    });
+    return out.join("\n").slice(0, 3800);
   }
 
   /* A checkbox by the text next to it (native or role=checkbox). */
@@ -127,13 +166,32 @@
   }
   function fire(el, type) { el.dispatchEvent(new Event(type, { bubbles: true })); }
 
+  function viaTyping(el, value) {
+    // The browser's own editing command: fires real (trusted) beforeinput /
+    // input events, so React / Vue / masked fields all register it — setting
+    // .value directly can look filled but be thrown away on the next render.
+    try {
+      el.focus();
+      if (typeof el.select === "function") el.select();
+      if (el.value) document.execCommand("delete", false, null);
+      return document.execCommand("insertText", false, value);
+    } catch (e) { return false; }
+  }
+
   async function typeInto(el, value, sameAs) {
     await highlight(el);
-    el.focus();
-    setNative(el, ""); fire(el, "input");
-    setNative(el, value); fire(el, "input"); fire(el, "change");
-    await sleep(200);
-    var ok = sameAs ? sameAs(el.value) : norm(el.value).toLowerCase() === norm(value).toLowerCase();
+    var same = function () { return sameAs ? sameAs(el.value) : norm(el.value).toLowerCase() === norm(value).toLowerCase(); };
+    if (same()) return true;  // already right (e.g. a retry)
+    viaTyping(el, value);
+    await sleep(250);
+    var ok = same();
+    if (!ok) {
+      el.focus();
+      setNative(el, ""); fire(el, "input");
+      setNative(el, value); fire(el, "input"); fire(el, "change");
+      await sleep(200);
+      ok = same();
+    }
     if (!ok) {
       // A masked field (e.g. MM/DD/YYYY) — type it key by key instead.
       setNative(el, ""); fire(el, "input");
@@ -153,15 +211,25 @@
     return ok;
   }
 
+  function stateMatches(o, code, name) {
+    var t = norm(o.textContent).toLowerCase(), v = String(o.value || "").toUpperCase();
+    return v === code || t === name.toLowerCase() || t.toUpperCase() === code || t.indexOf(name.toLowerCase() + " ") === 0;
+  }
+
   async function chooseState(el) {
     var code = job.state, name = job.state_name;
+    if (el.tagName !== "SELECT") {
+      // The label may point at a wrapper — use a real <select> inside it if there is one.
+      var box = el.closest("div") || el.parentElement;
+      var inner = box && box.querySelector("select");
+      if (inner) el = inner;
+    }
     if (el.tagName === "SELECT") {
       var opts = Array.prototype.slice.call(el.options);
-      var opt = opts.find(function (o) {
-        return o.value.toUpperCase() === code || norm(o.textContent).toLowerCase() === name.toLowerCase()
-          || norm(o.textContent).toUpperCase() === code;
-      });
-      if (!opt) return "missing";
+      var cur = opts[el.selectedIndex];
+      if (cur && stateMatches(cur, code, name)) return true;   // already chosen (HealthSherpa may preselect)
+      var opt = opts.find(function (o) { return stateMatches(o, code, name); });
+      if (!opt) return opts.length >= 10 ? "missing" : false;  // a short list = not the real state list
       await highlight(el);
       setNative(el, opt.value); fire(el, "input"); fire(el, "change");
       await sleep(200);
@@ -170,12 +238,13 @@
     // A custom dropdown: open it, type, pick the option.
     await click(el);
     if (el.tagName === "INPUT") { await typeInto(el, name, function () { return true; }); }
+    if (pageHas(new RegExp("^\\s*" + name + "\\s*$", "i"), el)) return true;  // already shows it
     var option = await waitFor(function () {
       var cands = document.querySelectorAll("[role=option], li, [class*=option]");
       for (var i = 0; i < cands.length; i++) if (visible(cands[i]) && norm(cands[i].textContent).toLowerCase() === name.toLowerCase()) return cands[i];
       return null;
     }, 4000);
-    if (!option) return "missing";
+    if (!option) return false;  // couldn't read a list — a person checks, never "bad data"
     await click(option);
     var box = el.closest("div") || el;
     return pageHas(new RegExp(name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i"), box.parentElement || box);
@@ -207,7 +276,7 @@
   async function step(name, detail, extra) {
     checkStop();
     overlay.update(detail);
-    if (name === lastStep && !(extra && (extra.link_sent || extra.hs_app_id))) return;
+    if (name === lastStep && !(extra && (extra.link_sent || extra.hs_app_id || extra.diag))) return;
     lastStep = name;
     var body = Object.assign({ step: name, detail: detail }, extra || {});
     var res = await send({ kind: "report", id: job.id, body: body });
@@ -273,6 +342,15 @@
     return /person_search/.test(location.pathname + location.search) || pageHas(/search for an application/i);
   }
   function searchMarketplaceLink() { return findButton(/^search marketplace$/i); }
+  function agentIdHere() {
+    var q = new URLSearchParams(location.search).get("_agent_id");
+    if (q) return q;
+    var m = location.pathname.match(/^\/agents\/([^\/]+)/);
+    return m ? decodeURIComponent(m[1]) : null;
+  }
+  function searchUrl(agentId) {
+    return location.origin + "/person_search?use_case=fetch" + (agentId ? "&_agent_id=" + encodeURIComponent(agentId) : "");
+  }
   function isProfilePage() {
     return !!findButton(/^household profile$/i) && !!findButton(/^details$/i);
   }
@@ -361,11 +439,24 @@
 
   async function openSearch() {
     await step("search_page", "Opening Search Marketplace");
-    var link = await waitFor(function () { return searchMarketplaceLink() || (isSearchPage() && "here"); }, 20000);
+    var link = await waitFor(function () {
+      return searchMarketplaceLink() || (isSearchPage() && "here")
+        || ((agentIdHere() || S.agentId) && findButton(/^(dashboard|log out)$/i) && "go");
+    }, 20000);
     if (link === "here") return;
+    if (link === "go" || (!link && (agentIdHere() || S.agentId))) {
+      // Logged in, but on a page without the menu (the public home page, which
+      // is where healthsherpa.com/ lands an agent): go to the search page directly.
+      var tries = (S.navTries || 0) + 1;
+      if (tries > 3) await final("FAILED", "HealthSherpa keeps sending the search page somewhere else (" + location.pathname + ").", { diag: formSnapshot() });
+      await save({ navTries: tries });
+      location.href = searchUrl(agentIdHere() || S.agentId);
+      await sleep(15000);  // the page load ends this script; the next one carries on
+      return;
+    }
     if (!link) {
       if (findButton(/^(sign in|log in)$/i)) { await waitForLogin(); return; }
-      await final("FAILED", "Couldn't find “Search Marketplace” on HealthSherpa. Are you logged in as an agent?");
+      await final("FAILED", "Couldn't find “Search Marketplace” on HealthSherpa. Are you logged in as an agent?", { diag: formSnapshot() });
     }
     await click(link);
     // A full page load ends this script; an in-page route change keeps us here.
@@ -378,24 +469,40 @@
     if (tries > 3) await final("FAILED", "The search didn't go through after 3 tries.");
     await save({ searchTries: tries });
 
-    var form = await waitFor(function () {
-      var f = fieldByLabel(/^first name/i), l = fieldByLabel(/^last name/i),
-        d = fieldByLabel(/^date of birth/i) || document.querySelector("input[placeholder*='MM/DD' i]"),
-        s = fieldByLabel(/^coverage state/i);
-      return f && l && d && s ? { f: f, l: l, d: d, s: s } : null;
-    }, 15000);
-    if (!form) await final("FAILED", "HealthSherpa's search form looks different — couldn't find the name / date of birth / state fields.");
+    var findForm = function () {
+      var f = fieldByLabel(/^first name\b/i, /first.?name|given/i), l = fieldByLabel(/^last name\b/i, /last.?name|family|surname/i),
+        d = fieldByLabel(/^date of birth\b/i, /birth|dob|bday/i) || document.querySelector("input[placeholder*='MM/DD' i]"),
+        s = fieldByLabel(/^coverage state\b/i, /state/i);
+      if (!(f && l && d && s) || f === l || f === d || l === d) return null;
+      return { f: f, l: l, d: d, s: s };
+    };
+    var form = await waitFor(findForm, 15000);
+    if (!form) await final("FAILED", "HealthSherpa's search form looks different — couldn't find the name / date of birth / state fields.", { diag: formSnapshot() });
 
-    var problems = [];
-    if (!(await typeInto(form.f, job.first_name))) problems.push("first name");
-    if (!(await typeInto(form.l, job.last_name))) problems.push("last name");
     var dobDigits = digits(job.dob);
-    if (!(await typeInto(form.d, job.dob, function (v) { return digits(v) === dobDigits; }))) problems.push("date of birth");
-    var st = await chooseState(form.s);
+    var dobSame = function (v) { return digits(v) === dobDigits; };
+    var nameSame = function (want) { return function (v) { return norm(v).toLowerCase() === norm(want).toLowerCase(); }; };
+    var problems = [];
+    var st = await chooseState(form.s);   // state first: changing it can re-render the form
     if (st === "missing") {
       await final("INVALID", "HealthSherpa's state list has no " + job.state_name + " (it may run its own state exchange).");
     }
     if (!st) problems.push("state");
+    for (var round = 0; round < 3; round++) {
+      form = findForm() || form;          // the fields may be new elements after a re-render
+      var bad = [];
+      if (!(await typeInto(form.f, job.first_name))) bad.push("first name");
+      if (!(await typeInto(form.l, job.last_name))) bad.push("last name");
+      if (!(await typeInto(form.d, job.dob, dobSame))) bad.push("date of birth");
+      await sleep(600);
+      form = findForm() || form;
+      var lost = [];                      // filled a moment ago, empty now = the page threw it away
+      if (!nameSame(job.first_name)(form.f.value)) lost.push("first name");
+      if (!nameSame(job.last_name)(form.l.value)) lost.push("last name");
+      if (!dobSame(form.d.value)) lost.push("date of birth");
+      if (!lost.length && !bad.length) break;
+      if (round === 2) { bad.concat(lost).forEach(function (x) { if (problems.indexOf(x) === -1) problems.push(x); }); }
+    }
 
     var consent = checkboxByText(/received consent from this consumer/i);
     if (!consent) await final("FAILED", "Couldn't find the consent checkbox on the search page.");
@@ -407,7 +514,8 @@
     await save({ phase: "searched" });
     if (problems.length) {
       // Don't guess: let the agent finish the form; we carry on from the results.
-      await step("fill", "Couldn't fill the " + problems.join(", ") + " — please fill it yourself, then click “Search the Marketplace”.");
+      await step("fill", "Couldn't fill the " + problems.join(", ") + " — please fill it yourself, then click “Search the Marketplace”.",
+        { diag: formSnapshot() });
       await handleResults(false, 5 * 60 * 1000);
       return;
     }
@@ -630,6 +738,10 @@
 
   // ------------------------------------------------------------ start
   async function main() {
+    // Remember the agent's HealthSherpa id from any page that shows it, so the
+    // next job opens the search page directly.
+    var aid = agentIdHere();
+    if (aid) send({ kind: "hs-agent-id", id: aid });
     // Ask a few times: right after Start the background may still be saving.
     var res = null;
     for (var i = 0; i < 6 && !(res && res.state); i++) {
