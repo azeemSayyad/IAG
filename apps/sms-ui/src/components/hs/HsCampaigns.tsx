@@ -29,7 +29,7 @@ export type HsCampaign = {
 export type HsOverview = {
   campaigns: HsCampaign[]; can_manage: boolean; is_hs_agent: boolean; my_queue: number;
   usage: { used: number; limit: number; left: number };
-  followup_text: string; reminder_draft: string; stages: Record<string, string>;
+  followup_text: string; blast_default: string; me: string; reminder_draft: string; stages: Record<string, string>;
   sent_today: number; daily_cap: number; simulating: boolean;
 };
 type Text = {
@@ -75,9 +75,11 @@ const inputCls = "rounded-lg border border-hairline bg-white px-2 py-1.5 text-xs
 
 const TEMPLATE_CSV = "First Name,Last Name,Date of Birth,State,Phone\nJane,Doe,01/31/1985,FL,(555) 123-4567\n";
 
-export default function HsCampaigns({ overview, reloadOverview, agents, onEdit, onError, onNote }: {
+export default function HsCampaigns({ overview, reloadOverview, agents, onEdit, onError, onNote, onRunning }: {
   overview: HsOverview; reloadOverview: () => void; agents: Agent[];
   onEdit: (c: Client) => void; onError: (m: string) => void; onNote: (m: string) => void;
+  /** A campaign was started from here — the page turns on auto mode if it's this user's. */
+  onRunning: (c: HsCampaign) => void;
 }) {
   const [campaignF, setCampaignF] = useState("");
   const [stage, setStage] = useState("ALL");
@@ -122,6 +124,7 @@ export default function HsCampaigns({ overview, reloadOverview, agents, onEdit, 
     try {
       if (action === "delete") await api(`/hs-auth/campaigns/${c.id}`, { method: "DELETE" });
       else await api(`/hs-auth/campaigns/${c.id}/${action}`, { method: "POST" });
+      if (action === "start" || action === "resume") onRunning(c);
     } catch (e) { onError(errText(e)); }
     finally { setBusy(null); reloadOverview(); load(); }
   };
@@ -273,7 +276,10 @@ export default function HsCampaigns({ overview, reloadOverview, agents, onEdit, 
       </section>
 
       {creating && <NewCampaignDrawer overview={overview} agents={agents} onClose={() => setCreating(false)}
-                                      onCreated={(c, msg) => { setCreating(false); onNote(msg); reloadOverview(); setCampaignF(c.id); }} />}
+                                      onCreated={(c, msg, started) => {
+                                        setCreating(false); onNote(msg); reloadOverview(); setCampaignF(c.id);
+                                        if (started) onRunning(c);
+                                      }} />}
       {settingsFor && <SettingsDrawer c={settingsFor} onClose={() => setSettingsFor(null)}
                                       onSaved={() => { setSettingsFor(null); reloadOverview(); }} />}
       {detail && <ClientDrawer c={detail} stages={stages} onClose={() => setDetail(null)}
@@ -327,7 +333,7 @@ function CampaignRow({ c, canManage, busy, onAction, onSettings, onShow }: {
         </div>
         {canManage && (
           <div className="flex flex-wrap gap-1">
-            {c.status === "DRAFT" && <button className={btn} disabled={busy} onClick={() => onAction("start")}>Start</button>}
+            {c.status === "DRAFT" && <button className={btn} disabled={busy} onClick={() => onAction("start")}>▶ Run campaign</button>}
             {c.status === "RUNNING" && <button className={btnGhost} disabled={busy} onClick={() => onAction("pause")}>Pause</button>}
             {c.status === "PAUSED" && <button className={btn} disabled={busy} onClick={() => onAction("resume")}>Resume</button>}
             {(c.status === "RUNNING" || c.status === "PAUSED") && (
@@ -353,12 +359,12 @@ function CampaignRow({ c, canManage, busy, onAction, onSettings, onShow }: {
 
 function NewCampaignDrawer({ overview, agents, onClose, onCreated }: {
   overview: HsOverview; agents: Agent[]; onClose: () => void;
-  onCreated: (c: HsCampaign, msg: string) => void;
+  onCreated: (c: HsCampaign, msg: string, started: boolean) => void;
 }) {
   const [file, setFile] = useState<File | null>(null);
   const [name, setName] = useState("");
   const [agent, setAgent] = useState("");
-  const [template, setTemplate] = useState("Hi {name}, this is Insurance Alliance Group. Your 2027 health plan renewal is coming up — want help keeping your coverage? Reply YES.");
+  const [template, setTemplate] = useState(overview.blast_default);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const preview = (() => {
@@ -366,7 +372,9 @@ function NewCampaignDrawer({ overview, agents, onClose, onCreated }: {
     return /stop/i.test(t) ? t : `${t} Reply STOP to opt out.`;
   })();
 
-  const save = async () => {
+  // run=true: ONE button — upload, start texting, and (on the HealthSherpa
+  // agent's own computer) switch auto mode on. run=false: keep it as a draft.
+  const save = async (run: boolean) => {
     if (!file) { setErr("Choose the client file first."); return; }
     setBusy(true); setErr(null);
     const fd = new FormData();
@@ -382,7 +390,17 @@ function NewCampaignDrawer({ overview, agents, onClose, onCreated }: {
         c.skipped_duplicate && `${c.skipped_duplicate} duplicate numbers`,
         c.skipped_dnc && `${c.skipped_dnc} on Do-Not-Call`,
       ].filter(Boolean);
-      onCreated(c, `Campaign “${c.name}” ready with ${c.counts.total ?? 0} clients${skipped.length ? ` · ${skipped.join(" · ")}` : ""}. Press Start to send.`);
+      const left = skipped.length ? ` · ${skipped.join(" · ")}` : "";
+      if (!run) {
+        onCreated(c, `Campaign “${c.name}” saved as a draft with ${c.counts.total ?? 0} clients${left}. Press Start to send.`, false);
+        return;
+      }
+      try {
+        const started = await api<HsCampaign>(`/hs-auth/campaigns/${c.id}/start`, { method: "POST" });
+        onCreated(started, `Campaign “${c.name}” is running — texting ${c.counts.total ?? 0} clients${left}.`, true);
+      } catch (e) {
+        onCreated(c, `Campaign “${c.name}” was uploaded but couldn't start: ${errText(e)} It's saved as a draft.`, false);
+      }
     } catch (e) { setErr(errText(e)); }
     finally { setBusy(false); }
   };
@@ -398,7 +416,10 @@ function NewCampaignDrawer({ overview, agents, onClose, onCreated }: {
             sub="Replies are never called — they go to HealthSherpa, not the Auto Dialer."
             footer={<>
               <button className={btnGhost} onClick={onClose}>Cancel</button>
-              <button className={btn} disabled={busy} onClick={save}>{busy ? "Uploading…" : "Create (starts as a draft)"}</button>
+              <button className={btnGhost} disabled={busy} onClick={() => save(false)}>Save as draft</button>
+              <button className={btn} disabled={busy} onClick={() => save(true)} data-testid="hs-run-campaign">
+                {busy ? "Starting…" : "▶ Run campaign"}
+              </button>
             </>}>
       {err && <div className="rounded-lg bg-danger/10 px-3 py-2 text-xs font-semibold text-danger">{err}</div>}
       <Field label="Client file" required

@@ -68,6 +68,11 @@ FOLLOWUP_TEXT = (
     "Insurance Alliance Group: You will get a text link to authorize help with your plan. "
     "What company are you renewing?Msg&data rates apply. Reply STOP to opt out"
 )
+# Stan's approved first text (2026-11-13) — the New campaign form starts with it.
+BLAST_DEFAULT = (
+    "Insurance Alliance Group: Hi {name}, this is Stan following up on your health plan for 2027. "
+    "Reply YES to renew. Reply STOP to opt out."
+)
 REMINDER_DRAFT = (
     "Insurance Alliance Group: Did you receive the HealthSherpa link? Tap it to authorize "
     "help with your plan. Reply STOP to opt out"
@@ -828,6 +833,8 @@ def overview(db: Session, tenant_id, user: User) -> dict:
         "my_queue": int(mine_waiting),
         "usage": service.usage(db, tenant_id, user.id),
         "followup_text": FOLLOWUP_TEXT,
+        "blast_default": BLAST_DEFAULT,
+        "me": str(user.id),
         "reminder_draft": REMINDER_DRAFT,
         "stages": {k: v[0] for k, v in _stage_conditions().items()},
         "sent_today": vc.sent_today(db, tenant_id),

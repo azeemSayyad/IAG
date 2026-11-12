@@ -294,7 +294,14 @@ export default function HealthSherpa() {
       {showCampaigns && (
         <HsCampaigns overview={hsOverview!} reloadOverview={loadOverview} agents={agents}
                      onEdit={(c) => setEditRow(c as unknown as Row)} onError={(m) => m && setErr(m)}
-                     onNote={(m) => { setNote(m); setErr(null); }} />
+                     onNote={(m) => { setNote(m); setErr(null); }}
+                     onRunning={(c) => {
+                       // One button: the campaign's HealthSherpa agent pressing Run on
+                       // their own computer also starts auto mode here.
+                       if (c.hs_agent_id === hsOverview!.me && ext) auto.toggle(true);
+                       else if (c.hs_agent_id === hsOverview!.me) setErr("Texting started. Install the Chrome extension on this computer to run HealthSherpa automatically.");
+                       else setNote(`Texting started. On ${c.hs_agent_name || "the HealthSherpa agent"}'s computer, turn on Auto mode on this page.`);
+                     }} />
       )}
 
       {!showCampaigns && <>
