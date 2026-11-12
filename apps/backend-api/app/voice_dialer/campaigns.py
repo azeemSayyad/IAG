@@ -24,6 +24,11 @@ brand, tier LOW):
     FAIL_STREAK texts failing in a row pause it too — a person looks first.
 One text per person per campaign, no follow-ups (as the SMS Manager's
 first-template-only rule). The same number in a later campaign IS texted again.
+
+The safety pieces above (senders / sender_for / claim_number / in_hours /
+dnc_digits / sent_today / daily_cap / failure_action) are SHARED with the
+HealthSherpa text campaigns (app/hs_auth/campaigns.py) — one sender, one daily
+cap for the whole brand. Change them here, for both.
 """
 from __future__ import annotations
 
@@ -165,7 +170,7 @@ def parse_csv(raw: bytes) -> tuple[list[dict], dict]:
     return out, {"rows": len(body), "invalid": invalid, "duplicate": dupes}
 
 
-def _dnc_digits(db: Session, tenant_id, phones: list[str]) -> set[str]:
+def dnc_digits(db: Session, tenant_id, phones: list[str]) -> set[str]:
     """Which of these numbers are on Do-Not-Call (digits-only keys, as the list stores them)."""
     digits = {"".join(c for c in p if c.isdigit()) for p in phones}
     out: set[str] = set()
@@ -176,8 +181,12 @@ def _dnc_digits(db: Session, tenant_id, phones: list[str]) -> set[str]:
     return out
 
 
-def _digits(phone: str) -> str:
+def digits(phone: str) -> str:
     return "".join(c for c in phone if c.isdigit())
+
+
+_dnc_digits = dnc_digits  # old private names, kept for callers
+_digits = digits
 
 
 # ---- Campaign lifecycle -------------------------------------------------------------
@@ -297,7 +306,10 @@ def day_start(now: datetime | None = None) -> datetime:
 
 def sent_today(db: Session, tenant_id) -> int:
     """Texts that left us today: campaign texts + one-to-one texts from the
-    inbox (the carrier's daily cap counts every text from the brand)."""
+    inbox + HealthSherpa campaign texts (the carrier's daily cap counts every
+    text from the brand)."""
+    from app.models.hs_auth import HsCampaignText
+
     start = day_start()
     campaign = db.query(func.count(TextCampaignRecipient.id)).filter(
         TextCampaignRecipient.tenant_id == tenant_id, TextCampaignRecipient.sent_at >= start,
@@ -306,7 +318,11 @@ def sent_today(db: Session, tenant_id) -> int:
         SmsMessage.tenant_id == tenant_id, SmsMessage.provider == telnyx.SLUG,
         SmsMessage.direction == "OUTBOUND", SmsMessage.created_at >= start,
     ).scalar() or 0
-    return int(campaign) + int(single)
+    hs = db.query(func.count(HsCampaignText.id)).filter(
+        HsCampaignText.tenant_id == tenant_id, HsCampaignText.direction == "OUT",
+        HsCampaignText.sent_at >= start,
+    ).scalar() or 0
+    return int(campaign) + int(single) + int(hs)
 
 
 def daily_cap() -> int:
@@ -341,7 +357,7 @@ def _unlock(tenant_id) -> None:
         pass
 
 
-def _claim_number(number: str) -> bool:
+def claim_number(number: str) -> bool:
     """One text per number per SEND_GAP_SECONDS, however many ticks run."""
     r = _redis()
     if r is None:
@@ -350,6 +366,9 @@ def _claim_number(number: str) -> bool:
         return bool(r.set(f"text:num:{number}", "1", nx=True, px=SEND_GAP_SECONDS * 1000))
     except Exception:
         return True
+
+
+_claim_number = claim_number
 
 
 def tick(db: Session, tenant_id) -> int:
@@ -392,14 +411,7 @@ def _tick(db: Session, tenant_id) -> int:
     if budget <= 0:
         return 0
 
-    from app.voice_dialer.service import get_settings
-
-    s = get_settings(db, tenant_id)
-    if telnyx.simulating():
-        from app.voice_dialer.service import _sim_ignore_hours
-
-        if _sim_ignore_hours(tenant_id):
-            s = None  # the simulator's "Ignore calling hours while testing"
+    s = hours_settings(db, tenant_id)
     candidates: list[TextCampaignRecipient] = []
     for c in running:  # oldest campaign first, file order within it
         if len(candidates) >= CANDIDATES:
@@ -464,12 +476,42 @@ def _tick(db: Session, tenant_id) -> int:
     return sent
 
 
-def _in_hours(s, now: datetime, state: str | None) -> bool:
+def in_hours(s, now: datetime, state: str | None) -> bool:
     """The dialer's own calling window, in the client's zone (Dialing rules).
     s=None: the simulator is ignoring hours."""
     if s is None:
         return True
     return rules.in_call_window(now, state, int(s.window_start_hour or 8), int(s.window_end_hour or 20))
+
+
+_in_hours = in_hours
+
+
+def hours_settings(db: Session, tenant_id):
+    """The dialer's settings row for in_hours(), or None while the simulator's
+    "Ignore calling hours while testing" is on."""
+    from app.voice_dialer.service import get_settings
+
+    s = get_settings(db, tenant_id)
+    if telnyx.simulating():
+        from app.voice_dialer.service import _sim_ignore_hours
+
+        if _sim_ignore_hours(tenant_id):
+            return None
+    return s
+
+
+def failure_action(code: str | None, from_number: str | None) -> tuple[str | None, str | None]:
+    """What a failed text means for the campaign: ("dnc", None) they texted
+    STOP earlier; ("pause", why) our numbers are at risk; (None, None) a plain
+    failure (the caller still watches for FAIL_STREAK)."""
+    if code in OPTED_OUT_CODES:
+        return "dnc", None
+    if code in SPAM_CODES:
+        return "pause", "Carriers flagged texts as spam — paused to protect our numbers. Check the message before resuming."
+    if code in UNREGISTERED_CODES:
+        return "pause", f"{from_number} is not approved for texting (10DLC) — paused."
+    return None, None
 
 
 def _failed(db: Session, r: TextCampaignRecipient, code: str | None, message: str) -> None:
@@ -478,7 +520,8 @@ def _failed(db: Session, r: TextCampaignRecipient, code: str | None, message: st
     r.status = "FAILED"
     r.error = f"{code}: {message}" if code else message
     c = db.query(TextCampaign).filter(TextCampaign.id == r.campaign_id).first()
-    if code in OPTED_OUT_CODES:
+    action, why = failure_action(code, r.from_number)
+    if action == "dnc":
         from app.sms_queue.services import queue_service as qs
 
         qs.add_to_dnc(db, str(r.tenant_id), r.phone_number, "OPTED_OUT")
@@ -486,10 +529,8 @@ def _failed(db: Session, r: TextCampaignRecipient, code: str | None, message: st
         return
     if c is None or c.status != "RUNNING":
         return
-    if code in SPAM_CODES:
-        c.status, c.pause_reason = "PAUSED", "Carriers flagged texts as spam — paused to protect our numbers. Check the message before resuming."
-    elif code in UNREGISTERED_CODES:
-        c.status, c.pause_reason = "PAUSED", f"{r.from_number} is not approved for texting (10DLC) — paused."
+    if action == "pause":
+        c.status, c.pause_reason = "PAUSED", why
     else:
         # The latest FAIL_STREAK texts, this one included (autoflush writes it first).
         last = [s for (s,) in db.query(TextCampaignRecipient.status).filter(
@@ -524,6 +565,11 @@ def on_status(db: Session, data: dict) -> dict:
         m = db.query(SmsMessage).filter(SmsMessage.provider_message_id == st["id"],
                                         SmsMessage.direction == "OUTBOUND").first()
         if m is None:
+            # A HealthSherpa campaign text? (its own tables, its own bookkeeping)
+            from app.hs_auth import campaigns as hs_campaigns
+
+            if hs_campaigns.on_status(db, st):
+                return {"ok": True, "hs": True}
             return {"ok": True, "unknown": True}
         if st["status"] == "delivered":
             m.status, m.delivered_at = "DELIVERED", m.delivered_at or _now()

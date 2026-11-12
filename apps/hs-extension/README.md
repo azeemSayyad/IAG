@@ -26,6 +26,19 @@ Backend: `apps/backend-api/app/hs_auth/` (migration 067).
 The CLIENT taps the link and authorizes on their own phone. The extension never
 does that part.
 
+## Auto mode (HealthSherpa text campaigns, v1.1.0+)
+
+On the page's **Text campaigns** tab, clients who text back and answer the
+follow-up are queued for the campaign's HealthSherpa agent. With **Auto mode**
+on (switch at the top of the page), the PAGE asks the server for the next one
+every few seconds and hands it over exactly like Start — still one job and one
+one-job token at a time; the server still enforces the daily limit and one
+client at a time. Nobody ticks the consent confirmation, so the job history
+records the client's own texts (their YES + answer, with times) as consent.
+Auto jobs don't pull the Chrome window to the front. The popup shows
+"Auto mode: ON" and has **Turn off**. Keep the portal tab open, the computer
+awake, and HealthSherpa logged in. Backend: `app/hs_auth/campaigns.py`.
+
 ## When it stops on purpose (status → what the agent does)
 
 | Status | Why |
@@ -63,5 +76,8 @@ from the screenshots; `.localpreview/verify-hs-extension.mjs` loads the
 extension into headless Chrome (over CDP — Chrome 137+ ignores
 `--load-extension`), maps `www.healthsherpa.com` to the fake and drives every
 scenario from the portal page against the real backend.
+`.localpreview/verify-hs-campaigns.mjs` drives the text-campaign + auto-mode flow
+(blast → reply → follow-up → answer → auto job → authorized, no answer, reminder,
+expiry, STOP at each stage) with the backend in Telnyx simulator mode.
 The real HealthSherpa markup has not been seen yet (it blocks non-US access),
 so the first live run with an agent should be watched.

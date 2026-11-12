@@ -13,7 +13,7 @@ the daily limit and keeps the status the extension reports.
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import Column, Date, DateTime, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import Boolean, Column, Date, DateTime, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 
 from app.core.database import Base
@@ -80,6 +80,22 @@ class HsAuthRequest(Base):
     # [{at, step, status, detail}] — newest last, capped in the service.
     events = Column(JSONB, nullable=True)
 
+    # ---- HealthSherpa TEXT CAMPAIGN rows only (NULL campaign_id = a plain
+    # uploaded row worked with Start). See app/hs_auth/campaigns.py.
+    campaign_id = Column(UUID(as_uuid=True), ForeignKey("hs_text_campaigns.id", ondelete="SET NULL"),
+                         nullable=True, index=True)
+    # The text conversation: QUEUED | INVALID | SKIPPED | BLAST_SENT | BLAST_FAILED |
+    # REPLIED | FOLLOWUP_SENT | NO_ANSWER | ANSWERED | DNC | CANCELLED
+    convo = Column(String(16), nullable=True)
+    convo_detail = Column(Text, nullable=True)
+    yes_text = Column(Text, nullable=True)            # their first (positive) reply
+    yes_at = Column(DateTime(timezone=True), nullable=True)
+    followup_sent_at = Column(DateTime(timezone=True), nullable=True)
+    renewing_company = Column(Text, nullable=True)    # their answer to the follow-up
+    answered_at = Column(DateTime(timezone=True), nullable=True)
+    reminder_sent_at = Column(DateTime(timezone=True), nullable=True)
+    last_text_at = Column(DateTime(timezone=True), nullable=True)   # newest text either way
+
     created_at = Column(DateTime(timezone=True), nullable=False, default=_now)
     updated_at = Column(DateTime(timezone=True), nullable=False, default=_now, onupdate=_now)
     deleted_at = Column(DateTime(timezone=True), nullable=True)
@@ -106,3 +122,77 @@ class HsAuthRun(Base):
     created_at = Column(DateTime(timezone=True), nullable=False, default=_now)
 
     __table_args__ = (Index("ix_hs_auth_runs_user_day", "tenant_id", "user_id", "created_at"),)
+
+
+class HsTextCampaign(Base):
+    """A HealthSherpa text campaign: one CSV of clients, one blast message.
+
+    Deliberately NOT the Auto Dialer's text_campaigns: replies to it never
+    reach the dialer — a positive reply gets the approved follow-up text and,
+    once answered, a HealthSherpa job for `hs_agent_id` (app/hs_auth/campaigns.py).
+    """
+
+    __tablename__ = "hs_text_campaigns"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True)
+    name = Column(String(120), nullable=False)
+    template = Column(Text, nullable=False)          # the blast; {name} = first name
+    # DRAFT -> RUNNING <-> PAUSED -> COMPLETED (blast done) | STOPPED
+    status = Column(String(12), nullable=False, default="DRAFT", server_default="DRAFT")
+    pause_reason = Column(Text, nullable=True)
+    file_name = Column(String(255), nullable=True)
+    # The agent whose HealthSherpa account authorizes these clients (Stan).
+    hs_agent_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    batch_id = Column(UUID(as_uuid=True), ForeignKey("hs_auth_batches.id"), nullable=True)
+
+    rows_in_file = Column(Integer, nullable=False, default=0, server_default="0")
+    skipped_invalid = Column(Integer, nullable=False, default=0, server_default="0")
+    skipped_no_phone = Column(Integer, nullable=False, default=0, server_default="0")
+    skipped_duplicate = Column(Integer, nullable=False, default=0, server_default="0")
+    skipped_dnc = Column(Integer, nullable=False, default=0, server_default="0")
+
+    # Timers / settings (edited from the campaign drawer).
+    answer_wait_minutes = Column(Integer, nullable=False, default=10, server_default="10")
+    reminder_enabled = Column(Boolean, nullable=False, default=False, server_default="false")
+    reminder_text = Column(Text, nullable=True)
+    reminder_minutes = Column(Integer, nullable=False, default=7, server_default="7")
+    expire_minutes = Column(Integer, nullable=False, default=15, server_default="15")
+    resend_on_expiry = Column(Boolean, nullable=False, default=False, server_default="false")
+
+    created_by = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=_now)
+    started_at = Column(DateTime(timezone=True), nullable=True)
+    finished_at = Column(DateTime(timezone=True), nullable=True)
+
+
+class HsCampaignText(Base):
+    """Every text of a HealthSherpa campaign, both ways — the client's history."""
+
+    __tablename__ = "hs_campaign_texts"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False)
+    campaign_id = Column(UUID(as_uuid=True), ForeignKey("hs_text_campaigns.id", ondelete="CASCADE"), nullable=False)
+    request_id = Column(UUID(as_uuid=True), ForeignKey("hs_auth_requests.id", ondelete="CASCADE"), nullable=False)
+    phone_number = Column(String(32), nullable=False)        # +1XXXXXXXXXX (the client)
+    direction = Column(String(3), nullable=False)            # OUT | IN
+    # OUT: BLAST | FOLLOWUP | REMINDER;  IN: REPLY
+    kind = Column(String(10), nullable=False)
+    body = Column(Text, nullable=True)
+    from_number = Column(String(32), nullable=True)          # our number (OUT)
+    # OUT: QUEUED -> SENDING -> SENT -> DELIVERED | FAILED; SKIPPED; CANCELLED.  IN: RECEIVED
+    status = Column(String(10), nullable=False, default="QUEUED")
+    reply_kind = Column(String(12), nullable=True)           # IN: replies.classify()
+    provider_message_id = Column(String(64), nullable=True)
+    error = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=_now)
+    sent_at = Column(DateTime(timezone=True), nullable=True)
+    delivered_at = Column(DateTime(timezone=True), nullable=True)
+
+    __table_args__ = (
+        Index("ix_hs_campaign_texts_request", "request_id", "created_at"),
+        Index("ix_hs_campaign_texts_phone", "tenant_id", "phone_number", "sent_at"),
+        Index("ix_hs_campaign_texts_queue", "tenant_id", "status"),
+        Index("ix_hs_campaign_texts_message", "provider_message_id"),
+    )

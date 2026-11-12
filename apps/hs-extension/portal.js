@@ -38,10 +38,14 @@
     }
     if (d.type === "stop-job") { chrome.runtime.sendMessage({ kind: "stop-job", id: d.id, reason: "Stopped from the portal." }); return; }
     if (d.type === "focus-tab") { chrome.runtime.sendMessage({ kind: "focus-tab" }); return; }
+    // Auto mode (HealthSherpa text campaigns): the PAGE drives it — this only
+    // lets the popup show it, and turn it off.
+    if (d.type === "auto-mode") { chrome.runtime.sendMessage({ kind: "auto-mode", on: !!d.on }); return; }
   });
 
   // Live step updates from the background -> the page.
   chrome.runtime.onMessage.addListener(function (msg) {
     if (msg && msg.kind === "job-update") toPage("job-update", msg.update);
+    if (msg && msg.kind === "auto-off") toPage("auto-off");
   });
 })();

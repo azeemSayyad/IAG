@@ -33,6 +33,8 @@ export type HsJob = {
   email: string | null;
   max_resends: number;
   plan_year: number;
+  /** A HealthSherpa text-campaign client started by AUTO MODE (no agent at the keyboard). */
+  auto?: boolean;
 };
 
 function post(type: string, payload: Record<string, unknown> = {}) {
@@ -106,4 +108,23 @@ export function stopJob(id: string) {
 
 export function focusHealthSherpa() {
   post("focus-tab");
+}
+
+/** Auto mode (HealthSherpa text campaigns): tell the extension it's on/off so
+ *  its popup can show it. The PAGE drives auto mode — the extension still only
+ *  ever gets one job + one-job token at a time. */
+export function setAutoMode(on: boolean) {
+  post("auto-mode", { on });
+}
+
+/** The extension's popup asked to turn auto mode off. */
+export function useAutoOffRequest(onOff: () => void) {
+  useEffect(() => {
+    const onMsg = (e: MessageEvent) => {
+      if (e.source !== window || e.data?.source !== EXT_SOURCE || e.data.type !== "auto-off") return;
+      onOff();
+    };
+    window.addEventListener("message", onMsg);
+    return () => window.removeEventListener("message", onMsg);
+  }, [onOff]);
 }

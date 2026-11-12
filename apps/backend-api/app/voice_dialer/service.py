@@ -323,6 +323,18 @@ def on_inbound_sms(
         return _inbound_sms_international(db, tenant_id, from_raw, text, message_id)
 
     kind = replies.classify(text)
+
+    # A reply to a HEALTHSHERPA text campaign (our newest text to this number
+    # was one of theirs): handled there completely — no lead, never dialed,
+    # never the pool. STOP / negatives still go on Do-Not-Call there, with the
+    # same reasons. Deliberately not wrapped in try/except: falling through to
+    # the dialer on an error would CALL a client who only agreed to a link.
+    from app.hs_auth import campaigns as hs_campaigns
+
+    hs = hs_campaigns.on_inbound(db, tenant_id, phone, to_raw, text, message_id, kind)
+    if hs is not None:
+        return hs, []
+
     now = _now()
     lead = find_lead(db, tenant_id, phone)
     created = lead is None

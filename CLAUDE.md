@@ -1,846 +1,152 @@
-# CLAUDE.md — Launchpad Call Center
+# CLAUDE.md — IAG / Launchpad call center
 
-Guidance for AI agents (and humans) working in this repo. Read this first.
-
-## What this is
-
-"Launchpad" / "Insurance Alliance Group" — an insurance call-center portal (leads, deals, SMS
-outreach, appointments, compliance/licensing). npm monorepo. GitHub:
-`Buissn885/Launchpadacacallcenter`.
+Insurance call-center portal. Repo `Buissn885/Launchpadacacallcenter`.
+The older, much longer version of this file (pay rules, inbox, compliance, Telnyx
+internals, …) is in git history: `git show de7c417:CLAUDE.md`.
 
 ```
-apps/
-  frontendall/   Static HTML/CSS/JS portal (NO framework, NO build step). Each page is a
-                 standalone .html with inline <style> + <script>. Served as-is.
-  sms-ui/        React + Vite SPA ("SMS" workspace: Queue, Manager, Monitoring, Sales
-                 Dashboard). Builds INTO apps/frontendall/sms/ (see "SPA build" below).
-  backend-api/   FastAPI + SQLAlchemy + Alembic (Postgres). Routers under app/<domain>/.
-  ai-engine/     AI services.
-  workers/       Background workers (Celery-style tasks, e.g. SMS).
-.localpreview/   Git-ignored local preview server + headless-Chrome verification scripts.
-scripts/         validate-frontend.mjs and ops scripts.
+apps/frontendall/  static portal pages (no build)        apps/sms-ui/  React SPA -> builds into frontendall/sms/
+apps/backend-api/  FastAPI + Postgres (Alembic)          apps/hs-extension/  HealthSherpa Chrome extension
 ```
 
-There are effectively **two frontends**: the static `frontendall` pages and the
-`sms-ui` React SPA. A change to a portal page may need to be made in BOTH, plus
-the SPA must be rebuilt. See "Gotchas".
-
-## Running locally (no backend required)
-
-The normal way to see the app is the **local preview server** — it serves
-`apps/frontendall` on http://127.0.0.1:5500 and injects two git-ignored shims so
-it works with NO backend:
-- `services/__preview-login.js` — lets the login page sign in locally (any
-  password). The **username substring picks the role**: `admin`→tenant_admin,
-  `super`→super_admin, `head`→head, `manager`→manager, `lead`/`team`→lead,
-  anything else→agent. E.g. log in as `admin@launchpad.com` to get the admin views.
-- `services/demo-mock.js` — mocks every REST endpoint with sample data.
-
-```bash
-python .localpreview/serve.py     # → http://127.0.0.1:5500  (then open /login.html)
-```
-
-Do NOT use a plain `python -m http.server 5500` for the portal — it skips the
-shims, so the auth guard hits the (absent) backend and bounces you to login.
-
-Running the real backend locally needs a Python venv at `apps/backend-api/venv`
-(NOT checked in). On the dev Mac it exists (created with
-`uv venv venv --python 3.12 && uv pip install --python venv/bin/python -r requirements.txt`),
-with brew `postgresql@15` + `redis` and a git-ignored `apps/backend-api/.env`
-pointing at `postgresql://sayyadazeem@localhost:5432/launchpad`. The preview
-server has a proxy mode for this — **no mocks, no demo data, real login**:
-
-```bash
-.localpreview/run-local.sh      # migrates, starts uvicorn :8000 + serve.py --backend → http://127.0.0.1:5500/login.html
-# local accounts: admin@local.test / Admin123! · manager@local.test / Agent123! · agent@local.test / Agent123!
-```
-
-Use this (not the mock) to verify anything that writes to the database before
-pushing. Without `--backend`, serve.py is the mock/demo-data preview described
-above.
-
-## Build / validate / test
-
-```bash
-# Static frontend — no build. Just validate:
-node scripts/validate-frontend.mjs        # checks broken local asset refs + mojibake
-
-# SMS SPA (after editing anything in apps/sms-ui/):
-cd apps/sms-ui && npx vite build          # outputs to ../frontendall/sms/ (index.html + assets/index-<hash>.js/.css)
-
-# Backend (needs venv):
-npm test                                  # pytest (apps/backend-api)
-```
-
-## Hard rules (do not break)
-
-1. **NEVER edit the env-detection logic in `apps/frontendall/services/api.js`
-   (~lines 4–12).** It auto-switches the API base URL (file:// → `127.0.0.1:18000`;
-   port 13000 → `:18000`; live → `location.origin`). This is what keeps local
-   edits from breaking the live backend connection. The user has said "don't
-   touch api.js ever."
-2. **`main` is shared. ALWAYS `git pull --rebase origin main` before pushing.**
-   Commit/push only when asked. Deploy is automatic on push (Railway/Netlify/Docker).
-3. **Cache-busting:** portal pages load scripts with a version query, e.g.
-   `brand.js?v=1`, `prefs-extras.js?v=30`, `error-boundary.js?v=20`, `api.js?v=10`.
-   `app-gate.js?v=2` / `announcements.js?v=2` are versioned at their injection
-   site inside `prefs-extras.js`, not in the HTML. If you change one
-   of these JS files you MUST bump its `?v=N` across **all** `apps/frontendall/*.html`
-   or deployed/cached browsers keep serving the old file. (One-liner:
-   `perl -pi -e 's/prefs-extras\.js\?v=5/prefs-extras.js?v=6/g' apps/frontendall/*.html`)
-4. **SPA rebuild:** editing `apps/sms-ui/src/**` does nothing live until you
-   `vite build`. The compiled bundle (`apps/frontendall/sms/assets/index-<hash>.js`)
-   is what the site loads. After building, commit the new bundle + updated
-   `sms/index.html` and delete the old hashed assets.
-
-## Architecture notes / gotchas
-
-### Colour — `apps/frontendall/brand.js` is the SINGLE SOURCE OF TRUTH
-**Never hardcode a brand colour anywhere.** `brand.js` holds three hexes
-(`BRAND.accent` / `accent2` / `accentHover` — currently a navy→sky blue) and
-DERIVES everything else from them at runtime, writing it onto `<html>` as custom
-properties: the accent family + `r,g,b` triplets, the page gradient and corner
-glow, and two ramps whose names encode HSL lightness —
-`--n99 … --n68` (neutral surfaces) and `--a98 … --a92` (accent-tinted washes),
-each also as `--n95-rgb` / `--a93-rgb` for `rgba(var(--n95-rgb),0.5)`.
-The ramps take their HUE from the active accent, so switching theme recolours
-every surface, and **rebranding is a one-line change in `brand.js`.**
-
-- It is a blocking `<script src="brand.js?v=1">` first in every page `<head>`
-  (and in the SPA's `index.html` as `/brand.js`), so first paint is branded.
-- Consume it as `var(--accent)`, `rgba(var(--accent-rgb),0.12)`, `var(--n95)`, …
-  `<canvas>` and SVG presentation attributes can't resolve `var()` — use
-  `EB_BRAND.theme().a`, `EB_BRAND.rgba(0.2)` or `EB_BRAND.css('--n95')` there
-  (in the SPA: `brandColor('--accent')` from `lib/theme.ts`).
-- `prefs-extras.js`, `app-gate.js` and `sms-ui/src/lib/theme.ts` used to each
-  carry their own copy of the theme map — they now all forward to `EB_BRAND`.
-- Theme keys are `brand | forest | indigo | rose | slate | amber` (default
-  `brand`). The retired orange `warm` key is aliased to `brand` for users whose
-  localStorage still holds it — see `LEGACY` / `normalize()` in brand.js.
-- Colours deliberately NOT derived from the brand: status (`--up/--down/
-  --pending`, hot-lead red-orange), the product-segment palette (ACA gold /
-  Dental / Vision), leaderboard rank medals, `wizard.css`'s per-chapter accents
-  (aca green, dv purple, auto orange) and `sms-ui/.../charts/jewel.ts`.
-
-### Logo — `apps/frontendall/assets/`
-`logo-source.png` is the master artwork; `logo.png` (full lockup), `logo-mark.png`
-(IAG monogram), `favicon.png` and `apple-touch-icon.png` are derived from it.
-`assets/README.md` has the exact regeneration script and crop boxes.
-- Sidebar / wizard / mobile gate use the **monogram** — the full lockup's
-  "ALLIANCE GROUP" line is unreadable below ~120px wide. The login card uses the
-  full lockup.
-- The SPA references them root-absolute (`/assets/logo-mark.png`); static pages
-  use `assets/...`.
-- The artwork is navy on transparent, so dark mode puts it on a white rounded
-  plate — it is never recoloured.
-- Gotcha: the wizard's brand link is `<a class="ch-brand" href="appointments.html">`,
-  and prefs-extras' role gate hides `a[href="appointments.html"]` for admin/head.
-  Those selectors carry `:not(.ch-brand)` so the gate doesn't eat the logo.
-
-### Dark mode
-Applied globally by **`apps/frontendall/prefs-extras.js`**, which injects a large
-`<style>` of `html[data-mode="dark"] …` rules and toggles `html[data-mode]` from
-`localStorage.ebMode`. It recolors `--text*/--border*` vars and common components.
-Bespoke per-page surfaces (custom cards, icon chips) are NOT auto-covered — they
-must be added to the prefs-extras dark block or they keep their light styling in
-dark mode. The **sms-ui SPA has its own** dark mode (Tailwind / its index.css) —
-audit BOTH codebases for any theme change.
-
-### Sessions — BOTH API layers must refresh the token
-Access tokens are short-lived (`JWT_EXPIRES_IN` / `JWT_ACCESS_TOKEN_EXPIRE_MINUTES`,
-30 min by default); refresh tokens last 7 days. There are **two** API layers and
-each needs its own refresh-on-401, or users get silently thrown back to the login
-page mid-session once the access token ages out:
-1. `apps/frontendall/services/api.js` — `handleRefresh()` (always had it).
-2. `apps/sms-ui/src/lib/api.ts` — `authedFetch()`, added later; it POSTs
-   `/auth/refresh` via `refreshAccessToken()` in `lib/auth.ts`, replays the
-   request, and only clears the session + redirects if the refresh itself fails.
-   `refreshAccessToken()` keeps ONE in-flight call, because a page load fires
-   ~8 requests at once and each would otherwise trigger its own refresh.
-Anything doing a raw `fetch` must go through `authedFetch`/`apiUpload`, not
-`fetch` + `getAccessToken()` — that was how the multipart uploaders each grew
-their own "401 → /login.html" line. BOTH socket layers pass `auth` as a callback
-(`lib/socket.ts` and `services/api.js`) so reconnects re-read the current token
-rather than the one captured at page load.
-
-**Only a REJECTED refresh may end a session.** This is the rule that keeps users
-from being thrown out at random, and every layer now obeys it:
-  * `POST /auth/refresh` answering **401/403** = the 7-day refresh token is
-    really dead -> clear tokens, go to login.
-  * ANY other failure (**502/503 while the API restarts or redeploys**, 429, a
-    network blip, an unparseable body) is TRANSIENT -> keep the tokens, fail
-    just that one request. Treating these as "session over" is what logged
-    people out mid-shift; it hit agents and head managers hardest simply
-    because their pages poll (the 6s queue-offer poll, inbox badge,
-    notifications) so a blip was far likelier to land on one of their requests.
-  * A 401 that survives one refresh+replay is that ENDPOINT's verdict, not a
-    dead session — surface the error, never refresh in a loop (`handleResponse`
-    takes a `retried` flag; `authedFetch` replays exactly once).
-  * A 401 carrying a token that is no longer the stored one just lost a race
-    with another request's refresh — replay it with the current token instead
-    of starting a second refresh (this is why exactly ONE `/auth/refresh` goes
-    out per page load, not one per in-flight request).
-  * `error-boundary.js`'s `safeInit()` session probe follows the same rule: it
-    only bounces to login when the tokens are already gone or the probe itself
-    came back 401.
-Logging out must clear `access_token` + `refresh_token`, not just `ebRole`
-(`ebClearSession()` in prefs-extras.js).
-Regression tests (both git-ignored):
-`.localpreview/verify-session-refresh.mjs` and, with backend fault injection
-across roles, `.localpreview/verify-session-resilience.mjs`.
-
-### The sidebar has THREE sources — check all three for any nav change
-1. Static `<a class="sb-item" href="…">` blocks hardcoded in each `.html` page.
-2. **`prefs-extras.js`** rewrites the nav at runtime: `inject*Link()` adds items
-   (e.g. it used to inject Dispositions on every page), `gate*()` + CSS hide items
-   by role (`html[data-role="…"]`), and an `ORDER` array reorders them.
-3. **`apps/sms-ui/src/components/PortalShell.tsx`** — `WORKSPACE_LINKS` /
-   `PORTAL_LINKS` arrays define the React SMS shell's sidebar (rebuild SPA to change).
-Removing/adding a nav item usually means editing the static HTML **and**
-prefs-extras **and** PortalShell, then bumping the cache version + rebuilding the SPA.
-
-### Roles
-`localStorage.ebRole` ∈ `agent | lead | manager | head | tenant_admin |
-super_admin | dev`. Views/nav are gated by role in both prefs-extras (static) and
-PortalShell/`lib/auth` (SPA).
-
-## Compliance domain (licenses & carrier appointments)
-
-Managed in the portal at **`settings.html` → "Licenses & Appointments"** (agent
-self-service view + admin view that manages any agent). Backend under
-`apps/backend-api/app/compliance/` (router/services/schemas) with models in
-`app/models/compliance.py`.
-
-- **State licenses** HAVE an effective date + expiration; state is a single-select
-  dropdown of 2-letter codes.
-- **Carrier appointments** have **NO effective date** (that concept is licenses-only)
-  — only an expiration. State is a **multi-select** dropdown: picking N states on
-  the admin form creates one appointment record per state (one POST each), keyed by
-  (agent, carrier, state). Dedupe is state-scoped; there is no blocking unique
-  constraint. `CarrierAppointmentCreate.effective_date` is Optional and the service
-  defaults it to `today` (NOT NULL column, no migration). The agent sees their own
-  appointments via `GET /compliance/me/profile`.
-- **`compliance.html`** is a SEPARATE compliance console (Agent Appointments / CSV
-  import / Carrier Matrix / Events / Logs). It was INTENTIONALLY left on the old
-  model (still has an appointment effective date + single-state input) — do not
-  "fix" it to match settings.html unless explicitly asked.
-- **Dispositions** were merged into **`agent-performance.html`** (a
-  Performance/Dispositions toggle at `#dispView`); `dispositions.html` is now a
-  redirect stub to `agent-performance.html#dispView`.
-
-## Training program (agent onboarding)
-
-Lives in the **SMS SPA** at `/sms/#/training` (`apps/sms-ui/src/pages/Training.tsx`
-+ `components/training/`), NOT a static page — there is no `training.html`.
-Backend domain `apps/backend-api/app/training/` (router + `defaults.py`), model
-`app/models/training.py` (`training_steps`, migration 052).
-
-- Everyone signed in can read; **admin-class edits** (add / remove / rename /
-  drag-reorder steps, paste a Vimeo/YouTube link or upload a video file, edit
-  the script text). Agents' completion progress is per-browser (`localStorage`).
-- Uploaded videos go through the same `app/calls/s3_storage.py` client as call
-  recordings (Railway Buckets / any S3-compatible via `S3_ENDPOINT_URL`); with
-  no S3 configured they fall back to DB bytes. Playback is
-  `GET /training/steps/{id}/video` — redirects to a signed URL for S3, streams
-  with Range support from DB — and accepts the JWT as `?token=` because
-  `<video>` can't send headers. `/training/steps` is exempt from the 10 MB body cap.
-- **Profile photos** use the same S3 client: `settings.html` still PATCHes a
-  small data URL to `/auth/me`, but `app/auth/avatar.py` uploads the bytes to
-  `avatars/<tenant>/<user>/<uuid>.<ext>`, keeps only `users.avatar_s3_key`
-  (migration 053) and returns a 7-day signed URL as `avatar_url`. Without S3
-  the data URL stays inline on the row; legacy inline photos are moved to S3
-  on the next `GET /auth/me`.
-- A tenant with **no rows at all** is seeded with `DEFAULT_STEPS` on first read
-  (7 steps; the master call script sits under "How to Sell"). Deleting every
-  step does NOT re-seed.
-- `content` is line-based script markup rendered by `ScriptBlocks.tsx`
-  (`# heading`, `[Agent]: quote`, `> note`, `1. item`, `- item`,
-  `++ Title | body`, `:: Title | body`, `!! text`). The cheat-sheet is in the editor.
-- Sidebar: the SPA shell renders it via `canSeeTraining()` (agents + admin-class
-  + dev); static pages get it injected by `prefs-extras.js` (`injectTrainingLink`).
-
-## Inbox (in-app messaging) — ONE page for every role
-
-`inbox.html` is the single messaging page and is visible to **every** role
-(the admin CSS/JS gates in `prefs-extras.js` deliberately do NOT hide it). It
-lists a pinned **Team** section — in-app direct messages with every other
-active user in the tenant, any role (admin ↔ agent, agent ↔ agent, admin ↔
-admin) — above the customer SMS conversations. Backend `app/direct_messages/`
-(`/inbox/dm/*`): `_counterpart_query` returns all active users, not just
-admin ↔ agent pairs; opening a thread marks it read and emits `inapp_read` to
-the reader's own socket room.
-
-- **Sidebar unread badge** = unread customer conversations + unread DMs
-  (`/inbox/dm/unread-count`). Static pages: `updateInboxBadge` in prefs-extras
-  (creates the badge span if the page lacks it; refreshes on `inapp_message` /
-  `inapp_read` / focus / 30s). SPA: `dmUnread` in `PortalShell.tsx`. Page
-  scripts must NOT write the sidebar badge themselves (dashboard.html used to
-  and blanked it).
-- The list is **latest activity first** on every render (`byLatest` in
-  inbox.html — realtime updates change `last_message_at` in place), and the
-  page shows the unread total beside its "Inbox" title plus a count on the
-  "Team" divider.
-- **`applicant-inbox.html` (admin ↔ hiree SMS) and `hirees.html` are HIDDEN,
-  not deleted** — no Hirees flow yet. `injectApplicantInboxLink` /
-  `injectHireesLink` early-return, CSS rules hide any `a[href="applicant-inbox.html"]`
-  / `a[href="hirees.html"]`, and both SPA entries hide for all roles.
-  `admin-inbox.html` is a redirect stub to `inbox.html`.
-- **Groups** (`/inbox/dm/groups`, models `DmGroup` / `DmGroupMember`, migration
-  055) sit in their own "Groups" divider above Team. **Only `super_admin`** can
-  create / rename / re-member / delete one (`_GROUP_ADMIN_ROLES`; legacy
-  `tenant_admin` and `admin` cannot) — every member can read and reply. The
-  picker is a free pick of tenant users; the creator is always added.
-  * A group message is a `direct_messages` row with `group_id` set and
-    `recipient_id` NULL, so `recipient_id` is now nullable and every 1:1 query
-    filters `group_id IS NULL` or it grows a phantom "None" peer.
-  * Read state can't live on the row (one row, many readers): each member has
-    `DmGroupMember.last_read_at`, and unread = messages newer than
-    `coalesce(last_read_at, added_at)` that they didn't send.
-  * Delivery reuses the already-whitelisted `inapp_message` socket event with a
-    `group_id` — deliberately, so `services/api.js` stays untouched (no `?v=`
-    bump).
-  * The inbox never auto-opens an UNREAD row on load — doing so would mark a
-    group blast read before anyone looked at it.
-  * The create/edit modal is a bespoke surface, so it carries its own
-    `html[data-mode="dark"]` rules (see "Dark mode").
-- **The Inbox never trusts the socket alone** (`pollInApp` in inbox.html). The
-  Socket.IO connection can be down entirely — `services/api.js` asks for
-  `transports: ['websocket','polling']`, and this socket.io build does NOT fall
-  back when the first transport fails, so anything that blocks WebSocket kills
-  realtime outright (the local preview proxy does exactly that: `serve.py` 404s
-  `transport=websocket` because a plain HTTP proxy can't upgrade). When that
-  happens no event ever arrives and an open thread used to sit there until you
-  navigated away and back. So the page polls the OPEN in-app thread every 7s and
-  repaints ONLY when the server has a message id it doesn't (a blind re-render
-  would fight the user's scroll); the row list re-reads every 45s and on focus,
-  which is also how group creation / membership changes arrive since those are
-  never pushed. Customer SMS threads do NOT have this net — they still depend on
-  the socket.
-- The filter chips (All / Hot / Appointments / Replied / Dead / DNC) were
-  REMOVED from inbox.html. `matchFilter` stays, hardcoded to the old "All"
-  behaviour, so dead + DNC conversations remain hidden.
-- `.localpreview/verify-inbox-all-roles.mjs` checks all of the above per role
-  against the real backend (`run-local.sh`); `verify-inbox-groups.mjs` drives the
-  group flow end-to-end (super admin creates + posts, agent replies but cannot
-  manage).
-
-## SMS pool — two ways a lead gets to an agent
-
-The agent pool is `sms_leads WHERE status='QUEUED'`; everything downstream
-(assignment, offer/accept/pass, dispositions, appointments, DNC) only reads
-that table and is agnostic about how a row got there. Two producers:
-
-1. **REPLY** (original): CSV → Campaign (`upload_batch`) → held leads → drip →
-   first template via Sinch/Engage → customer replies → `lead_ingest` /
-   `inbound_sync` mirror the replier into `sms_leads`.
-2. **CSV_DIRECT** (`sms_leads.source`): admin uploads a CSV at
-   `POST /sms/pool/upload` (router `sms_queue/routers/pool.py`, service
-   `sms_queue/services/pool_ingest.py`) and rows land in `sms_leads` QUEUED
-   immediately — **no SMS is ever sent**. Agents work these by phone; the whole
-   CSV row is stored in `sms_leads.details` (`{fields:[[label,value],…], address}`)
-   and shown on the offer popup / accepted view (`components/LeadDetails.tsx`).
-   Each upload is an `sms_pool_batches` row so it can be removed as a unit.
-   Limits: **20,000 rows** (`pool_ingest.MAX_ROWS`) and **30 MB**
-   (`routers/pool.MAX_UPLOAD_BYTES`); the route is on the security middleware's
-   `large_upload_paths` so the global 10 MB body cap doesn't apply. The UI checks
-   both client-side and shows the limits under the section title.
-
-Rules that keep #2 safe — don't undo them:
-- The linked `leads` rows use `pacing_status='pooled'` (NOT `'held'`) so
-  neither the campaign drip nor `ranked_held` can ever text them, and
-  `on_lead_created` is never called.
-- `_next_queued_lead` serves REPLY leads before CSV_DIRECT (FIFO within each).
-- The choice is made **per upload** (a separate button beside Campaigns on
-  `upload-leads.html` and in the SMS Manager's `LeadsTools`), never a global
-  mode toggle.
-- `_dispatch_sms` (agent chat sends) still passes no `kind`, so the
-  first-template-only lockdown blocks them — CSV_DIRECT leads therefore have no
-  chat composer; that is intentional (phone-first) until an exemption is decided.
-
-## Commission (per-sale agent pay), company pay rules and deal source
-
-"Commission" everywhere in the portal means **per-sale agent pay** — there is no
-separate carrier-commission number. It is DERIVED, never stored:
-`expenses/services.sale_pay_lines` returns one line per APPROVED deal, and three
-surfaces sum those same lines, so they cannot disagree:
-
-1. **Expenses → Agent pay** (`/sms/#/expenses`, owner only) — what the company owes.
-2. **All Deals → "Total commission · whole team"** (`totals.commission_cents` on
-   `/compliance/deals/today-all`, plus `commission_cents` per deal) — follows the
-   page's date filter, so "Today" is the daily counter.
-3. **My Deals → "You earned"** (`/compliance/deals/my-earnings`, plus
-   `earned_cents` per deal on `/deals/my-today`) — the agent's own pay and their
-   own tier standing (`week`) only.
-
-### Company pay rules — `app/expenses/pay_rules.py` (migration 060)
-ONE rule set per tenant (`pay_rules`, append-only versions, seeded on first read
-from `DEFAULT_RULES`) pays every agent automatically. **Nothing about pay is
-hard-coded** — every amount/threshold is in the `rules` JSON and edited from
-Expenses → Agents → **Edit rules**. Per-agent rate entry is gone from the UI.
-
-- **Weeks are Monday–Sunday, Eastern.** An agent's ACA COMMISSIONS for the week
-  pick the tier (defaults: 0 → $20, 80 → $25, 130 → $30) and EVERY ACA commission
-  that week is paid at that tier — crossing a threshold reprices the whole week.
-  So a deal's commission is not fixed until its week closes.
-- **Commissions are counted per APPLICATION**, not per deal row. The Log Sale
-  form saves one `deals` row per person; rows from one submission share
-  `deals.application_id` (NULL on older rows = its own application):
-  an application marked **EAP → always 1**; a carrier listed in
-  `per_member_carriers` (Anthem) **→ 1 per member**; anything else **→ 1**.
-- **Dental** pays once per application by household size (= the number of people
-  logged on the application; 3+ pays the larger amount). **Ancillary** pays a flat
-  amount once per application. **Vision** has `vision_cents: null` = not offered
-  yet = $0. None of these move the tier.
-- **A closed week never moves when the rules are edited**: it is priced with the
-  rules version in force when it closed, and with the tier exception active at
-  that moment. Deals are still read live, so approving/blocking a deal from an
-  earlier week DOES change that week (there is no stored weekly snapshot).
-- **Exceptions** (`pay_exceptions`): an admin locks one agent's ACA tier until
-  the end of the week / a date / no end, with a required reason; "Back to
-  automatic" revokes it. Set from the agent's **Pay plan** drawer.
-- **Cutover**: the latest rules row's `starts_on` (always a Monday; seeded as the
-  Monday of the week the rules were first read; movable in Edit rules). Deals
-  logged BEFORE it keep the old per-agent `agent_sale_rates` pricing
-  (`_legacy_sale_lines`) — only there can a sale be "unrated" and pay $0
-  (`unrated_sales` warnings). The legacy sale-rate endpoints still exist but have
-  no UI.
-- `pay_rules.price()` is the pure maths (no DB) — `tests/unit/test_pay_rules.py`
-  runs the handoff's example week against it. Change the maths there first.
-
-### Products on the Log Sale form
-`PRODUCT_LIST` in `add-deal.html` is the product registry (ACA, Ancillary,
-Dental, Vision). A product with an `added` date carries a **NEW** tag for
-`NEW_DAYS` (30) after it and the tag then disappears on its own — a future
-product only needs a row there. **Ancillary** (`deals.ancillary_count`) shows as
-a coverage pill, legend entry, "Has Ancillary" filter and details row on All
-Deals / My Deals. The **Leaderboard and Sales Dashboard do NOT count it yet** —
-their "deals" total is still ACA + Dental + Vision.
-
-### Deal source and announcements
-- **`deals.deal_source`** (`carrier` | `eap`, migration 059) is the EAP checkbox
-  in each person card on `add-deal.html` (carrier is the default; added persons
-  follow Person 1 until changed). Under the pay rules it also makes the whole
-  application count as ONE commission. It shows as an "EAP" tag beside the carrier
-  on All Deals / My Deals, has a "Deal type" filter under More filters, and
-  admins can correct it in Edit deal. `normalize_deal_source` is deliberately
-  lenient (anything unknown → `carrier`) so a cached old form still logs sales.
-- **Announcements** can be sent by admins AND `head` (`_ADMIN_ROLES` in
-  `app/announcements/router.py`, mirrored by the role gates in `inbox.html` and
-  `notifications.html`).
-- `.localpreview/verify-pay-rules.mjs` and `verify-commission-eap-announce.mjs`
-  check all of this against the real backend.
-
-## Trash for sales, and disabled agents — two SHARED filters
-
-Both rules are enforced in ONE place each, on purpose, so a screen added later
-cannot forget them. Do not re-implement either per query.
-
-### Trash (All Deals → admin delete) — migration 061
-A sale is never hard-deleted. `POST /compliance/deals/{id}/trash` sets
-`deals.trashed_at` / `trashed_by`; `…/restore` clears them; `GET
-/compliance/deals/trash` lists them with who/when. Roles: `admin`,
-`tenant_admin`, `super_admin`, `dev` (NOT `head`) — checked server-side.
-- **`core/database.py` hides trashed deals from EVERY ORM select** (a
-  `do_orm_execute` listener adding `with_loader_criteria(Deal, trashed_at IS
-  NULL)` — full-entity, column-only and aggregate queries alike). That is how a
-  trashed sale stops counting toward commissions, the weekly tier, leaderboards
-  and dashboards at once. A query that must see trashed rows opts in with
-  `.execution_options(include_trashed=True)` (`INCLUDE_TRASHED`) — only the
-  Trash list and trash/restore do.
-- Consequence: a trashed deal 404s on edit / status change until restored.
-- Both actions write `deal_trashed` / `deal_restored` to `audit_logs`.
-- UI (`all-deals.html`): red icon beside View → confirmation (Keep sale has
-  focus) → Undo banner for 8s; the "Trash N" button in the page header opens the
-  list with Restore. The modals are bespoke and carry their own dark rules.
-
-### Disabled agents — `core/active_agents.py`
-"Disabled" = `users.status = 'suspended'` (Settings → team → "Inactive users",
-which is also where they are re-enabled) or `users.deleted_at` set. It is NOT
-`Agent.status` — that only says whether a profile is routable, and every admin
-owns an inactive profile.
-- LIVE lists pull from `active_agents_query` / `active_users_query` /
-  `active_user_clause`: Expenses → Agents (and its counts), the agent pickers
-  (`/compliance/agents`), SMS Manager → Agent Availability and every per-agent
-  SMS report, lead routing (`_available_agents`), and the Leaderboard / Sales
-  Dashboard rankings (via `disabled_agent_ids`).
-- HISTORY keeps the person, labelled with `labelled()` → "Name (disabled)": All
-  Deals rows, ledger lines, the audit trail. Totals still include their past pay.
-- Disabling also takes the user OFFLINE in the SMS queue and returns any lead
-  they were only offered to the pool (`_leave_sms_queue` in admin.py).
-- Re-enabling is just the status flip — nothing is deleted, so they reappear
-  everywhere with history intact.
-- `.localpreview/verify-trash-disabled.mjs` checks both features end to end.
-
-## YES-reply auto dialer (Telnyx) — `app/voice_dialer/`, migration 062
-
-A client who texts YES is called automatically; only a LIVE person is bridged to
-an agent, and the lead card pops on that same agent's screen. Built on the
-**Telnyx** (TeXML + WebRTC + Messaging) — see "Telnyx carrier" below.
-
-- **Lead states:** a YES makes the lead `READY_TO_CALL`; `DIALING` is the lock
-  while a call is in flight. Neither is `QUEUED`, so the pool / offer popup never
-  see them. A live answer jumps straight to `IN_PROGRESS` + agent `ON_CALL` — no
-  Accept/Pass. Out of attempts (`max_total_attempts`) → back to `QUEUED` (pool).
-- **Two switches for the agent in Lead Manager: Join queue and Ready for calls**
-  (`sms_queue_agents.voice_ready`, `POST /voice/dialer/ready`). Join queue alone
-  = regular pool only, NO headset line, so no carrier minutes. Ready for calls
-  opens the line; the dialer only counts agents with it on (`_ready_agents`), and
-  `on_agent_line` refuses a line for anyone with it off. The line also closes
-  while they work a regular pool lead (reopens when free). Leave / timeout /
-  disabling the user switch it off. Manager board shows "Regular pool only".
-- **Agents answer in the portal** (`components/AgentLine.tsx`, `lib/voice.ts`):
-  while Available AND Ready for calls, the browser holds one Telnyx WebRTC call parked in the
-  agent's room (`iag-agent-<uuid>`); a live customer is TRANSFERRED into it, which
-  is why the bridge is instant. Line = `sms_queue_agents.voice_leg_uuid`.
-  Leaving the SPA drops the line, so while a customer is connected AgentLine
-  warns on unload and opens off-app links (Log Sale) in a new tab.
-- **Rules are server-side and clamped** (`service.update_settings`): 8 am–8 pm in
-  the CLIENT's zone (`rules.py`; split states must satisfy every zone, unknown
-  state = 11 am–8 pm ET), ≤3 tries per number per 24 h, ring 15–45 s.
-  Pacing is FIXED at one call per free agent on the line (no setting — YES
-  replies trickle in, so over-dialing only risks abandoned calls; the unused
-  `voice_dialer_settings.pacing_ratio` column is left in place). DNC/STOP
-  numbers are never dialed; never two calls to one number.
-- **Every reply is called except a negative one** (owner's rule, `replies.py`):
-  `classify` → YES (clear yes) | REPLY (anything else: "who is this?", "maybe",
-  "not now", "where are you?", "I'm fine", "I'm good", "did you eat?", "?", a
-  photo) | STOP (also "block", "do not disturb"/DND) | NEGATIVE ("no", "not
-  interested", "no, I'm good") | ABUSE
-  (profanity, slurs, "scam/fake", threats) | WRONG. All four negatives go on
-  Do-Not-Call forever (`DNC_REASON`: OPTED_OUT / NOT_INTERESTED / ABUSIVE /
-  WRONG_NUMBER). **Opting back in** (`service._opt_back_in`): a CLEAR yes from
-  an opted-out number ("yes", "ok", "call me", "I'm interested", "start",
-  "unstop", "I want a quote"…) deletes its Do-Not-Call rows and the lead is
-  normal again (called, textable); a vague text ("cool", "hi") is only saved.
-  The texts are marked `sms_messages.status` OPT_OUT / OPT_IN (shown on the
-  Inbox thread) and the opt-in is audited (`ai_dnc_opt_in_by_text`, their
-  words). Note `audit_logs.resource_id` is a UUID — pass a lead id or None,
-  never a phone (that made every dialer audit insert fail silently).
-  The dialer does NOT use the shared `block_words` list — it
-  treats "who is this?" / "huh" as opt-outs, which the owner wants called.
-  A client an agent already CLOSED is reopened only by a clear YES; any other
-  follow-up ("thank you") is just saved (`reply_saved`). Match by phone (last 10
-  digits), never by name.
-- **Wait before calling** (`voice_dialer_settings.reply_delay_seconds`, default 3,
-  0–30, in Dialing rules): a reply sets `next_dial_at = now + delay` and
-  `_tick_later` fires the dialer when it's up (polls / Celery beat also cover it).
-- While the dialer has people to call, agents on an open line are held for it:
-  `_try_assign` skips them and `_reclaim_offers` pulls back an UNACCEPTED offer.
-- "Voicemail" in Lead Manager's disposition list (auto-dialed leads only) puts
-  the lead back on the dial list instead of closing it.
-- **Connect on answer** (`VOICE_CONNECT_ON_ANSWER`, default on — manager's choice
-  "Option B"): the customer is bridged on the `answered` event (~1.5 s to the
-  agent) while machine detection keeps listening; `human` only stamps
-  `human_at`, and a later `machine` runs `_drop_early_voicemail` (hang up, agent
-  back to AVAILABLE + their room, lead requeued, `voice:ended` reason voicemail
-  closes the agent's card). Off = wait for `human` (~5 s) as before.
-  **Webhook order is not fixed:** the customer's ANSWER URL can be asked AFTER
-  we bridged (seen live on the previous carrier: answered → human → answer,
-  ~4 s later). `webhooks.answer` therefore replies to match
-  where the call already is — CONNECTED → `room_only_script` (same call room),
-  ABANDONED → abandon message, ended → "Goodbye", still in flight → bridge via
-  `script_out`. Replying with the hold room after a bridge pulled the customer
-  out: both sides connected, total silence (happened twice).
-- **Bridge latency:** each call gets its own room (`call_room`) — recording a
-  room is how recording works, and the agent's all-shift room gave 1-second files.
-  Agent and customer legs are transferred IN PARALLEL over one pooled keep-alive
-  httpx client (`telnyx._http`); the notice is `VOICE_RECORDING_NOTICE`
-  ("This call is recorded.", spoken in the customer's call script before the room) —
-  every word there is delay.
-- **Each call keeps the agent's result**: `voice_call_attempts.disposition` is set
-  from Mark… (`end_call_for_lead`, called by both agent and manager
-  disposition paths) — the Called tab shows it as the call's outcome (Sale,
-  Appointment set, Not interested…), and Today counts sales/appointments from it.
-- **Called list is paged**: `GET /voice/dialer/calls?kind=all|talked|sales|missed&before=<created_at>&limit=30`
-  (`service.call_history`) returns a page + the per-filter counts; the page loads
-  30 more when the bottom scrolls into view and re-reads the loaded rows every 5 s.
-- **Period picker** (Today / Yesterday / This week / This month / All time /
-  Custom dates) sits on the stats card and also filters the Called list:
-  `?period=…&from=YYYY-MM-DD&to=YYYY-MM-DD` on `/overview` and `/calls`
-  (`service.period_bounds`; days in Eastern, weeks start Monday like agent pay).
-  The header's abandoned-calls warning only fires on Today.
-- The "Sorry we missed you" follow-up text from the spec is deliberately NOT
-  sent — the first-template-only lockdown forbids it.
-- Webhooks (public, `?k=VOICE_WEBHOOK_TOKEN` or Telnyx's Ed25519 signature):
-  `/api/v1/voice/telnyx/{answer,event,inbound-sms,recording,hold,optout}`. Per-call
-  URLs are built from `VOICE_CALLBACK_BASE_URL`. Env: see "Telnyx carrier".
-- **Managers/admins have their own page, `/sms/#/dialer` ("Auto Dialer",
-  `pages/AutoDialer.tsx`)** — switch, today's numbers, agents on the line, calls
-  in progress, dial list, outcomes, recent calls, rules. Same audience as SMS
-  Manager; linked from BOTH sidebars (`PortalShell.tsx` SMS_LINKS and
-  `services/error-boundary.js`). Agents never use it — their side is Lead Manager.
-- **Never run dialer DB code on the event loop.** `service`/`webhooks`/`simulator`
-  are synchronous SQLAlchemy; every `async def` route in `voice_dialer/router.py`
-  calls them through `_run` (threadpool), and the queue router's `_dialer` does
-  the same. Calling them directly froze the WHOLE app during a demo: once the
-  10-connection pool was busy, the blocked loop waited 10 s for a connection only
-  the loop could release (1,000+ `QueuePool limit` errors).
-- **Webhook parsing lives in ONE place, `webhooks.py`** — the HTTP routes in
-  `router.py` are thin shells (trust check → `webhooks.*` → flush events).
-- **Simulator (`simulator.py`):** with no Telnyx keys and `APP_ENV != production`
-  it plays the carrier — builds the payloads `webhooks.py` reads (inbound text,
-  Voice answer/event, AMD human/machine, record event) and feeds them to it,
-  so tests run the production code path. "Test it" box on the Auto Dialer page:
-  send a text; "When the dialer calls" (live person after 2 s by default /
-  voicemail / no answer / busy / let me choose); "Ignore calling hours while
-  testing" (default on — testing happens outside US hours). Production never
-  simulates.
-- **Recordings arrive two ways:** the room's webhook, or `collect_recordings` (in
-  the tick, every 15 s, calls that ended in the last 6 h with no recording), which
-  looks the room up by name. Telnyx recorded a live call and never sent the
-  webhook, so don't rely on it alone.
-- **Recordings:** the carrier's copy isn't permanent, so `store_recording` copies
-  each one to the SAME place Log Sale keeps call recordings — a `deal_recordings`
-  row (kind `recording`) with the audio in the Railway S3 bucket under
-  `deal-recordings/<tenant>/` (inline on the row only if S3 is unavailable, Log
-  Sale's own fallback). `voice_call_attempts.recording_id` → `deal_recordings.id`,
-  so a dialer recording can be attached to a sale like an uploaded one. Play:
-  `GET /voice/dialer/recordings/{attempt_id}?token=` (managers: any; agents:
-  their own), shown as ▶ Play in Called + Inbox.
-- **Opted out** card on the Auto Dialer page (`optouts.py`, `/voice/dialer/optouts`):
-  the tenant's `sms_do_not_call` list made readable — who, when, reason (Texted
-  STOP / Not interested / Wrong number / Blocked by admin / other), their last
-  text; filters, search, the page's period, paged on scroll. Admin-class can
-  **Block number** by hand and **Remove from list**; removing a real STOP
-  (`OPTED_OUT`) needs `?confirm_stop=true` (409 otherwise) and the UI asks first.
-  Removal never re-dials — only a new YES does. Both actions go to the audit log.
-  Today's card shows "N opted out" for the period.
-- **Inbox** on the Auto Dialer page (`inbox.py`, `/voice/dialer/inbox[/{phone}]`):
-  ONE ROW PER PHONE (not per lead — a campaign contact who never replied has no
-  lead), latest activity first, paged with `?before=`, server search `?q=`.
-  Sources: dialer texts (`sms_messages` provider telnyx/vonage), campaign texts
-  (`text_campaign_recipients`) and calls. The thread mixes all of them, and a
-  composer sends a custom one-to-one text (`POST /voice/dialer/inbox/send`,
-  manager-class): from the number they know, refused on DNC, counted in
-  `TEXT_DAILY_CAP`, stored as an OUTBOUND `sms_messages` row (provider telnyx,
-  `agent_id` = sender), delivery via the same `/sms-status` webhook.
-- Switched on per tenant from the Auto Dialer page (off by default). Celery
-  beat `voice-dialer-tick` (3 s) is the safety net; webhooks, agent actions and
-  the agent's `/voice/dialer/state` poll also tick.
-- `tests/unit/test_voice_dialer.py`; `.localpreview/verify-auto-dialer.mjs` drives
-  the whole flow in the browser against the real backend.
-
-## Manual dialing (Dial drawer) — `app/voice_dialer/manual.py`, migration 063
-
-Anyone signed in can call ANY number from the browser over Telnyx. The **Dial**
-button opens a right-hand drawer that overlays the page (does not resize it):
-on the **Auto Dialer** page for manager-class, on **Lead Manager** for agents.
-`components/DialDrawer.tsx` is mounted ONCE in `PortalShell` (opened by the
-`dial:open` window event), so a call survives SMS route changes; with the drawer
-closed a mini dock keeps Hang up reachable.
-
-- Flow: `POST /voice/manual/calls` logs a `manual_calls` row and rings the
-  caller's browser (`telnyx.dial_browser`) → it answers by itself → `webhooks.answer`
-  sees `?leg=manual&mc=` → `manual.on_answer` returns `record` + `connect` (phone; recording notice via
-  the endpoint's `onAnswer` → `?leg=manual_notice`). Phone-leg events carry
-  `?mc=`; the browser leg is matched by `app_leg_uuid`. Hang up ends the row
-  immediately (`/end`) — the carrier's later events only fill in the exact duration.
-- **Busy while dialing, no UI change:** an in-flight manual call (derived from the
-  row — `live_clause`, nothing stored) is excluded in
-  `queue_service._available_agents` (no pool offer, no dialer bridge),
-  `on_agent_line` refuses a line, and `agent_state.manual` makes AgentLine keep
-  the headset line closed. "Ready for calls" is never touched, so the line
-  reopens by itself when the call ends. Lost events can't strand an agent: no
-  browser leg after 90 s or 4 h in flight = not live.
-- **No DNC, no calling hours, no attempt cap** (owner's rule — dialer only).
-  Refused only while the user has an auto-dialed customer CONNECTED.
-- **Separate log**: never in the dialer's Called list / stats. Calls tab: agents
-  see their own (tap to redial); manager-class sees everyone + "Who dialed"
-  filter + ▶ recording (`GET /voice/manual/calls/{id}/recording?token=`,
-  manager-class only). Recordings use `service.save_recording` (same S3
-  `deal-recordings/` store as the dialer).
-- Caller ID: dropdown of `TELNYX_FROM_NUMBERS`, first = default, last pick kept
-  in `localStorage.manualDialFrom`. Keypad sends DTMF during a call.
-- One SDK session (`lib/voice.ts` `sdk()`) serves both the headset line and
-  manual calls. Simulator (no keys, non-prod): `start` plays the answer webhook,
-  the drawer calls `/sim-answer` after 2 s.
-- `.localpreview/verify-manual-dial.mjs` checks the drawer UI per role (never
-  presses Call — with real keys that rings a real phone).
-
-## Text campaigns (Telnyx) — `app/voice_dialer/campaigns.py`, migration 066
-
-Super admin (`require_role("super_admin")`, UI `isOwner()`) uploads a CSV on the
-**Auto Dialer page → Text campaigns** card (`components/TextCampaigns.tsx`: New
-campaign drawer + per-campaign drawer with stats, message, recipients), writes
-ONE message (`{name}` = first name, "there" if missing) and presses Start. It is
-built from scratch and shares NOTHING with the SMS Manager's Sinch `campaigns`
-(own tables `text_campaigns` / `text_campaign_recipients`).
-
-- **Replies need no new code path:** they arrive at `/voice/telnyx/inbound-sms`
-  → `service.on_inbound_sms` (positive → dial list, negative → DNC) which calls
-  `campaigns.on_reply` to mark the recipient and give an "Unknown" lead the CSV
-  name + row (`lead.details`). The Auto Dialer inbox thread shows the campaign
-  text (`texts_for_phone`).
-- **Pacing = what keeps the numbers safe** (limits read from our 10DLC
-  registration on 2026-11-10: AT&T 240/min per campaign, T-Mobile 2,000/day for
-  the brand, tier LOW): one text per sending number per `SEND_GAP_SECONDS` (4 s,
-  Redis slot `text:num:<n>`), `TEXT_DAILY_CAP` (2,000) per Eastern day across all
-  campaigns, only inside the dialer's calling window in the client's zone (CSV
-  state; unknown = strict), DNC checked at upload AND before each send,
-  "Reply STOP to opt out." appended if the message lacks STOP.
-- Sender = `fleet_numbers()`; a client always gets the same number (their
-  lead's `dial_from`, else a stable hash of their phone).
-- **Auto-pause:** spam codes 40002/40003, unregistered 40010, or `FAIL_STREAK`
-  (10) failures in a row → PAUSED with `pause_reason`. 40300 (they texted STOP) →
-  DNC. A send with no carrier answer for 5 min is FAILED, never re-sent.
-- One text per person per campaign, no follow-ups (the SMS Manager's
-  first-template-only rule). The same number in a later campaign IS texted again.
-- Driver: Celery beat `text-campaign-tick` (5 s); locally the page's 5 s refresh
-  of `GET /voice/dialer/campaigns` ticks. Delivery reports: per-text
-  `webhook_url` → `/voice/telnyx/sms-status` (the inbound-sms route also accepts
-  them as a fallback).
-- Before live use, each sending number must be on the **IAG Dialer messaging
-  profile** in Telnyx and listed in `TELNYX_FROM_NUMBERS`.
-- Tests: `tests/unit/test_text_campaigns.py`; `.localpreview/verify-text-campaigns.mjs`
-  (simulator: upload → send → replies → pause/stop).
-
-## Listen in / whisper — `app/voice_dialer/monitor.py`, migration 065
-
-Managers (`_require_manager`) can join a CONNECTED dialer or inbound call from
-**Auto Dialer → Live calls → 🎧 Listen** (`components/ListenIn.tsx`, state in
-`lib/voice.ts`). One `voice_monitors` row per session (also who-listened-to-what;
-start + mode changes go to `audit_logs`).
-
-- Flow: `POST /voice/dialer/monitor {attempt_id}` rings the manager's browser
-  (`dial_browser`, `?leg=monitor&sv=`), which answers by itself → `monitor.on_answer`
-  joins `call_room(att)` **muted**, `startOnEnter=false`, `endOnExit=false`, no beep.
-- **Whisper** (`/monitor/{id}/mode`): TeXML `<Conference>` has no coach attribute,
-  so it is a REST participant update — `Coaching=true` + `CallSidToCoach=<agent's
-  voice_leg_uuid>` FIRST, and only if Telnyx's reply says `coaching` true is the
-  manager unmuted. Anything else → stays muted ("listening only"). The browser
-  also mutes its own mic in listen mode. A whisper must never reach the client.
-- The call ending (`on_call_event` completed, `_end_live_calls`) hangs every
-  listener up — otherwise the room never empties and its recording never lands;
-  `monitor.sweep` in the tick catches the rest. Leaving the Auto Dialer page ends it.
-- Listening = busy like a manual call: excluded in `_available_agents`, no
-  headset line (`open_line` / `on_agent_line` refuse; `agent_state.manual` true).
-- NOT for manual (Dial drawer) calls — those are a direct `<Dial><Number>`, no room.
-- Not yet proven on a real call: whether a muted participant hears the room,
-  the exact `coaching` field in Telnyx's reply, and whether the whisper is in
-  the room recording. `.localpreview/verify-listen-in.mjs` covers the simulator flow.
-
-## Inbound calls: client owners + hold queue — `app/voice_dialer/inbound.py`, migration 064
-
-Team-agreed rules for a client calling one of our numbers (the admin-facing
-copy is the **"How calls work"** drawer on the Auto Dialer page,
-`components/DialerNotes.tsx` — keep it in step when a rule changes):
-
-- **Owner** (`voice_client_owners`, by phone): the agent who MOST RECENTLY
-  called / talked to the client — set by `manual.start`, `connect_human` and
-  inbound `connect`. Managers (`MANAGER_ROLES`, incl. head) never own; their
-  clients' callbacks go to any free agent. Admins reassign / remove under
-  **Client owners** (`/voice/dialer/owners`); the next agent call overrides it.
-- Routing (`inbound.on_call`): closed (open hours on + outside) → closed message
-  with the hours; DNC / lead being worked → "we'll call you back"; owner **free**
-  on the line → owner; owner **busy** (Ready for calls, AVAILABLE/ON_CALL, not
-  free) → status `HOLDING` with `hold_for_user_id`, only the owner may take it
-  until `max_hold_seconds` (default 300), then anyone; owner **away** / none →
-  first free agent; nobody free → `HOLDING` for anyone; **nobody taking calls
-  at all** → no hold, callback.
-- Hold = call-script loop `talk` + `stream` (bargeIn, ~45 s generated soft loop at
-  `/voice/telnyx/hold-music.wav`, or `VOICE_HOLD_MUSIC_URL`) + 1-digit `input`
-  → `/voice/telnyx/hold`. **1 = call me back.** The dialer tick
-  (`serve_holding`, before outbound) bridges held callers longest-first and ends
-  holds past the limit if their webhook never came. `HOLDING → BRIDGING` is the
-  lock so the tick and the hold webhook never both bridge one caller.
-- Callback (`schedule_callback`): attempt → `MISSED` with the reason; dialer on →
-  lead `READY_TO_CALL` keeping their place (`yes_at` = hold start); dialer off →
-  regular pool as HOT. Hanging up on hold counts as a callback request.
-- **Held callers outrank everything:** `_tick` starts no outbound call while
-  anyone holds, and `dialer_reserves_agents` keeps pool offers off agents on a line.
-- Open hours + longest hold are in Dialing rules ("When clients call us"):
-  `voice_dialer_settings.max_hold_seconds / hours_enabled / open_days (Mon=0) /
-  open_start_minute / open_end_minute / hours_tz` (US zones). Hours default OFF.
-- Free agents on the line are bridged instantly (parked line), so there is no
-  "ring the owner for N seconds" step.
-- Tests: `tests/unit/test_voice_dialer.py` (hours); scenario + UI checks in
-  `.localpreview/verify-inbound-routing.mjs`.
-
-## Telnyx carrier — `app/voice_dialer/telnyx.py`
-
-The dialer, Dial drawer and inbound routing run on **Telnyx**, the only carrier
-(Vonage was removed 2026-11; old `sms_messages.provider='vonage'` rows stay as
-history, which is why `inbox.py` still reads both values).
-
-- **Call scripts are carrier-neutral lists of steps.** `telnyx.to_texml()`
-  translates them: `talk` → `<Say>`, `stream` → `<Play>`, `conversation` →
-  `<Dial><Conference>` (record → `record-from-start` +
-  `recordingStatusCallback`), `record`+`connect` →
-  `<Dial record="record-from-answer-dual"><Number url=notice>`, `input` →
-  `<Gather>` holding the bargeIn prompts **followed by a `<Redirect>` to the same
-  URL** (a TeXML Gather that times out falls through; the hold loop needs to see
-  "no digits"). `transfer` = TeXML call update
-  (`POST /texml/Accounts/{account}/Calls/{sid}` with `Texml=`).
-- **Webhooks:** `/api/v1/voice/telnyx/{answer,event,recording,hold,optout,inbound-sms,hold-music.wav}`.
-  `telnyx.normalize()` turns TeXML form fields into the dict `webhooks.py` reads
-  (CallSid→uuid, CallStatus in-progress→answered / no-answer→timeout /
-  canceled→cancelled, AnsweredBy→human|machine, Digits→dtmf,
-  RecordingUrl→recording_url); replies are TeXML. Trust = our `?k=` token or
-  Telnyx's Ed25519 signature (`telnyx-signature-ed25519` over
-  `"<timestamp>|<body>"`, 5-min window, `TELNYX_PUBLIC_KEY`). Inbound texts:
-  Messaging v2 `message.received` envelope.
-- **Agents' browsers are RUNG, not dialing out.** A browser can't start a
-  TeXML call, so `POST /voice/dialer/line {on:true}` and
-  `POST /voice/manual/calls` make the server call `sip:<gencred…>@sip.telnyx.com`
-  (`telnyx.dial_browser`, answer URL `?leg=agent&u=` / `?leg=manual&mc=`) and
-  `lib/voice.ts` answers it by itself — it registers the expectation BEFORE
-  asking and refuses any call nobody asked for. One telephony credential per
-  agent (named `iag_<user hex>`, created on first token request) under
-  `TELNYX_CREDENTIAL_CONNECTION_ID` (SIP URI calls: `internal` only). WebRTC
-  legs are $0.002/min, so the always-open headset line stays.
-- **Setup:** `venv/bin/python -m app.voice_dialer.telnyx_setup [--dry-run]`
-  creates/refreshes (by name) the outbound voice profile (US only), TeXML app,
-  credential connection and messaging profile, points their webhooks at
-  `VOICE_CALLBACK_BASE_URL`, attaches every account number, and prints the
-  `.env` lines. Rerun it when the ngrok URL changes. `TELNYX_ACCOUNT_SID` is
-  learned from webhooks / credentials if blank.
-- **Env:** `TELNYX_API_KEY`, `TELNYX_PUBLIC_KEY`, `TELNYX_TEXML_APP_ID`,
-  `TELNYX_CREDENTIAL_CONNECTION_ID`, `TELNYX_FROM_NUMBERS`, `VOICE_CALLBACK_BASE_URL`,
-  `VOICE_WEBHOOK_TOKEN`, `VOICE_TENANT_ID`, plus call behaviour:
-  `VOICE_MACHINE_DETECTION` (async AMD: `AsyncAmdStatusCallback` → event),
-  `VOICE_CONNECT_ON_ANSWER`, `VOICE_RECORDING_NOTICE`, `VOICE_HOLD_MUSIC_URL`,
-  `VOICE_TEST_NUMBERS`, `VOICE_SIMULATE`.
-- Tests: `tests/unit/test_telnyx.py`. End-to-end without a Telnyx account: run
-  the API with `TELNYX_API_BASE_URL` pointed at a fake REST server and post
-  TeXML-format webhooks (agent line → YES text → dial → bridge → hang-up →
-  recording → manual call → inbound call) — done 2026-10-30, all passing.
-
-## Verifying UI changes (headless Chrome over CDP)
-
-The `.localpreview/*.mjs` scripts drive a headless Chrome via the DevTools Protocol
-to seed auth, navigate, read computed styles, and screenshot — used to verify
-changes against the preview server before pushing.
-
-```bash
-# 1) start the preview server (above), then launch debug Chrome:
-"/c/Program Files/Google/Chrome/Application/chrome.exe" --headless=new \
-  --remote-debugging-port=9231 --remote-allow-origins=* --user-data-dir="$TEMP/cr" about:blank &
-# 2) a .mjs script connects to ws://127.0.0.1:9231, sets localStorage
-#    (access_token='local-demo', ebRole, ebMode='dark', ebLocalUser), navigates,
-#    and calls Page.captureScreenshot / Runtime.evaluate. See existing scripts.
-```
-`.localpreview/` is git-ignored — scratch scripts/screenshots there never get committed.
-
-## Current state / where to begin  (as of 2026-06-18)
-
-`main` @ `6be3e32`. Recent merged work (newest first):
-- `6be3e32` remove Dashboard & Dispositions from the SMS shell + cache bump.
-- `1e7ec10` carrier appointment `effective_date` made optional (fixed a 422 that
-  blocked ALL appointment creates).
-- `ad91f8d` remove Dashboard & Dispositions from the static sidebar.
-- `02efe2e` merge Dispositions into Agent Performance.
-- `7c2f289` Sales Dashboard "Total Leads" card.
-- `80934dc` carrier appointments multi-state + no effective date; license state dropdown.
-
-**Uncommitted working tree (built + verified this session, NOT yet pushed):**
-- In-app **confirmation dialog** replacing the browser's native `confirm()` for
-  removing a license / carrier appointment (centered modal in `settings.html`).
-- **Dark-mode icon outline fix** in `prefs-extras.js`: icon chips that were solid
-  white boxes (`.notif-icon`, the `⌘K` `.search kbd` badge, and `.kpi-icon`/
-  `.activity-icon`) now render as transparent + white outline. Includes a
-  `prefs-extras.js?v=4 → v=5` cache bump across all 34 pages.
-
-**Stale, un-reconciled:** branch **`wip/portal-sms-pending`** holds older
-dark-mode / SMS-bundle / `PortalShell.tsx` working-tree changes that diverged from
-the team's newer SPA rebuild — do NOT force the stale SMS bundle; merge sms-ui
-source and rebuild fresh if reviving any of it.
+**Must-follow:** never edit the env-detection lines at the top of
+`apps/frontendall/services/api.js` · `git pull --rebase origin main` before any
+push, and push only when asked · after editing `apps/sms-ui/src` run
+`cd apps/sms-ui && npx vite build` · changing a shared portal JS file means
+bumping its `?v=N` in every `apps/frontendall/*.html`.
+Local run with the real backend: `.localpreview/run-local.sh` →
+http://127.0.0.1:5500/login.html (admin@local.test / Admin123!, agent@local.test / Agent123!).
+
+## Roles
+
+- Only **two roles are assigned now: `agent` and `super_admin`.** Old users may still
+  have `lead / manager / head / tenant_admin` — they keep working and show as
+  "(legacy)". Don't add roles and don't redesign the role system.
+- `dev` = developer, passes every gate.
+- Role is `localStorage.ebRole` in the browser; the server checks it again with
+  `require_role(...)`. Front-end gates: `apps/sms-ui/src/lib/auth.ts`
+  (`canSeeQueue`, `canSeeManager`, `isAdminClass`, `isOwner`) and
+  `apps/frontendall/prefs-extras.js`.
+
+| Page | Who |
+|---|---|
+| Lead Manager `/sms/#/queue` | agent (+ head, dev) |
+| SMS Manager `/sms/#/manager` | super_admin (+ legacy manager/admin roles, dev) |
+| Auto Dialer `/sms/#/dialer` | same as SMS Manager |
+| HealthSherpa Auth `/sms/#/healthsherpa` | everyone signed in (server scopes rows) |
+| └ its Text campaigns tab | super_admin manages; managers + the campaign's HealthSherpa agent can view |
+| Text campaigns, Expenses | super_admin (+ dev) |
+
+Sidebar links come from THREE places — change all that apply: static `.html`
+pages, `prefs-extras.js` / `services/error-boundary.js` (injected links), and
+`apps/sms-ui/src/components/PortalShell.tsx`.
+
+## Lead Manager (agents)
+
+`pages/SmsQueue.tsx`, backend `app/sms_queue/`.
+- The lead pool is `sms_leads` with status `QUEUED`. An agent presses **Join
+  queue**; a lead is offered in a popup (Accept / Pass), then the agent works it
+  and marks a disposition (sale, appointment, not interested, voicemail…).
+- **Ready for calls** (second switch) opens the agent's browser phone line so the
+  Auto Dialer can connect live callers to them. Join queue alone = pool only.
+- **Dial** button opens the manual dial drawer (call any number from the browser).
+
+## SMS Manager (super_admin)
+
+`pages/SmsManager.tsx`, `components/LeadsTools.tsx`, backend `app/sms_queue/`, `app/ingestion/`.
+- Watch agents (online, on call, current lead), the pool, and reports.
+- **Direct to agent pool** upload (`POST /sms/pool/upload`): CSV rows go straight
+  into the pool as `QUEUED` — **no text is sent**; agents call them. Each upload is
+  a batch that can be removed. Limits 20,000 rows / 30 MB.
+- The old **Sinch / Engage Cloud campaigns** (`/ingestion/campaigns`) still exist
+  but are not the active texting path — Telnyx is.
+
+## Auto Dialer (super_admin) — Telnyx
+
+`pages/AutoDialer.tsx`, backend `app/voice_dialer/` (Telnyx only).
+- **Text campaigns** (`campaigns.py`, `components/TextCampaigns.tsx`): upload CSV,
+  one message, Start. Paced to protect our 10DLC numbers (one text per number every
+  few seconds, daily cap, client-timezone hours, DNC checked, STOP footer,
+  auto-pause on carrier blocks). One text per person per campaign.
+- **Replies** (`service.on_inbound_sms`, `replies.classify`): YES / positive →
+  dial list (`READY_TO_CALL`) if the dialer is on, else the regular pool as HOT.
+  STOP / not interested / abusive / wrong number → Do-Not-Call. A reply to a
+  **HealthSherpa** text campaign is taken out first and never reaches this logic
+  (see below).
+- **Calling:** only a live person is connected to a free agent who is "Ready for
+  calls"; voicemail is dropped and retried. 8 am–8 pm client time, ≤3 tries / 24 h.
+- Also on this page: live calls + **Listen / whisper**, Called list with
+  recordings, Opted-out list, Inbox (all texts + calls per phone), Client owners
+  and inbound-call rules (owner first, hold queue, callback), dialing rules.
+- Never run the synchronous dialer DB code directly in an `async` route — use the
+  threadpool (`_run`). Doing that once froze the whole app.
+- Without Telnyx keys (non-production) a simulator plays the carrier for testing.
+
+## HealthSherpa authorizations — `app/hs_auth/`, `apps/hs-extension/`
+
+Gets a client's 2027 CMS authorization in HealthSherpa for an agent.
+HealthSherpa has **no API** and blocks non-US access, so a **Chrome extension**
+does the agent's clicks inside a logged-in HealthSherpa tab.
+- Page `pages/HealthSherpa.tsx`: upload a sheet (.xlsx/.csv: first name, last
+  name, DOB, state, optional phone/email — cleaned in `sheet.py`: no punctuation,
+  MM/DD/YYYY, state code; bad rows = "Fix data"), press **Start**, confirm consent.
+- Extension (`hs.js`): Search Marketplace → name/DOB/state + consent boxes →
+  Plan Year 2027 row with matching DOB → Add to clients → Include consent →
+  Text link → waits (Refresh status, one resend on expiry) → Finish. It finds
+  everything by **visible text**, not screen position, and stops with a reason
+  on anything unexpected (no 2027 row, two matches, phone differs from the sheet,
+  already in clients, logged out → waits for login).
+- The CLIENT authorizes on their own phone — never automated.
+- Statuses: PENDING, IN_PROGRESS, LINK_SENT, AUTHORIZED, NOT_FOUND, NEEDS_REVIEW,
+  EXPIRED, FAILED, CANCELLED, INVALID. Limit `HS_AUTH_DAILY_LIMIT` (20 per agent
+  per Eastern day), one client at a time. The extension reports with a one-job
+  token, never the portal login.
+- Build the agent zip: `scripts/build-hs-extension.sh` (live host
+  `portal.iagplans.com`, localhost stripped). Bump `version` in `manifest.json`
+  AND `common.js` on every change.
+- Test: `.localpreview/fake-healthsherpa/server.py 8443` + `.localpreview/verify-hs-extension.mjs`.
+  The real HealthSherpa pages have not been seen yet — watch the first live run.
+
+## HealthSherpa text campaigns — `app/hs_auth/campaigns.py` (migration 068)
+
+The **Text campaigns** tab on the HealthSherpa page (`components/hs/HsCampaigns.tsx`).
+**Completely separate from the Auto Dialer's text campaigns** — own tables
+(`hs_text_campaigns`, `hs_campaign_texts`, conversation columns on
+`hs_auth_requests`), and its replies are **never dialed, pooled or made into a lead.**
+No Google Sheet: every client's details, texts and status are on the page, with
+**Export to Excel (CSV)** for the closer.
+- Flow per client (`hs_auth_requests.convo`): blast → any non-negative reply →
+  Stan's approved follow-up, sent **verbatim** (`FOLLOWUP_TEXT` — an approved
+  exception to "one text per person", HealthSherpa campaigns only) → wait 10 min
+  (`NO_ANSWER` after; a late answer still counts) → any non-negative answer =
+  "Company they're renewing" → queued (status `PENDING`) → **auto mode** runs it
+  → link sent → ONE reminder at 7 min (OFF by default; the text is a placeholder
+  until approved 10DLC wording is pasted in Settings) → `EXPIRED` at 15 min, no
+  resend unless the campaign setting says so. STOP / no / abuse / wrong number at
+  ANY point → Do-Not-Call (same reasons as the dialer), texts cancelled, any
+  queued or running HealthSherpa job cancelled. "Fix data" rows aren't texted.
+- **Reply routing:** `voice_dialer/service.on_inbound_sms` calls
+  `hs_campaigns.on_inbound` FIRST. It owns the reply when our newest text to that
+  number (last 30 days) was a HealthSherpa campaign text; a newer dialer text
+  takes the number back. Not wrapped in try/except on purpose — falling through
+  to the dialer would CALL someone who only agreed to a link.
+- **Sender is shared, not copied:** `voice_dialer/campaigns.py` exposes the safety
+  pieces (`senders`, `sender_for`, `claim_number`, `in_hours`, `dnc_digits`,
+  `sent_today` — which counts these texts too — `daily_cap`, `failure_action`).
+  Blast, reminder and auto jobs only run 8 am–8 pm client time; the follow-up goes
+  any hour (it answers their text). Pause stops blasts + reminders; Stop cancels
+  unsent blasts; conversations already started always finish.
+- **Auto mode = the portal tab drives it.** The campaign's HealthSherpa agent
+  (Stan — clients authorize HIS account, so he closes the sale) leaves the page
+  open with **Auto mode** on; `components/hs/useAutoMode.ts` calls
+  `POST /hs-auth/auto/next` every 5 s and hands the job to the extension like
+  Start. The server still enforces the daily limit, one client at a time and
+  hours, and writes the consent to the job history (the client's YES + answer
+  with times). Extension ≥ 1.1.0 shows auto mode in its popup (Turn off there too).
+- Who: view = managers + the campaign's HealthSherpa agent; create / start /
+  pause / stop / settings = super_admin.
+- Timers: Celery beat `hs-campaign-tick` (5 s); locally the page's poll ticks.
+- Tests: `tests/unit/test_hs_text_campaigns.py` (uses local Postgres, rolled
+  back). End to end: `.localpreview/verify-hs-campaigns.mjs` — start the API with
+  `TELNYX_API_KEY= TELNYX_TEXML_APP_ID= TELNYX_FROM_NUMBERS=` so the simulator
+  sends nothing real (the local `.env` has REAL Telnyx keys).

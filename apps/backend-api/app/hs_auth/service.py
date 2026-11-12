@@ -31,7 +31,7 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import case, func, or_
+from sqlalchemy import and_, case, func, or_
 from sqlalchemy.orm import Session
 
 from app.core.active_agents import user_is_active
@@ -46,6 +46,12 @@ FINAL = ("AUTHORIZED", "NOT_FOUND", "NEEDS_REVIEW", "EXPIRED", "FAILED", "CANCEL
 STARTABLE = ("PENDING", "NOT_FOUND", "NEEDS_REVIEW", "EXPIRED", "FAILED", "CANCELLED")
 REPORTABLE = ACTIVE + FINAL
 ALL_STATUSES = ("PENDING",) + ACTIVE + FINAL
+
+STATUS_LABELS = {
+    "PENDING": "Ready", "IN_PROGRESS": "Running", "LINK_SENT": "Link sent", "AUTHORIZED": "Authorized",
+    "NOT_FOUND": "Not found", "NEEDS_REVIEW": "Needs review", "EXPIRED": "Expired", "FAILED": "Failed",
+    "CANCELLED": "Stopped", "INVALID": "Fix data", "TEXTING": "Texting",
+}
 
 MANAGER_ROLES = ("manager", "head", "tenant_admin", "admin", "super_admin", "dev")
 
@@ -241,6 +247,8 @@ def serialize(row: HsAuthRequest, names: dict, *, with_events: bool = False) -> 
         "finished_at": row.finished_at.isoformat() if row.finished_at else None,
         "updated_at": row.updated_at.isoformat() if row.updated_at else None,
         "created_at": row.created_at.isoformat() if row.created_at else None,
+        "campaign_id": str(row.campaign_id) if row.campaign_id else None,
+        "auto": bool(row.campaign_id),
     }
     if with_events:
         d["events"] = row.events or []
@@ -250,8 +258,12 @@ def serialize(row: HsAuthRequest, names: dict, *, with_events: bool = False) -> 
 def list_requests(db: Session, tenant_id, user: User, *, status: Optional[str], agent: Optional[str],
                   batch: Optional[str], q: Optional[str], limit: int, offset: int) -> dict:
     sweep_stale(db, tenant_id)
-    base = _visible(db.query(HsAuthRequest).filter(HsAuthRequest.tenant_id == tenant_id,
-                                                   HsAuthRequest.deleted_at.is_(None)), user)
+    # HealthSherpa text-campaign clients live in their own section (campaigns.py)
+    # — except the one auto mode is running right now, so its card shows here too.
+    base = _visible(db.query(HsAuthRequest).filter(
+        HsAuthRequest.tenant_id == tenant_id, HsAuthRequest.deleted_at.is_(None),
+        or_(HsAuthRequest.campaign_id.is_(None),
+            and_(HsAuthRequest.status.in_(ACTIVE), HsAuthRequest.started_by == user.id))), user)
     if agent and is_manager(user):
         base = base.filter(HsAuthRequest.assigned_to.is_(None)) if agent == "open" else base.filter(HsAuthRequest.assigned_to == agent)
     if batch:
@@ -274,6 +286,7 @@ def list_requests(db: Session, tenant_id, user: User, *, status: Optional[str], 
     names = _names(db, {r.assigned_to for r in rows} | {r.started_by for r in rows})
     batches = (db.query(HsAuthBatch).filter(HsAuthBatch.tenant_id == tenant_id)
                .order_by(HsAuthBatch.created_at.desc()).limit(50).all())
+    batches = [b for b in batches if not (b.name or "").startswith("Campaign: ")]
     if not is_manager(user):
         visible_batches = {b for (b,) in _visible(db.query(HsAuthRequest.batch_id).filter(
             HsAuthRequest.tenant_id == tenant_id, HsAuthRequest.deleted_at.is_(None)), user).distinct()}
@@ -307,9 +320,15 @@ def detail(db: Session, tenant_id, user: User, request_id: str) -> dict:
 
 # ---------------------------------------------------------------- actions
 
-def start(db: Session, tenant_id, user: User, request_id: str) -> dict:
+def start(db: Session, tenant_id, user: User, request_id: str, *, auto: bool = False,
+          resends: Optional[int] = None, consent: Optional[str] = None) -> dict:
+    """auto=True: a HealthSherpa text-campaign client started by the agent's
+    auto-mode tab (campaigns.next_job). Nobody ticks the consent confirmation,
+    so `consent` (their YES + answer, with times) goes in the job history."""
     sweep_stale(db, tenant_id)
     row = get_request(db, tenant_id, user, request_id)
+    if row.campaign_id and not auto:
+        raise HsAuthError(409, "This client is in a HealthSherpa text campaign — auto mode runs it.")
     if row.assigned_to and str(row.assigned_to) != str(user.id) and not is_manager(user):
         raise HsAuthError(403, "This client is assigned to another agent.")
     if row.status in ACTIVE:
@@ -344,7 +363,9 @@ def start(db: Session, tenant_id, user: User, request_id: str) -> dict:
     row.runs = (row.runs or 0) + 1
     if not row.assigned_to:
         row.assigned_to = user.id  # taking an open row makes it yours
-    _set_status(row, "IN_PROGRESS", "Starting…", "start")
+    if consent:
+        _event(row, "consent", None, consent)
+    _set_status(row, "IN_PROGRESS", "Starting…" if not auto else "Starting (auto mode)…", "start")
     db.add(HsAuthRun(tenant_id=tenant_id, request_id=row.id, user_id=user.id))
     db.commit()
 
@@ -360,8 +381,9 @@ def start(db: Session, tenant_id, user: User, request_id: str) -> dict:
             "state_name": STATES.get(row.state or "", ""),
             "phone": row.phone,
             "email": row.email,
-            "max_resends": max_resends(),
+            "max_resends": max_resends() if resends is None else resends,
             "plan_year": 2027,
+            "auto": auto,
         },
         "usage": usage(db, tenant_id, user.id),
     }
@@ -385,7 +407,9 @@ def reset(db: Session, tenant_id, user: User, request_id: str) -> dict:
         raise HsAuthError(409, "Stop it first.")
     if row.status == "INVALID":
         raise HsAuthError(409, "Fix the row with Edit instead.")
-    _set_status(row, "PENDING", None, "reset")
+    if row.campaign_id and row.convo != "ANSWERED":
+        raise HsAuthError(409, "This client hasn't answered the text yet — nothing to queue.")
+    _set_status(row, "PENDING", "Queued for HealthSherpa again." if row.campaign_id else None, "reset")
     row.finished_at = None
     db.commit()
     return serialize(row, _names(db, {row.assigned_to, row.started_by}))
@@ -437,12 +461,44 @@ def update(db: Session, tenant_id, user: User, request_id: str, data: dict) -> d
         errors.append("Date of birth is missing")
     if row.state is None and "State isn't a US state" not in errors:
         errors.append("State is missing")
+    if row.campaign_id:
+        return _update_campaign_row(db, row, errors, data)
     if errors:
         _set_status(row, "INVALID", "; ".join(errors), "edited")
         row.finished_at = None
     elif row.status == "INVALID" or any(k in data for k in ("first_name", "last_name", "dob", "state", "phone")):
         _set_status(row, "PENDING", None, "edited")
         row.finished_at = None
+    db.commit()
+    return serialize(row, _names(db, {row.assigned_to, row.started_by}))
+
+
+def _update_campaign_row(db: Session, row: HsAuthRequest, errors: list, data: dict) -> dict:
+    """A text-campaign client: the phone is required (it's how we reach them),
+    and fixing an INVALID row puts it back in the blast queue."""
+    if not row.phone:
+        errors.append("A mobile phone is required for a text campaign")
+    if "phone" in data and row.convo not in ("INVALID", "QUEUED"):
+        errors.append("The phone can't change after the client was texted")
+    if errors:
+        if row.convo in ("INVALID", "QUEUED"):
+            row.convo = "INVALID"
+            row.convo_detail = "Fix data — not texted until fixed: " + "; ".join(errors)
+            _set_status(row, "INVALID", "; ".join(errors), "edited")
+            row.finished_at = None
+            db.commit()
+            return serialize(row, _names(db, {row.assigned_to, row.started_by}))
+        db.rollback()
+        raise HsAuthError(400, "; ".join(errors))
+    if row.convo == "INVALID":
+        row.convo, row.convo_detail = "QUEUED", None
+        _set_status(row, "TEXTING", None, "edited")
+        row.finished_at = None
+    elif row.status == "INVALID" and row.convo == "ANSWERED":
+        _set_status(row, "PENDING", "Fixed — queued for HealthSherpa again.", "edited")
+        row.finished_at = None
+    else:
+        _event(row, "edited", None, "Details edited")
     db.commit()
     return serialize(row, _names(db, {row.assigned_to, row.started_by}))
 

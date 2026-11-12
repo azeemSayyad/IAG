@@ -11,6 +11,7 @@ importScripts("common.js");
 var HS_HOME = "https://www.healthsherpa.com/";
 var STATE_KEY = "iagJob";
 var LOG_KEY = "iagLog";
+var AUTO_KEY = "iagAuto";   // {on, at} — set by the portal page's Auto mode switch
 
 function getState() {
   return chrome.storage.session.get(STATE_KEY).then(function (r) { return r[STATE_KEY] || null; });
@@ -86,7 +87,10 @@ function openHsTab(state) {
       state.tabId = tabId;
       setState(state).then(function () {
         chrome.tabs.update(tabId, { url: HS_HOME, active: true }, function () {
-          if (windowId) chrome.windows.update(windowId, { focused: true });
+          // Auto mode runs unattended: don't pull the window in front of whatever
+          // the person is doing. (The tab stays the active one in its window, so
+          // Chrome doesn't throttle its timers.)
+          if (windowId && !state.job.auto) chrome.windows.update(windowId, { focused: true });
           resolve(tabId);
         });
       });
@@ -134,7 +138,7 @@ chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
           return chrome.storage.session.set({ iagLastTab: tabId });
         }).then(function () {
           badge("…", "#1f5fbf");
-          log("Started " + job.first_name + " " + job.last_name);
+          log((job.auto ? "Auto: started " : "Started ") + job.first_name + " " + job.last_name);
           report(state, { step: "open", detail: "Opening HealthSherpa" });
           broadcast({ id: job.id, step: "open" });
           sendResponse({ ok: true });
@@ -171,6 +175,35 @@ chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
       });
     });
     return;
+  }
+
+  if (kind === "auto-mode") {
+    var origin2 = sender.origin || (sender.url ? new URL(sender.url).origin : "");
+    if (!IAG.isPortalOrigin(origin2)) return;
+    var o = {}; o[AUTO_KEY] = { on: !!msg.on, at: Date.now() };
+    chrome.storage.session.get(AUTO_KEY).then(function (r) {
+      var was = !!(r[AUTO_KEY] && r[AUTO_KEY].on);
+      if (was !== !!msg.on) log("Auto mode " + (msg.on ? "ON" : "off") + " (from the portal)");
+      return chrome.storage.session.set(o);
+    });
+    return;
+  }
+
+  if (kind === "auto-off") {
+    // From the popup: ask every portal tab to switch auto mode off.
+    var off = {}; off[AUTO_KEY] = { on: false, at: Date.now() };
+    chrome.storage.session.set(off).then(function () {
+      log("Auto mode turned off from the extension");
+      chrome.tabs.query({}, function (tabs) {
+        tabs.forEach(function (t) {
+          if (!t.url) return;
+          try { if (!IAG.isPortalOrigin(new URL(t.url).origin)) return; } catch (e) { return; }
+          chrome.tabs.sendMessage(t.id, { kind: "auto-off" }, function () { void chrome.runtime.lastError; });
+        });
+      });
+      sendResponse({ ok: true });
+    });
+    return true;
   }
 
   /* ---- from hs.js (the HealthSherpa tab) ---- */
@@ -221,8 +254,9 @@ chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
 
   if (kind === "status") {
     getState().then(function (s) {
-      chrome.storage.session.get(LOG_KEY).then(function (r) {
-        sendResponse({ state: s ? { job: { first_name: s.job.first_name, last_name: s.job.last_name, id: s.job.id }, phase: s.phase, stopped: s.stopped } : null, log: r[LOG_KEY] || [], version: IAG.VERSION });
+      chrome.storage.session.get([LOG_KEY, AUTO_KEY]).then(function (r) {
+        var a = r[AUTO_KEY] || null;
+        sendResponse({ state: s ? { job: { first_name: s.job.first_name, last_name: s.job.last_name, id: s.job.id, auto: !!s.job.auto }, phase: s.phase, stopped: s.stopped } : null, log: r[LOG_KEY] || [], version: IAG.VERSION, auto: a });
       });
     });
     return true;

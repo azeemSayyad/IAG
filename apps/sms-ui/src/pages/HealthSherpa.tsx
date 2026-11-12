@@ -9,14 +9,22 @@
  *
  * Statuses come from the server (the extension reports each step with a
  * one-job token); the page polls fast while a job is running.
+ *
+ * The "Text campaigns" tab (components/hs/HsCampaigns.tsx) is the HealthSherpa
+ * TEXT CAMPAIGN flow — separate from the Auto Dialer's. Its clients are queued
+ * by their own text replies and run by AUTO MODE (components/hs/useAutoMode.ts),
+ * which lives here so it keeps running whichever tab is open.
  */
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, apiUpload } from "../lib/api";
 import { Drawer, Field, drawerCtl } from "../components/Drawer";
 import {
   focusHealthSherpa, sendJob, stopJob, useExtension, useExtensionUpdates,
   type ExtUpdate, type HsJob,
 } from "../lib/hsBridge";
+import { Banner, Empty, Menu, MenuItem, ago, errText, fmtDob, fmtPhone } from "../components/hs/ui";
+import HsCampaigns, { type HsOverview } from "../components/hs/HsCampaigns";
+import { autoLabel, useAutoMode } from "../components/hs/useAutoMode";
 
 type Row = {
   id: string;
@@ -42,6 +50,7 @@ type Row = {
   authorized_at: string | null;
   finished_at: string | null;
   updated_at: string | null;
+  auto?: boolean;
   events?: { at: string; step: string | null; status: string | null; detail: string }[];
 };
 type Usage = { used: number; limit: number; left: number };
@@ -85,30 +94,6 @@ const btn = "rounded-lg bg-accent px-3 py-1.5 text-xs font-bold text-white hover
 const btnGhost = "rounded-lg border border-hairline px-3 py-1.5 text-xs font-semibold text-ink-muted hover:bg-black/5 hover:text-ink disabled:opacity-50";
 const inputCls = "rounded-lg border border-hairline bg-white px-2 py-1.5 text-xs text-ink";
 
-function fmtDob(iso: string | null) {
-  if (!iso) return "—";
-  const [y, m, d] = iso.split("-");
-  return `${m}/${d}/${y}`;
-}
-function fmtPhone(p: string | null) {
-  if (!p || p.length !== 10) return p || "";
-  return `(${p.slice(0, 3)}) ${p.slice(3, 6)}-${p.slice(6)}`;
-}
-function ago(iso: string | null) {
-  if (!iso) return "";
-  const s = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 1000));
-  if (s < 60) return "just now";
-  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
-  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
-  return new Date(iso).toLocaleDateString();
-}
-function errText(e: unknown) {
-  const m = e instanceof Error ? e.message : String(e);
-  const json = m.match(/\{.*\}$/s);
-  if (json) { try { return JSON.parse(json[0]).detail || m; } catch { /* not JSON */ } }
-  return m;
-}
-
 const TEMPLATE = "First Name,Last Name,Date of Birth,State,Phone,Email\nJane,Doe,01/31/1985,FL,(555) 123-4567,jane@example.com\n";
 
 export default function HealthSherpa() {
@@ -129,6 +114,10 @@ export default function HealthSherpa() {
   const [showInstall, setShowInstall] = useState(false);
   const [agents, setAgents] = useState<Agent[]>([]);
   const [, tick] = useState(0);
+  const [tab, setTab] = useState<"clients" | "campaigns">(() => {
+    try { return localStorage.getItem("hsTab") === "campaigns" ? "campaigns" : "clients"; } catch { return "clients"; }
+  });
+  const [hsOverview, setHsOverview] = useState<HsOverview | null>(null);
 
   const load = useCallback(() => {
     const p = new URLSearchParams();
@@ -160,6 +149,23 @@ export default function HealthSherpa() {
   useEffect(() => {
     if (data?.is_manager) api<Agent[]>("/hs-auth/agents").then(setAgents).catch(() => setAgents([]));
   }, [data?.is_manager]);
+
+  // HealthSherpa text campaigns: managers + the campaign's HealthSherpa agent
+  // (403 for everyone else — then the tab simply isn't there).
+  const loadOverview = useCallback(() => {
+    api<HsOverview>("/hs-auth/campaigns").then(setHsOverview).catch(() => setHsOverview(null));
+  }, []);
+  const auto = useAutoMode(ext, !!hsOverview?.is_hs_agent, load);
+  useEffect(() => {
+    loadOverview();
+    const t = window.setInterval(loadOverview, tab === "campaigns" || auto.active ? 5000 : 30000);
+    return () => window.clearInterval(t);
+  }, [loadOverview, tab, auto.active]);
+  const pickTab = (t: "clients" | "campaigns") => {
+    setTab(t);
+    try { localStorage.setItem("hsTab", t); } catch { /* private window */ }
+  };
+  const showCampaigns = !!hsOverview && tab === "campaigns";
 
   const onUpdate = useCallback((u: ExtUpdate) => {
     setLive((cur) => ({ ...cur, [u.id]: u }));
@@ -234,6 +240,17 @@ export default function HealthSherpa() {
               Today: {usage.used} / {usage.limit}
             </span>
           )}
+          {hsOverview?.is_hs_agent && (
+            <button onClick={() => auto.toggle(!auto.on)} disabled={!ext} data-testid="hs-auto-toggle"
+                    title={!ext ? "Install the Chrome extension first" : "Run answered text-campaign clients in HealthSherpa automatically. Keep this tab open."}
+                    className={`flex items-center gap-2 rounded-full px-3 py-1 text-xs font-bold disabled:opacity-50 ${auto.active ? "bg-accent text-white" : "bg-black/5 text-ink-soft hover:text-ink"}`}>
+              <span className={`inline-block h-3.5 w-6 rounded-full p-0.5 ${auto.active ? "bg-white/40" : "bg-black/15"}`}>
+                <span className={`block h-2.5 w-2.5 rounded-full bg-white transition ${auto.active ? "translate-x-2.5" : ""}`} />
+              </span>
+              Auto mode {auto.active ? "on" : "off"}
+              {!!hsOverview.my_queue && !auto.active && <span className="rounded-full bg-accent px-1.5 text-white">{hsOverview.my_queue}</span>}
+            </button>
+          )}
           {ext ? (
             <span className="rounded-full bg-success/15 px-3 py-1 text-xs font-bold text-success">
               ● Extension connected <span className="font-normal opacity-70">v{ext.version}</span>
@@ -247,12 +264,37 @@ export default function HealthSherpa() {
         </div>
       </div>
 
+      {hsOverview && (
+        <div className="flex gap-1 border-b border-hairline" role="tablist">
+          {([["clients", "Clients (Start by hand)"], ["campaigns", "Text campaigns"]] as const).map(([k, label]) => (
+            <button key={k} role="tab" aria-selected={tab === k} onClick={() => pickTab(k)}
+                    className={`-mb-px border-b-2 px-3 py-2 text-xs font-bold ${tab === k ? "border-accent text-accent" : "border-transparent text-ink-muted hover:text-ink"}`}>
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {auto.active && (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-accent/30 bg-accent/5 px-3 py-2 text-xs" data-testid="hs-auto-status">
+          <span><b className="text-accent">Auto mode</b> · {autoLabel(auto.info, usage?.left)}. Keep this tab open and HealthSherpa logged in.</span>
+          <button className={btnGhost} onClick={() => auto.toggle(false)}>Turn off</button>
+        </div>
+      )}
+      {auto.error && <Banner tone="danger" onClose={auto.clearError}>{auto.error}</Banner>}
       {err && <Banner tone="danger" onClose={() => setErr(null)}>{err}</Banner>}
       {note && <Banner tone="success" onClose={() => setNote(null)}>{note}</Banner>}
 
       {myRunning && <RunningCard row={myRunning} live={live[myRunning.id]} busy={busyId === myRunning.id}
                                  maxResends={data?.max_resends ?? 1} onStop={() => doStop(myRunning)} />}
 
+      {showCampaigns && (
+        <HsCampaigns overview={hsOverview!} reloadOverview={loadOverview} agents={agents}
+                     onEdit={(c) => setEditRow(c as unknown as Row)} onError={(m) => m && setErr(m)}
+                     onNote={(m) => { setNote(m); setErr(null); }} />
+      )}
+
+      {!showCampaigns && <>
       <UploadCard isManager={!!data?.is_manager} agents={agents}
                   onDone={(msg) => { setNote(msg); setErr(null); load(); }} onError={setErr} />
 
@@ -378,6 +420,7 @@ export default function HealthSherpa() {
           </div>
         )}
       </div>
+      </>}
 
       {/* Start confirmation — the consent tick in HealthSherpa is the AGENT's statement. */}
       <Drawer
@@ -473,7 +516,7 @@ function RunningCard({ row, live, busy, maxResends, onStop }: {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">
           <div className="text-[0.68rem] font-bold uppercase tracking-wide text-accent">
-            {row.status === "LINK_SENT" ? "Waiting for the client" : "Running in HealthSherpa"}
+            {row.auto && "Auto mode · "}{row.status === "LINK_SENT" ? "Waiting for the client" : "Running in HealthSherpa"}
           </div>
           <div className="truncate text-lg font-extrabold text-ink">{row.first_name} {row.last_name}</div>
           <div className="text-xs text-ink-muted">
@@ -623,51 +666,5 @@ function EditDrawer({ row, isManager, agents, onClose, onSaved }: {
         </Field>
       )}
     </Drawer>
-  );
-}
-
-function Banner({ tone, children, onClose }: { tone: "danger" | "success"; children: ReactNode; onClose: () => void }) {
-  const cls = tone === "danger" ? "border-danger/30 bg-danger/10 text-danger" : "border-success/30 bg-success/10 text-success";
-  return (
-    <div className={`flex items-start justify-between gap-3 rounded-lg border px-3 py-2 text-xs font-semibold ${cls}`}>
-      <span>{children}</span>
-      <button onClick={onClose} aria-label="Dismiss" className="opacity-60 hover:opacity-100">×</button>
-    </div>
-  );
-}
-
-function Empty({ children }: { children: ReactNode }) {
-  return <div className="py-10 text-center text-sm text-ink-muted">{children}</div>;
-}
-
-function Menu({ children }: { children: ReactNode }) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!open) return;
-    const close = (e: MouseEvent) => { if (!ref.current?.contains(e.target as Node)) setOpen(false); };
-    document.addEventListener("mousedown", close);
-    return () => document.removeEventListener("mousedown", close);
-  }, [open]);
-  return (
-    <div ref={ref} className="relative">
-      <button className="rounded-lg px-2 py-1.5 text-xs text-ink-faint hover:bg-black/5 hover:text-ink" aria-label="More"
-              onClick={() => setOpen((o) => !o)}>⋯</button>
-      {open && (
-        <div className="absolute right-0 z-20 mt-1 min-w-44 rounded-lg border border-hairline bg-white py-1 text-left shadow-lg"
-             onClick={() => setOpen(false)}>
-          {children}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function MenuItem({ children, danger, onClick }: { children: ReactNode; danger?: boolean; onClick: () => void }) {
-  return (
-    <button onClick={onClick}
-            className={`block w-full px-3 py-1.5 text-left text-xs hover:bg-black/5 ${danger ? "text-danger" : "text-ink"}`}>
-      {children}
-    </button>
   );
 }

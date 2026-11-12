@@ -464,3 +464,29 @@ def text_campaign_tick(self) -> Dict:
         return {"tenants": len(tenant_ids), "sent": sent}
     finally:
         db.close()
+
+
+@celery_app.task(
+    name="workers.tasks.sms.hs_campaign_tick",
+    bind=True,
+)
+def hs_campaign_tick(self) -> Dict:
+    """HealthSherpa text campaigns (app/hs_auth/campaigns.py): timers and the
+    next texts for every tenant with a campaign from the last 30 days. Pacing,
+    hours and the daily cap live in campaigns.tick — this is only the heartbeat."""
+    from datetime import datetime, timedelta, timezone
+
+    from app.hs_auth import campaigns
+    from app.models.hs_auth import HsTextCampaign
+
+    db = next(get_db())
+    try:
+        since = datetime.now(timezone.utc) - timedelta(days=30)
+        tenant_ids = [
+            str(r[0]) for r in db.query(HsTextCampaign.tenant_id)
+            .filter(HsTextCampaign.status != "DRAFT", HsTextCampaign.created_at >= since).distinct().all()
+        ]
+        sent = sum(campaigns.tick(db, tid) for tid in tenant_ids)
+        return {"tenants": len(tenant_ids), "sent": sent}
+    finally:
+        db.close()

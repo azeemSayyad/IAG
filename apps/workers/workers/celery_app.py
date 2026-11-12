@@ -150,6 +150,13 @@ celery_app.conf.update(
             "schedule": 5.0,
             "options": {"expires": 5},
         },
+        # HealthSherpa text campaigns (HealthSherpa page): blast batches,
+        # follow-ups, the 10-min answer wait, 7-min reminder, 15-min expiry.
+        "hs-campaign-tick": {
+            "task": "workers.tasks.sms.hs_campaign_tick",
+            "schedule": 5.0,
+            "options": {"expires": 5},
+        },
         "auto-assign-sms-queue": {
             "task": "workers.tasks.sms.auto_assign_queue",
             "schedule": 10.0,

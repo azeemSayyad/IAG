@@ -15,11 +15,16 @@
     details { margin-top: 12px; } summary { cursor: pointer; color: #5b6472; font-size: 12px; }
     pre { max-height: 200px; overflow: auto; background: #f4f6fa; border-radius: 8px; padding: 8px; font-size: 11px; white-space: pre-wrap; }
     p.help { color: #5b6472; font-size: 12px; margin: 10px 0 0; }
+    .auto { margin: 0 0 10px; padding: 8px 10px; border-radius: 8px; font-size: 12px; display: flex; gap: 8px; align-items: center; justify-content: space-between; }
+    .auto.off { background: #f4f6fa; color: #5b6472; }
+    .auto.on { background: #e8f0fb; color: #0f2a4d; font-weight: 600; }
+    .auto button { padding: 4px 10px; flex-shrink: 0; }
   </style>
 </head>
 <body>
   <header><b>IAG HealthSherpa</b><span id="ver"></span></header>
   <main>
+    <div id="auto" class="auto off">Auto mode: off</div>
     <div id="state" class="idle">Loading…</div>
     <p class="help">Start a client from the portal's <b>HealthSherpa Auth</b> page. Stay logged in to HealthSherpa in this Chrome.</p>
     <details><summary>Activity log</summary><pre id="log"></pre></details>
