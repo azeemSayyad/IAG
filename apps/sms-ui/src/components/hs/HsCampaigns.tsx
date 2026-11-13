@@ -7,7 +7,7 @@
  * MODE runs; STOP / no at any point = Do-Not-Call. Everything the closer needs
  * is in the table + Export. Backend: app/hs_auth/campaigns.py.
  */
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { api, apiUpload, authedFetch } from "../../lib/api";
 import { stopJob } from "../../lib/hsBridge";
 import { Drawer, DrawerSection, Field, drawerCtl } from "../Drawer";
@@ -30,10 +30,10 @@ export type HsOverview = {
   campaigns: HsCampaign[]; can_manage: boolean; is_hs_agent: boolean; my_queue: number;
   usage: { used: number; limit: number; left: number };
   followup_text: string; blast_default: string; me: string; reminder_draft: string; stages: Record<string, string>;
-  sent_today: number; daily_cap: number; simulating: boolean;
+  sent_today: number; daily_cap: number; simulating: boolean; needs_reply: number;
 };
 type Text = {
-  id: string; direction: "IN" | "OUT"; kind: string; body: string | null; status: string;
+  id: string; direction: "IN" | "OUT"; kind: string; body: string | null; status: string; sent_by_name: string | null;
   reply_kind: string | null; from_number: string | null; error: string | null; at: string | null;
 };
 export type Client = {
@@ -45,6 +45,7 @@ export type Client = {
   campaign_id: string | null; campaign_name: string | null; convo: string | null; convo_detail: string | null;
   stage: string; yes_text: string | null; yes_at: string | null; followup_sent_at: string | null;
   renewing_company: string | null; answered_at: string | null; reminder_sent_at: string | null; last_text_at: string | null;
+  needs_reply: boolean; can_text?: boolean; texting_hours_ok?: boolean; from_number?: string | null;
   last_text?: { direction: string; kind: string; body: string | null; at: string } | null;
   texts?: Text[]; events?: { at: string; step: string | null; status: string | null; detail: string }[];
 };
@@ -52,13 +53,14 @@ type ClientsResp = { rows: Client[]; total: number; counts: Record<string, numbe
 type Agent = { id: string; name: string; role: string };
 
 const STAGE_CLS: Record<string, string> = {
+  NEEDS_REPLY: "bg-danger text-white",
   QUEUED: "bg-black/5 text-ink-muted", TEXTED: "bg-accent/10 text-accent", ASKED: "bg-pending/15 text-pending",
   NO_ANSWER: "bg-black/5 text-ink-soft", HS_QUEUED: "bg-accent/10 text-accent", HS_RUNNING: "bg-accent text-white",
   LINK_SENT: "bg-pending/15 text-pending", AUTHORIZED: "bg-success/15 text-success", EXPIRED: "bg-danger/10 text-danger",
   HS_REVIEW: "bg-pending/15 text-pending", DNC: "bg-danger/10 text-danger", NOT_SENT: "bg-black/5 text-ink-muted",
   INVALID: "bg-danger/10 text-danger",
 };
-const STAGE_ORDER = ["ALL", "QUEUED", "TEXTED", "ASKED", "NO_ANSWER", "HS_QUEUED", "HS_RUNNING", "LINK_SENT",
+const STAGE_ORDER = ["ALL", "NEEDS_REPLY", "QUEUED", "TEXTED", "ASKED", "NO_ANSWER", "HS_QUEUED", "HS_RUNNING", "LINK_SENT",
   "AUTHORIZED", "EXPIRED", "HS_REVIEW", "DNC", "NOT_SENT", "INVALID"];
 const CAMP_PILL: Record<string, string> = {
   DRAFT: "bg-black/5 text-ink-muted", RUNNING: "bg-success/15 text-success", PAUSED: "bg-pending/15 text-pending",
@@ -67,7 +69,9 @@ const CAMP_PILL: Record<string, string> = {
 const CAMP_LABEL: Record<string, string> = {
   DRAFT: "Draft", RUNNING: "Sending", PAUSED: "Paused", COMPLETED: "All texted", STOPPED: "Stopped",
 };
-const KIND_LABEL: Record<string, string> = { BLAST: "Campaign text", FOLLOWUP: "Follow-up", REMINDER: "Reminder", REPLY: "Client" };
+const KIND_LABEL: Record<string, string> = {
+  BLAST: "Campaign text", FOLLOWUP: "Follow-up", REMINDER: "Reminder", MANUAL: "You", REPLY: "Client",
+};
 
 const btn = "rounded-lg bg-accent px-3 py-1.5 text-xs font-bold text-white hover:bg-accent-hover disabled:opacity-50";
 const btnGhost = "rounded-lg border border-hairline px-3 py-1.5 text-xs font-semibold text-ink-muted hover:bg-black/5 hover:text-ink disabled:opacity-50";
@@ -162,13 +166,17 @@ export default function HsCampaigns({ overview, reloadOverview, agents, onEdit, 
           <div className="max-w-2xl">
             <h2 className="text-sm font-bold text-ink">HealthSherpa text campaigns</h2>
             <p className="text-xs text-ink-muted">
-              Text a list of clients. A positive reply gets the approved follow-up asking which company they're renewing;
-              their answer queues them for HealthSherpa, and <b>auto mode</b> sends them the authorization link.
-              Replies here are <b>never called</b> — this is separate from the Auto Dialer's text campaigns.
-              STOP or “no” at any point puts them on Do-Not-Call.
+              Text a list → clients who say yes are asked which company they're renewing → <b>auto mode</b> sends
+              the HealthSherpa link. Never called. STOP or “no” = Do-Not-Call.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            {overview.needs_reply > 0 && (
+              <button onClick={() => { setStage("NEEDS_REPLY"); setCampaignF(""); }} data-testid="hs-needs-reply-badge"
+                      className="rounded-full bg-danger px-3 py-1 text-xs font-bold text-white hover:opacity-90">
+                💬 {overview.needs_reply} need{overview.needs_reply === 1 ? "s" : ""} a reply
+              </button>
+            )}
             <span className="rounded-full bg-black/5 px-3 py-1 text-xs font-bold tabular-nums text-ink-soft"
                   title="Every text from our numbers today (all campaigns) — carrier daily cap">
               Texts today: {overview.sent_today.toLocaleString()} / {overview.daily_cap.toLocaleString()}
@@ -204,7 +212,8 @@ export default function HsCampaigns({ overview, reloadOverview, agents, onEdit, 
             if (key !== "ALL" && !n && stage !== key) return null;
             return (
               <button key={key} onClick={() => setStage(key)}
-                      className={`rounded-full px-3 py-1 text-xs font-semibold ${stage === key ? "bg-accent text-white" : "bg-black/5 text-ink-muted hover:text-ink"}`}>
+                      className={`rounded-full px-3 py-1 text-xs font-semibold ${stage === key ? "bg-accent text-white"
+                        : key === "NEEDS_REPLY" ? "bg-danger/10 text-danger hover:bg-danger/15" : "bg-black/5 text-ink-muted hover:text-ink"}`}>
                 {key === "ALL" ? "All" : stages[key] || key} <span className="tabular-nums opacity-70">{n}</span>
               </button>
             );
@@ -237,7 +246,10 @@ export default function HsCampaigns({ overview, reloadOverview, agents, onEdit, 
                 {data.rows.map((r) => (
                   <tr key={r.id} className="cursor-pointer align-top hover:bg-black/[0.02]" onClick={() => openDetail(r.id)}>
                     <td className="py-2.5 pr-3">
-                      <div className="font-bold text-ink">{r.first_name} {r.last_name}</div>
+                      <div className="flex items-center gap-1.5 font-bold text-ink">
+                        {r.needs_reply && <span className="h-2 w-2 shrink-0 rounded-full bg-danger" title="Needs a reply" />}
+                        {r.first_name} {r.last_name}
+                      </div>
                       <div className="tabular-nums text-ink-faint">{fmtPhone(r.phone)}</div>
                       {!campaignF && <div className="text-[0.66rem] text-ink-faint">{r.campaign_name}</div>}
                     </td>
@@ -247,7 +259,7 @@ export default function HsCampaigns({ overview, reloadOverview, agents, onEdit, 
                         <>
                           <div className="truncate text-ink-soft">
                             <span className={`font-semibold ${r.last_text.direction === "IN" ? "text-ink" : "text-ink-muted"}`}>
-                              {r.last_text.direction === "IN" ? "Client: " : `${KIND_LABEL[r.last_text.kind] || "Us"}: `}
+                              {r.last_text.direction === "IN" ? "Client: " : `${r.last_text.kind === "MANUAL" ? "You" : KIND_LABEL[r.last_text.kind] || "Us"}: `}
                             </span>
                             {r.last_text.body}
                           </div>
@@ -283,6 +295,7 @@ export default function HsCampaigns({ overview, reloadOverview, agents, onEdit, 
       {settingsFor && <SettingsDrawer c={settingsFor} onClose={() => setSettingsFor(null)}
                                       onSaved={() => { setSettingsFor(null); reloadOverview(); }} />}
       {detail && <ClientDrawer c={detail} stages={stages} onClose={() => setDetail(null)}
+                               onChanged={(d) => { setDetail(d); load(); reloadOverview(); }}
                                onEdit={() => { onEdit(detail); setDetail(null); }}
                                onRequeue={() => requeue(detail)} onStop={() => stopRunning(detail)} />}
     </div>
@@ -310,10 +323,15 @@ function CampaignRow({ c, canManage, busy, onAction, onSettings, onShow }: {
   c: HsCampaign; canManage: boolean; busy: boolean; onAction: (a: string) => void; onSettings: () => void; onShow: () => void;
 }) {
   const n = c.counts || {};
+  // The funnel, left to right. The rest is one quiet line underneath.
   const stats: [string, number | undefined][] = [
-    ["Texted", n.sent], ["Replied", n.replied], ["Positive", n.positive], ["Answered", n.answered],
-    ["No answer", n.no_answer], ["Link sent", n.link_sent], ["Authorized", n.authorized], ["Expired", n.expired], ["DNC", n.dnc],
+    ["Texted", n.sent], ["Replied", n.replied], ["Answered", n.answered],
+    ["Link sent", n.link_sent], ["Authorized", n.authorized], ["Opted out", n.dnc],
   ];
+  const extra = [
+    n.no_answer ? `${n.no_answer} no answer yet` : "", n.expired ? `${n.expired} expired` : "",
+    n.invalid ? `${n.invalid} need fixing` : "", n.failed ? `${n.failed} not delivered` : "",
+  ].filter(Boolean).join(" · ");
   return (
     <div className="rounded-xl border border-hairline p-3" data-testid="hs-campaign-row">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -345,14 +363,15 @@ function CampaignRow({ c, canManage, busy, onAction, onSettings, onShow }: {
         )}
       </div>
       {c.pause_reason && <div className="mt-2 rounded-lg bg-pending/10 px-3 py-1.5 text-xs font-semibold text-pending">{c.pause_reason}</div>}
-      <div className="mt-2 grid grid-cols-3 gap-1.5 sm:grid-cols-5 lg:grid-cols-9">
+      <div className="mt-2 grid grid-cols-3 gap-1.5 sm:grid-cols-6">
         {stats.map(([label, v]) => (
-          <div key={label} className="rounded-lg bg-black/5 px-2 py-1.5 text-center">
-            <div className="text-sm font-extrabold tabular-nums text-ink">{(v ?? 0).toLocaleString()}</div>
+          <div key={label} className={`rounded-lg px-2 py-1.5 text-center ${label === "Authorized" ? "bg-success/10" : "bg-black/5"}`}>
+            <div className={`text-sm font-extrabold tabular-nums ${label === "Authorized" ? "text-success" : "text-ink"}`}>{(v ?? 0).toLocaleString()}</div>
             <div className="text-[0.62rem] uppercase tracking-wide text-ink-faint">{label}</div>
           </div>
         ))}
       </div>
+      {extra && <div className="mt-1.5 text-[0.7rem] text-ink-faint">{extra}</div>}
     </div>
   );
 }
@@ -525,58 +544,163 @@ function Bubble({ who, body, inbound, at, note }: { who: string; body: string | 
   );
 }
 
-function ClientDrawer({ c, stages, onClose, onEdit, onRequeue, onStop }: {
-  c: Client; stages: Record<string, string>; onClose: () => void; onEdit: () => void; onRequeue: () => void; onStop: () => void;
+/* Key HealthSherpa moments shown inline in the conversation (the full step
+   list stays under "All steps"). */
+const EVENT_LINE: Record<string, string> = {
+  PENDING: "Queued for HealthSherpa", IN_PROGRESS: "HealthSherpa lookup started", LINK_SENT: "HealthSherpa texted them the link",
+  AUTHORIZED: "Authorized ✓", EXPIRED: "Link expired — not authorized", NOT_FOUND: "Not found in HealthSherpa",
+  NEEDS_REVIEW: "HealthSherpa needs a look", FAILED: "HealthSherpa stopped — problem", CANCELLED: "HealthSherpa stopped",
+};
+const STEP_LINE: Record<string, string> = {
+  no_answer: "No answer yet", opted_out: "Opted out (Do-Not-Call)", handled: "Marked as handled",
+  question: "Asked a question — waiting for your reply", hesitant: "Hesitant — paused for your reply",
+};
+const DELIVERY: Record<string, string> = {
+  QUEUED: "Sending…", SENDING: "Sending…", SENT: "Sent", DELIVERED: "Delivered", SKIPPED: "Not sent", CANCELLED: "Not sent",
+};
+
+function ClientDrawer({ c, stages, onClose, onChanged, onEdit, onRequeue, onStop }: {
+  c: Client; stages: Record<string, string>; onClose: () => void; onChanged: (c: Client) => void;
+  onEdit: () => void; onRequeue: () => void; onStop: () => void;
 }) {
-  const info: [string, string | null][] = [
-    ["Phone", fmtPhone(c.phone)], ["Date of birth", fmtDob(c.dob)], ["State", c.state], ["Campaign", c.campaign_name],
-    ["Their reply", c.yes_text], ["Company they're renewing", c.renewing_company],
-    ["HealthSherpa", c.convo === "ANSWERED" || c.status === "AUTHORIZED" ? `${c.status_detail || ""}` : null],
-    ["App ID", c.hs_app_id], ["Authorized", c.authorized_at ? new Date(c.authorized_at).toLocaleString() : null],
-  ];
-  return (
-    <Drawer open title={`${c.first_name} ${c.last_name}`} icon="🧾" onClose={onClose}
-            sub={<span className={`inline-block rounded-full px-2 py-0.5 text-[0.68rem] font-bold ${STAGE_CLS[c.stage] || ""}`}>{stages[c.stage] || c.stage}</span>}
-            footer={<>
-              {c.stage === "INVALID" && <button className={btn} onClick={onEdit}>Fix data</button>}
-              {(c.stage === "HS_REVIEW" || c.stage === "EXPIRED") && <button className={btn} onClick={onRequeue}>Queue for HealthSherpa again</button>}
-              {(c.stage === "HS_RUNNING" || c.stage === "LINK_SENT") && <button className={btnGhost} onClick={onStop}>Stop HealthSherpa</button>}
-              <button className={btnGhost} onClick={onClose}>Close</button>
-            </>}>
-      <dl className="grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
-        {info.filter(([, v]) => v).map(([k, v]) => (
-          <div key={k} className={k === "HealthSherpa" || k === "Their reply" || k === "Company they're renewing" ? "col-span-2" : ""}>
-            <dt className="text-[0.62rem] font-bold uppercase tracking-wide text-ink-faint">{k}</dt>
-            <dd className="text-ink">{v}</dd>
+  const [draft, setDraft] = useState("");
+  const [sending, setSending] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [allSteps, setAllSteps] = useState(false);
+  const endRef = useRef<HTMLDivElement>(null);
+
+  type Item = { at: string; key: string; node: ReactNode };
+  const items: Item[] = [];
+  (c.texts || []).forEach((t) => {
+    const at = t.at || "";
+    const inbound = t.direction === "IN";
+    const optOut = inbound && t.reply_kind && ["STOP", "NEGATIVE", "ABUSE", "WRONG"].includes(t.reply_kind);
+    const who = inbound ? c.first_name : t.kind === "MANUAL" ? (t.sent_by_name || "You") : KIND_LABEL[t.kind] || "IAG";
+    const foot = inbound ? (optOut ? "Opted out" : "") : t.status === "FAILED" ? `Failed${t.error ? ` — ${t.error}` : ""}` : DELIVERY[t.status] || "";
+    items.push({ at, key: t.id, node: (
+      <div className={`flex ${inbound ? "justify-start" : "justify-end"}`}>
+        <div className={`max-w-[82%] rounded-2xl px-3 py-2 text-xs ${inbound ? "rounded-bl-md bg-black/[0.06] text-ink"
+          : t.kind === "MANUAL" ? "rounded-br-md bg-accent text-white" : "rounded-br-md bg-accent/10 text-ink"}`}>
+          <div className={`mb-0.5 text-[0.62rem] font-bold ${t.kind === "MANUAL" && !inbound ? "text-white/80" : "text-ink-faint"}`}>
+            {who} · {at ? new Date(at).toLocaleString([], { month: "numeric", day: "numeric", hour: "numeric", minute: "2-digit" }) : ""}
           </div>
-        ))}
-      </dl>
-      {c.convo_detail && <div className="rounded-lg bg-black/5 px-3 py-2 text-xs text-ink-muted">{c.convo_detail}</div>}
-      <DrawerSection icon="💬" title="Texts">
-        <div className="space-y-2" data-testid="hs-texts">
-          {(c.texts || []).length === 0 && <div className="text-xs text-ink-muted">Not texted yet.</div>}
-          {(c.texts || []).map((t) => (
-            <Bubble key={t.id} who={KIND_LABEL[t.kind] || t.kind} body={t.body} inbound={t.direction === "IN"} at={t.at}
-                    note={t.direction === "OUT"
-                      ? ({ QUEUED: "Waiting to send", SENDING: "Sending", SENT: "Sent", DELIVERED: "Delivered", FAILED: `Failed${t.error ? ` — ${t.error}` : ""}`, SKIPPED: t.error || "Skipped", CANCELLED: "Not sent" } as Record<string, string>)[t.status]
-                      : t.reply_kind && ["STOP", "NEGATIVE", "ABUSE", "WRONG"].includes(t.reply_kind) ? "Opted out → Do-Not-Call" : undefined} />
-          ))}
+          <div className="whitespace-pre-wrap leading-relaxed">{t.body}</div>
+          {foot && <div className={`mt-0.5 text-right text-[0.6rem] ${t.status === "FAILED" || optOut ? "font-bold text-danger" : t.kind === "MANUAL" && !inbound ? "text-white/70" : "text-ink-faint"}`}>{foot}</div>}
         </div>
-      </DrawerSection>
-      <DrawerSection icon="🕘" title="History">
-        <div className="space-y-1.5 text-xs">
-          {[...(c.events || [])].reverse().map((ev, i) => (
-            <div key={i} className="rounded-lg bg-black/5 px-3 py-1.5">
-              <div className="flex justify-between gap-2">
-                <span className="font-bold text-ink">{ev.status || ev.step}</span>
-                <span className="tabular-nums text-ink-faint">{new Date(ev.at).toLocaleString()}</span>
+      </div>
+    ) });
+  });
+  (c.events || []).forEach((ev, i) => {
+    const line = (ev.status && EVENT_LINE[ev.status]) || (ev.step && STEP_LINE[ev.step]);
+    if (!line) return;
+    items.push({ at: ev.at, key: `e${i}`, node: (
+      <div className="text-center text-[0.68rem] text-ink-faint">
+        <span className="rounded-full bg-black/[0.04] px-2.5 py-1">
+          {line}{ev.status && ev.detail && ev.status !== "PENDING" ? ` — ${ev.detail}` : ""} · {new Date(ev.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
+        </span>
+      </div>
+    ) });
+  });
+  // Real time order: texts and steps carry different UTC offsets, so compare instants, not strings.
+  items.sort((a, b) => (Date.parse(a.at) || 0) - (Date.parse(b.at) || 0));
+
+  useEffect(() => { endRef.current?.scrollIntoView({ block: "end" }); }, [items.length]);
+
+  const send = async () => {
+    const body = draft.trim();
+    if (!body || sending) return;
+    setSending(true); setErr(null);
+    try {
+      const d = await api<Client>(`/hs-auth/campaigns/clients/${c.id}/text`, { method: "POST", body: JSON.stringify({ body }) });
+      setDraft(""); onChanged(d);
+    } catch (e) { setErr(errText(e)); }
+    finally { setSending(false); }
+  };
+  const handled = async () => {
+    try { onChanged(await api<Client>(`/hs-auth/campaigns/clients/${c.id}/handled`, { method: "POST" })); }
+    catch (e) { setErr(errText(e)); }
+  };
+
+  const facts = [
+    fmtPhone(c.phone), c.dob ? fmtDob(c.dob) : null, c.state, c.campaign_name,
+  ].filter(Boolean).join(" · ");
+  const action = c.stage === "INVALID" ? { label: "Fix data", run: onEdit }
+    : (c.stage === "HS_REVIEW" || c.stage === "EXPIRED") ? { label: "Queue for HealthSherpa again", run: onRequeue }
+    : (c.stage === "HS_RUNNING" || c.stage === "LINK_SENT") ? { label: "Stop HealthSherpa", run: onStop } : null;
+
+  return (
+    <Drawer open title={`${c.first_name} ${c.last_name}`} icon="💬" onClose={onClose}
+            sub={<>
+              <span className={`mr-1.5 inline-block rounded-full px-2 py-0.5 text-[0.66rem] font-bold ${STAGE_CLS[c.stage] || ""}`}>{stages[c.stage] || c.stage}</span>
+              <span className="tabular-nums">{facts}</span>
+            </>}
+            footer={
+              <div className="w-full space-y-1.5" data-testid="hs-composer">
+                {err && <div className="rounded-lg bg-danger/10 px-3 py-1.5 text-xs font-semibold text-danger">{err}</div>}
+                {c.can_text ? (
+                  <>
+                    <div className="flex items-end gap-2">
+                      <textarea value={draft} rows={Math.min(5, Math.max(1, draft.split("\n").length))} maxLength={480}
+                                placeholder={`Text ${c.first_name}…`} data-testid="hs-composer-input"
+                                onChange={(e) => setDraft(e.target.value)}
+                                onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
+                                className="min-h-[38px] flex-1 resize-none rounded-2xl border border-hairline bg-white px-3 py-2 text-xs text-ink focus:border-accent focus:outline-none" />
+                      <button className={`${btn} h-[38px] rounded-2xl px-4`} disabled={!draft.trim() || sending} onClick={send}>
+                        {sending ? "…" : "Send"}
+                      </button>
+                    </div>
+                    <div className="flex flex-wrap items-center justify-between gap-2 px-1 text-[0.66rem] text-ink-faint">
+                      <span>
+                        {c.texting_hours_ok === false
+                          ? <b className="text-pending">⚠ Outside 8 am–8 pm for them ({c.state}) — send only if it can't wait.</b>
+                          : <>From {c.from_number ? fmtPhone(c.from_number.replace(/^\+1/, "")) : "their usual number"} · Enter to send, Shift+Enter for a new line</>}
+                      </span>
+                      {draft.length > 0 && <span className="tabular-nums">{draft.length}/480</span>}
+                    </div>
+                  </>
+                ) : (
+                  <div className="rounded-xl bg-black/[0.04] px-3 py-2 text-center text-xs text-ink-muted">
+                    {c.stage === "DNC" ? "Opted out — they can't be texted." : "Texting opens once the campaign has texted them."}
+                  </div>
+                )}
               </div>
-              {ev.detail && <div className={`mt-0.5 text-ink-muted ${ev.step === "diagnostic" ? "whitespace-pre-wrap break-words font-mono text-[0.62rem]" : ""}`}>{ev.detail}</div>}
-            </div>
-          ))}
+            }>
+      {c.needs_reply && (
+        <div className="flex items-center justify-between gap-2 rounded-xl border border-danger/30 bg-danger/5 px-3 py-2 text-xs">
+          <span className="font-semibold text-danger">💬 {c.first_name} is waiting for a reply.</span>
+          <button className="text-[0.7rem] font-semibold text-ink-muted underline hover:text-ink" onClick={handled}>No reply needed</button>
         </div>
-      </DrawerSection>
+      )}
+      {(c.renewing_company || c.hs_app_id || action) && (
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-xl bg-black/[0.03] px-3 py-2 text-xs">
+          {c.renewing_company && <span><span className="text-ink-faint">Renewing:</span> <b className="text-ink">{c.renewing_company}</b></span>}
+          {c.hs_app_id && <span><span className="text-ink-faint">App ID:</span> <b className="tabular-nums text-ink">{c.hs_app_id}</b></span>}
+          {action && <button className={`${btnGhost} ml-auto`} onClick={action.run}>{action.label}</button>}
+        </div>
+      )}
+      <div className="space-y-2.5" data-testid="hs-texts">
+        {items.length === 0 && <div className="py-6 text-center text-xs text-ink-muted">Not texted yet — the campaign texts them in order.</div>}
+        {items.map((it) => <div key={it.key}>{it.node}</div>)}
+        <div ref={endRef} />
+      </div>
+      <div className="border-t border-hairline pt-2">
+        <button className="text-[0.7rem] font-semibold text-ink-faint hover:text-ink" onClick={() => setAllSteps((v) => !v)}>
+          {allSteps ? "▾ Hide all steps" : "▸ All steps (for support)"}
+        </button>
+        {allSteps && (
+          <div className="mt-2 space-y-1.5 text-xs">
+            {[...(c.events || [])].reverse().map((ev, i) => (
+              <div key={i} className="rounded-lg bg-black/5 px-3 py-1.5">
+                <div className="flex justify-between gap-2">
+                  <span className="font-bold text-ink">{ev.status || ev.step}</span>
+                  <span className="tabular-nums text-ink-faint">{new Date(ev.at).toLocaleString()}</span>
+                </div>
+                {ev.detail && <div className={`mt-0.5 text-ink-muted ${ev.step === "diagnostic" ? "whitespace-pre-wrap break-words font-mono text-[0.62rem]" : ""}`}>{ev.detail}</div>}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </Drawer>
   );
 }
-

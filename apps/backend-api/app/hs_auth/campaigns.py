@@ -11,6 +11,11 @@ dnc_digits / sent_today / failure_action).
 
 The flow, per client (`convo`):
   QUEUED         uploaded; the blast goes out in the client's texting hours
+                 (8 am – 8 pm their time). That is the ONLY timed step: once a
+                 client replies they're talking to us, so everything after —
+                 follow-up, HealthSherpa lookup + link, reminder, manual texts —
+                 happens right away, any hour (owner's rule, 2026-11-13: "anyone
+                 who communicates needs to be contacted immediately").
   BLAST_SENT     blast sent — waiting for a reply
   REPLIED        any NON-negative reply -> the approved follow-up is queued
                  (sent at once, any hour — it answers their text)
@@ -29,7 +34,7 @@ The flow, per client (`convo`):
   CANCELLED      campaign stopped before their blast went out
 
 After the HealthSherpa link is sent (status LINK_SENT): at reminder_minutes (7)
-ONE reminder text (only when reminder_enabled and in texting hours); at
+ONE reminder text (only when reminder_enabled); at
 expire_minutes (15) EXPIRED and the agent moves on (no resend unless
 resend_on_expiry). Timers run in tick() — Celery beat `hs-campaign-tick`, and
 locally the page's own poll. All of this is synchronous DB code: routes run it
@@ -83,7 +88,9 @@ STALE_SENDING = vc.STALE_SENDING
 CANDIDATES = 400
 RESEND_GRACE = timedelta(minutes=3)   # resend_on_expiry: let the extension resend first
 EDITABLE = ("DRAFT", "PAUSED")
-CAMPAIGN_ROLES = ("super_admin", "dev")  # create / start / pause / stop / settings
+# create / start / pause / stop / settings / manual texts. Owner's call
+# (2026-11-13): admins and head managers (Alan is "head") run campaigns too.
+CAMPAIGN_ROLES = ("super_admin", "tenant_admin", "admin", "head", "dev")
 
 # Rows the conversation still owns (a reply is matched to them).
 NOT_TEXTED = ("QUEUED", "INVALID", "SKIPPED", "BLAST_FAILED", "CANCELLED")
@@ -406,7 +413,7 @@ def _send(db: Session, tenant_id, now: datetime) -> int:
     queued = (db.query(HsCampaignText)
               .filter(HsCampaignText.tenant_id == tenant_id, HsCampaignText.status == "QUEUED",
                       HsCampaignText.direction == "OUT")
-              .order_by((HsCampaignText.kind == "FOLLOWUP").desc(), HsCampaignText.created_at)
+              .order_by(HsCampaignText.kind.in_(("FOLLOWUP", "MANUAL")).desc(), HsCampaignText.created_at)
               .limit(CANDIDATES).all())
     running = sorted((c for c in camps.values() if c.status == "RUNNING"), key=lambda c: c.started_at or now)
     blast_rows: list[HsAuthRequest] = []
@@ -453,9 +460,8 @@ def _send(db: Session, tenant_id, now: datetime) -> int:
                 continue
             if c.status == "PAUSED":
                 continue
-            if not (replies.is_test_number(t.phone_number) or vc.in_hours(s, now, row.state)):
-                continue
-        # FOLLOWUP: any hour — it answers the text they just sent us.
+        # FOLLOWUP / REMINDER / MANUAL: any hour — the client replied, so this is
+        # part of THEIR conversation, not us reaching out. Only the blast is timed.
         num = t.from_number if t.from_number in numbers else vc.sender_for(t.phone_number, numbers, _last_from(db, row.id))
         if not take(num):
             continue
@@ -519,6 +525,8 @@ def _after_sent(row: Optional[HsAuthRequest], t: HsCampaignText) -> None:
         row.followup_sent_at = now
         row.convo_detail = None
         service._event(row, "followup", None, "Approved follow-up sent — waiting for the company they're renewing")
+    elif t.kind == "MANUAL":
+        service._event(row, "manual", None, "Text sent by hand")
     elif t.kind == "REMINDER":
         row.reminder_sent_at = now
         service._event(row, "reminder", None, "Reminder text sent")
@@ -571,6 +579,52 @@ def on_status(db: Session, st: dict) -> bool:
 
 
 # ---- Replies --------------------------------------------------------------------------
+
+_QUESTION_START = re.compile(
+    r"^(who|what|whats|what's|why|how|is|are|am|can|could|do|does|did|where|when|which|will|would|should|wym|huh)\b", re.I)
+_BOT_WORDS = re.compile(r"\b(real person|human|a bot|robot|autorespon|auto respon|automated|scam)\b", re.I)
+# Short thank-yous / acks after they were queued: nothing for a person to answer.
+_ACKS = {"ok", "okay", "k", "kk", "thanks", "thank you", "thx", "ty", "yes", "yep", "yeah", "done", "great",
+         "cool", "got it", "perfect", "sure", "👍", "ok thanks", "ok thank you"}
+
+
+def looks_like_question(text: Optional[str]) -> bool:
+    """A question isn't an answer: "Is this a real person?", "who is this", "how much".
+    Those wait for a person instead of queuing a HealthSherpa job."""
+    t = (text or "").strip()
+    return bool(t) and ("?" in t or bool(_QUESTION_START.match(t)) or bool(_BOT_WORDS.search(t)))
+
+
+# Replies that say "not so fast" without being a plain no (plain no / STOP /
+# scam -> Do-Not-Call is decided earlier by replies.classify). These PAUSE the
+# automation for a person (owner's rule: pause only when they don't want to
+# move forward; any other question is answered later while automation runs).
+_HESITANT = re.compile(
+    r"how did you get (my|this)|who gave you|where did you get (my|this)|why do you (need|want)"
+    r"|what do you need (it|this|that|my)|is this (legit|real|legal|safe)|is this a joke"
+    r"|not (sure|right now|now|today|yet|ready)|maybe (later|tomorrow|next)|\blater\b|call me (later|back|tomorrow)"
+    r"|i'?m busy|im busy|\bbusy\b|let me think|i'?ll think|need to think|think about it"
+    r"|don'?t want|do not want|dont want|didn'?t (sign up|ask|request)|never (signed up|asked|applied)"
+    r"|already (have|got|covered|enrolled|renewed|signed|did)|i'?m covered|im covered|have (an|my own) agent|my agent"
+    r"|talk to my (wife|husband|spouse|son|daughter)|ask my (wife|husband|spouse|son|daughter)",
+    re.I)
+
+
+def looks_hesitant(text: Optional[str]) -> bool:
+    return bool(_HESITANT.search((text or "").replace("’", "'")))
+
+
+def company_from(text: Optional[str]) -> Optional[str]:
+    """The answer part of a reply: "Oscar, is this free?" -> "Oscar". A reply
+    that is only a question -> None (the closer asks them later)."""
+    parts = [p.strip() for p in re.split(r"[?!.;,\n]+", text or "") if p.strip()]
+    keep = [p for p in parts if not looks_like_question(p) and not _is_ack(p)]
+    out = ", ".join(keep).strip()
+    return out[:200] or None
+
+
+def _is_ack(text: Optional[str]) -> bool:
+    return re.sub(r"[.!\s]+$", "", (text or "").strip().lower()) in _ACKS
 
 def owner_text(db: Session, tenant_id, phone: str) -> Optional[HsCampaignText]:
     """The HealthSherpa text this reply answers — or None when the number's
@@ -634,14 +688,21 @@ def on_inbound(db: Session, tenant_id, phone: str, to_raw: Optional[str], text: 
     from app.sms_queue.services import queue_service as qs
 
     send_now = False
+    question = looks_like_question(body)
     if kind in replies.NEGATIVE_KINDS:
         # Exactly the dialer's rule: every negative goes on Do-Not-Call forever.
         qs.add_to_dnc(db, tenant_id, phone, replies.DNC_REASON[kind])
         _to_dnc(db, row, f"Opted out by text: “{body[:120]}”")
+        row.needs_reply = False
         result = "hs_dnc"
     elif row.convo == "DNC" or qs.is_dnc(db, tenant_id, phone):
         service._event(row, "reply", None, f"Text saved (number is on Do-Not-Call): “{body[:200]}”")
         result = "hs_saved_dnc"
+    elif row.convo in ("BLAST_SENT", "BLAST_FAILED") and looks_hesitant(body):
+        # "How did you get my number?" — not a yes yet: no follow-up, a person answers.
+        row.needs_reply = True
+        service._event(row, "hesitant", None, f"Hesitant: “{body[:200]}” — paused for a person to reply")
+        result = "hs_hesitant"
     elif row.convo in ("BLAST_SENT", "BLAST_FAILED"):
         row.yes_text, row.yes_at = body, now
         row.convo, row.convo_detail = "REPLIED", None
@@ -649,17 +710,32 @@ def on_inbound(db: Session, tenant_id, phone: str, to_raw: Optional[str], text: 
         db.add(HsCampaignText(tenant_id=tenant_id, campaign_id=c.id, request_id=row.id, phone_number=phone,
                               direction="OUT", kind="FOLLOWUP", body=FOLLOWUP_TEXT, from_number=to, status="QUEUED"))
         service._event(row, "replied", None, f"Replied “{body[:200]}” — sending the follow-up")
+        if question:
+            row.needs_reply = True  # the follow-up still goes; a person may want to answer too
         send_now = True
         result = "hs_followup"
+    elif row.convo in ("FOLLOWUP_SENT", "NO_ANSWER") and looks_hesitant(body):
+        # They don't want to move forward (yet): PAUSE — a person replies first.
+        row.needs_reply = True
+        service._event(row, "hesitant", None, f"Hesitant: “{body[:200]}” — paused for a person to reply (not queued)")
+        result = "hs_hesitant"
     elif row.convo in ("FOLLOWUP_SENT", "NO_ANSWER"):
+        # Any other answer moves forward — even with a question in it ("Oscar,
+        # is this free?"): HealthSherpa runs now, the question is flagged for later.
         late = row.convo == "NO_ANSWER"
-        row.renewing_company, row.answered_at = body, now
+        row.renewing_company, row.answered_at = company_from(body), now
         row.convo, row.convo_detail = "ANSWERED", None
+        row.needs_reply = question
         service._set_status(row, "PENDING", "Queued for HealthSherpa (auto mode).", "answered")
         service._event(row, "answered", None,
-                       f"{'Late answer' if late else 'Answered'}: “{body[:200]}” — queued for HealthSherpa")
+                       f"{'Late answer' if late else 'Answered'}: “{body[:200]}” — queued for HealthSherpa"
+                       + (" (their question is waiting for a reply)" if question else ""))
         result = "hs_answered"
     else:
+        # Anything else (e.g. "I didn't get the link") — a person should read it,
+        # unless it's just "ok" / "thanks".
+        if question or not _is_ack(body):
+            row.needs_reply = True
         service._event(row, "reply", None, f"Text: “{body[:200]}”")
         result = "hs_saved"
     db.commit()
@@ -701,14 +777,9 @@ def next_job(db: Session, tenant_id, user: User) -> dict:
     if u["left"] <= 0:
         db.commit()
         return {"job": None, "reason": "limit", "waiting": len(waiting), "usage": u}
-    s = vc.hours_settings(db, tenant_id)
-    now = _now()
-    pick = next(((r, c) for r, c in waiting
-                 if replies.is_test_number(e164(r.phone)) or vc.in_hours(s, now, r.state)), None)
-    if pick is None:
-        db.commit()
-        return {"job": None, "reason": "hours", "waiting": len(waiting)}
-    r, c = pick
+    # Any hour: every queued client answered our follow-up minutes ago, and
+    # speed is what gets the link authorized (it only lives 15 minutes).
+    r, c = waiting[0]
     out = service.start(db, tenant_id, user, str(r.id), auto=True,
                         resends=1 if c.resend_on_expiry else 0, consent=consent_note(r))
     out["waiting"] = len(waiting) - 1
@@ -739,7 +810,9 @@ def _stage_conditions():
     """One "stage" per client = text conversation + HealthSherpa status, for
     the table's filter chips and the export."""
     R = HsAuthRequest
-    return {
+    waiting = R.needs_reply.is_(True)
+    not_waiting = R.needs_reply.is_(False)
+    raw = {
         "QUEUED": ("Not texted yet", R.convo == "QUEUED"),
         "TEXTED": ("Texted — no reply", R.convo == "BLAST_SENT"),
         "ASKED": ("Asked company", R.convo.in_(("REPLIED", "FOLLOWUP_SENT"))),
@@ -755,9 +828,18 @@ def _stage_conditions():
         "NOT_SENT": ("Not sent", R.convo.in_(("SKIPPED", "BLAST_FAILED", "CANCELLED"))),
         "INVALID": ("Fix data", R.convo == "INVALID"),
     }
+    # "Needs reply" wins over every stage but Opted out, so each client counts once.
+    out = {"NEEDS_REPLY": ("Needs reply", and_(waiting, R.convo != "DNC"))}
+    for k, (label, cond) in raw.items():
+        out[k] = (label, cond if k == "DNC" else and_(cond, not_waiting))
+    return out
 
 
 def stage_of(r: HsAuthRequest) -> str:
+    if r.convo == "DNC":
+        return "DNC"
+    if r.needs_reply:
+        return "NEEDS_REPLY"
     if r.status == "AUTHORIZED":
         return "AUTHORIZED"
     cv = r.convo
@@ -837,6 +919,10 @@ def overview(db: Session, tenant_id, user: User) -> dict:
         "me": str(user.id),
         "reminder_draft": REMINDER_DRAFT,
         "stages": {k: v[0] for k, v in _stage_conditions().items()},
+        "needs_reply": int(db.query(func.count(HsAuthRequest.id)).filter(
+            HsAuthRequest.tenant_id == tenant_id, HsAuthRequest.campaign_id.isnot(None),
+            HsAuthRequest.deleted_at.is_(None), HsAuthRequest.needs_reply.is_(True),
+            HsAuthRequest.convo != "DNC").scalar() or 0),
         "sent_today": vc.sent_today(db, tenant_id),
         "daily_cap": vc.daily_cap(),
         "simulating": telnyx.simulating(),
@@ -880,6 +966,7 @@ def client_dict(r: HsAuthRequest, camps: dict, names: dict, *, last_texts: dict 
         "answered_at": r.answered_at.isoformat() if r.answered_at else None,
         "reminder_sent_at": r.reminder_sent_at.isoformat() if r.reminder_sent_at else None,
         "last_text_at": r.last_text_at.isoformat() if r.last_text_at else None,
+        "needs_reply": bool(r.needs_reply),
     })
     if last_texts is not None:
         t = last_texts.get(r.id)
@@ -912,8 +999,9 @@ def clients(db: Session, tenant_id, *, campaign: Optional[str], stage: Optional[
     }
 
 
-def text_dict(t: HsCampaignText) -> dict:
+def text_dict(t: HsCampaignText, names: Optional[dict] = None) -> dict:
     return {
+        "sent_by_name": (names or {}).get(t.sent_by) if t.sent_by else None,
         "id": str(t.id), "direction": t.direction, "kind": t.kind, "body": t.body, "status": t.status,
         "reply_kind": t.reply_kind, "from_number": t.from_number, "error": t.error,
         "at": (t.sent_at or t.created_at).isoformat() if (t.sent_at or t.created_at) else None,
@@ -934,9 +1022,68 @@ def client_detail(db: Session, tenant_id, request_id: str) -> dict:
     names = service._names(db, {r.assigned_to, r.started_by})
     d = client_dict(r, camps, names)
     d["events"] = r.events or []
-    d["texts"] = [text_dict(t) for t in db.query(HsCampaignText).filter(HsCampaignText.request_id == r.id)
-                  .order_by(func.coalesce(HsCampaignText.sent_at, HsCampaignText.created_at)).all()]
+    texts = (db.query(HsCampaignText).filter(HsCampaignText.request_id == r.id)
+             .order_by(func.coalesce(HsCampaignText.sent_at, HsCampaignText.created_at)).all())
+    senders = service._names(db, {t.sent_by for t in texts})
+    d["texts"] = [text_dict(t, senders) for t in texts]
+    # For the message box: can we text them, and is it a normal hour for them?
+    from app.sms_queue.services import queue_service as qs
+
+    d["can_text"] = r.convo not in ("DNC", "QUEUED", "INVALID") and bool(r.phone) \
+        and not qs.is_dnc(db, tenant_id, e164(r.phone))
+    # Replying to someone who texted us is fine any hour; warn only when they never replied.
+    replied = any(t.direction == "IN" for t in texts)
+    d["texting_hours_ok"] = replied or vc.in_hours(vc.hours_settings(db, tenant_id), _now(), r.state)
+    d["from_number"] = _last_from(db, r.id)
     return d
+
+
+MANUAL_MAX = 480
+
+
+def can_text(user: User, c: HsTextCampaign) -> bool:
+    return can_manage(user) or str(c.hs_agent_id) == str(user.id)
+
+
+def send_manual(db: Session, tenant_id, user: User, request_id: str, body: str) -> dict:
+    """A text a PERSON typed in the client's window (answer a question, give
+    instructions). Same safe sender as everything else: the number the client
+    already knows, Do-Not-Call blocked, counted in the daily cap. Any hour —
+    it's a one-to-one reply. Their next reply is handled by the flow as usual."""
+    detail = client_detail(db, tenant_id, request_id)  # 404s for us
+    r = db.query(HsAuthRequest).filter(HsAuthRequest.id == detail["id"]).first()
+    c = db.query(HsTextCampaign).filter(HsTextCampaign.id == r.campaign_id).first()
+    if not can_text(user, c):
+        raise CampaignError("Only the owner or this campaign's HealthSherpa agent can text clients.", 403)
+    text = (body or "").strip()
+    if not text:
+        raise CampaignError("Write the message first")
+    if len(text) > MANUAL_MAX:
+        raise CampaignError(f"Keep it under {MANUAL_MAX} characters")
+    if not detail["can_text"]:
+        raise CampaignError("This client can't be texted (opted out, or never texted by this campaign).", 409)
+    if vc.daily_cap() - vc.sent_today(db, tenant_id) <= 0:
+        raise CampaignError("Today's texting limit is reached — it resets at midnight Eastern.", 429)
+    db.add(HsCampaignText(tenant_id=tenant_id, campaign_id=c.id, request_id=r.id, phone_number=e164(r.phone),
+                          direction="OUT", kind="MANUAL", body=text, status="QUEUED",
+                          from_number=detail["from_number"], sent_by=user.id))
+    r.needs_reply = False
+    r.updated_at = _now()
+    db.commit()
+    tick(db, tenant_id)  # goes now unless that number just sent (then within seconds)
+    return client_detail(db, tenant_id, request_id)
+
+
+def mark_handled(db: Session, tenant_id, user: User, request_id: str) -> dict:
+    detail = client_detail(db, tenant_id, request_id)
+    r = db.query(HsAuthRequest).filter(HsAuthRequest.id == detail["id"]).first()
+    c = db.query(HsTextCampaign).filter(HsTextCampaign.id == r.campaign_id).first()
+    if not can_text(user, c):
+        raise CampaignError("Only the owner or this campaign's HealthSherpa agent can do that.", 403)
+    r.needs_reply = False
+    service._event(r, "handled", None, "Marked as handled — no reply needed")
+    db.commit()
+    return client_detail(db, tenant_id, request_id)
 
 
 EXPORT_COLUMNS = [

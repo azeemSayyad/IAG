@@ -34,7 +34,7 @@ http://127.0.0.1:5500/login.html (admin@local.test / Admin123!, agent@local.test
 | SMS Manager `/sms/#/manager` | super_admin (+ legacy manager/admin roles, dev) |
 | Auto Dialer `/sms/#/dialer` | same as SMS Manager |
 | HealthSherpa Auth `/sms/#/healthsherpa` | everyone signed in (server scopes rows) |
-| └ its Text campaigns tab | super_admin manages; managers + the campaign's HealthSherpa agent can view |
+| └ its Text campaigns tab | super_admin, admin (tenant_admin/admin) and head manage; managers + the campaign's HealthSherpa agent can view |
 | Text campaigns, Expenses | super_admin (+ dev) |
 
 Sidebar links come from THREE places — change all that apply: static `.html`
@@ -145,8 +145,10 @@ No Google Sheet: every client's details, texts and status are on the page, with
 - **Sender is shared, not copied:** `voice_dialer/campaigns.py` exposes the safety
   pieces (`senders`, `sender_for`, `claim_number`, `in_hours`, `dnc_digits`,
   `sent_today` — which counts these texts too — `daily_cap`, `failure_action`).
-  Blast, reminder and auto jobs only run 8 am–8 pm client time; the follow-up goes
-  any hour (it answers their text). Pause stops blasts + reminders; Stop cancels
+  **Hours (owner's rule, 2026-11-13): only the BLAST waits for 8 am–8 pm client
+  time.** Once a client replies they're talking to us, so the follow-up, the
+  HealthSherpa lookup + link, the reminder and manual texts go immediately, any
+  hour — speed is what gets a 15-minute link authorized. Pause stops blasts + reminders; Stop cancels
   unsent blasts; conversations already started always finish.
 - **Auto mode = the portal tab drives it.** The campaign's HealthSherpa agent
   (Stan — clients authorize HIS account, so he closes the sale) leaves the page
@@ -155,8 +157,21 @@ No Google Sheet: every client's details, texts and status are on the page, with
   Start. The server still enforces the daily limit, one client at a time and
   hours, and writes the consent to the job history (the client's YES + answer
   with times). Extension ≥ 1.1.0 shows auto mode in its popup (Turn off there too).
+- **Manual texts + "Needs reply"** (migration 069): the client window is one
+  conversation (texts + key HealthSherpa moments in time order) with a message
+  box — `send_manual` → kind `MANUAL`, `sent_by`, same sender/number, DNC
+  blocked. **Owner's rule: only HESITATION pauses** (`looks_hesitant`: "how did
+  you get my number", "not right now", "already have an agent", "why do you
+  need this"…) → `needs_reply`, not queued (at the blast stage: no follow-up).
+  Any other reply moves forward even with a question in it — "Oscar, is this
+  free?" queues HealthSherpa with company "Oscar" (`company_from`) AND sets
+  `needs_reply` for a person to answer later; any non-ack text after they're
+  queued also sets it. Plain no / STOP / scam = Do-Not-Call as always. Sending
+  a manual text or "No reply needed" clears it. "Needs reply" outranks every
+  stage but Opted out (one count per client) and has a red badge in the header.
 - Who: view = managers + the campaign's HealthSherpa agent; create / start /
-  pause / stop / settings = super_admin.
+  pause / stop / settings / manual texts = super_admin, admin, head (`CAMPAIGN_ROLES`;
+  the campaign's HealthSherpa agent may also text).
 - Timers: Celery beat `hs-campaign-tick` (5 s); locally the page's poll ticks.
 - Tests: `tests/unit/test_hs_text_campaigns.py` (uses local Postgres, rolled
   back). End to end: `.localpreview/verify-hs-campaigns.mjs` — start the API with

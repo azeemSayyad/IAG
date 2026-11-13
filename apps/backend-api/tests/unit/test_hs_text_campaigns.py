@@ -38,7 +38,7 @@ def test_failure_actions_shared_with_the_dialer():
 
 
 def test_stage_names():
-    R = lambda **k: SimpleNamespace(**{"status": "TEXTING", "convo": None, **k})  # noqa: E731
+    R = lambda **k: SimpleNamespace(**{"status": "TEXTING", "convo": None, "needs_reply": False, **k})  # noqa: E731
     assert hc.stage_of(R(convo="QUEUED")) == "QUEUED"
     assert hc.stage_of(R(convo="BLAST_SENT")) == "TEXTED"
     assert hc.stage_of(R(convo="REPLIED")) == "ASKED"
@@ -49,6 +49,8 @@ def test_stage_names():
     assert hc.stage_of(R(convo="ANSWERED", status="AUTHORIZED")) == "AUTHORIZED"
     assert hc.stage_of(R(convo="ANSWERED", status="NOT_FOUND")) == "HS_REVIEW"
     assert hc.stage_of(R(convo="DNC", status="CANCELLED")) == "DNC"
+    assert hc.stage_of(R(convo="FOLLOWUP_SENT", needs_reply=True)) == "NEEDS_REPLY"
+    assert hc.stage_of(R(convo="DNC", needs_reply=True)) == "DNC"
 
 
 # ---------------------------------------------------------------- with the database
@@ -421,3 +423,143 @@ def test_extension_diagnostic_is_kept_in_history(env):
     service.report(env.db, job["id"], job["token"], {"step": "fill", "detail": "Couldn't fill the first name", "diag": diag})
     ev = [e for e in _row(env, "Ana").events if e["step"] == "diagnostic"]
     assert len(ev) == 1 and len(ev[0]["detail"]) > 500 and "person[first_name]" in ev[0]["detail"]
+
+
+def test_questions_are_not_answers():
+    for q in ("Is this a autonresponder?", "who is this", "How much does it cost", "are you a real person",
+              "is this automated", "what is this about?"):
+        assert hc.looks_like_question(q), q
+    for a in ("Oscar", "Ambetter", "ok", "Blue Cross Blue Shield", "yes"):
+        assert not hc.looks_like_question(a), a
+
+
+def test_hesitation_detection():
+    for h in ("How did you get my number?", "not right now", "maybe later", "I already have an agent",
+              "why do you need this", "I'm busy", "let me think about it", "I didn't sign up for this"):
+        assert hc.looks_hesitant(h), h
+    for ok in ("Oscar", "Is this a real person?", "who is this", "Ambetter, is this free?", "yes"):
+        assert not hc.looks_hesitant(ok), ok
+    assert hc.company_from("Oscar, is this free?") == "Oscar"
+    assert hc.company_from("Is this a real person?") is None
+    assert hc.company_from("Ambetter") == "Ambetter"
+
+
+def test_question_with_answer_moves_forward_and_is_flagged(env):
+    """Owner's rule: a question doesn't stop the automation — HealthSherpa runs,
+    the question waits for a person."""
+    _campaign(env)
+    _blast_all(env)
+    _reply(env, "+13055550102", "yes")
+    r = _reply(env, "+13055550102", "Oscar, is this free?")
+    bo = _row(env, "Bo")
+    assert r["result"] == "hs_answered" and bo.status == "PENDING" and bo.renewing_company == "Oscar"
+    assert bo.needs_reply and hc.stage_of(bo) == "NEEDS_REPLY"
+    job = hc.next_job(env.db, env.tenant, env.stan)["job"]
+    assert job and job["first_name"] == "Bo"      # automation keeps going
+    # A person answers later from the client window -> flag cleared, same number.
+    n = len(env.sent)
+    d = hc.send_manual(env.db, env.tenant, env.stan, str(bo.id), "Yes, it's free to renew. The link is on its way.")
+    assert len(env.sent) == n + 1
+    assert env.sent[n]["from"] == next(s["from"] for s in env.sent if s["to"] == "+13055550102")
+    manual = [t for t in d["texts"] if t["kind"] == "MANUAL"][0]
+    assert manual["sent_by_name"] == "Stan L" and not d["needs_reply"]
+
+
+def test_pure_question_also_moves_forward(env):
+    _campaign(env)
+    _blast_all(env)
+    _reply(env, "+13055550102", "yes")
+    _reply(env, "+13055550102", "Is this a autonresponder?")
+    bo = _row(env, "Bo")
+    assert bo.status == "PENDING" and bo.renewing_company is None and bo.needs_reply
+
+
+def test_hesitant_reply_pauses_for_a_person(env):
+    _campaign(env)
+    _blast_all(env)
+    _reply(env, "+13055550102", "yes")
+    r = _reply(env, "+13055550102", "how did you get my number?")
+    bo = _row(env, "Bo")
+    assert r["result"] == "hs_hesitant" and bo.needs_reply and bo.status == "TEXTING"
+    assert hc.next_job(env.db, env.tenant, env.stan)["job"] is None   # paused
+    hc.send_manual(env.db, env.tenant, env.stan, str(bo.id), "You filled out a form with us last year. Which company are you renewing?")
+    assert _reply(env, "+13055550102", "Ambetter")["result"] == "hs_answered"
+    assert _row(env, "Bo").status == "PENDING"
+
+
+def test_hesitant_first_reply_gets_no_follow_up(env):
+    _campaign(env)
+    _blast_all(env)
+    n = len(env.sent)
+    assert _reply(env, "+13055550103", "who gave you my number")["result"] == "hs_hesitant"
+    hc.tick(env.db, env.tenant)
+    assert len(env.sent) == n and _row(env, "Cy").needs_reply   # no automatic follow-up
+    assert _reply(env, "+13055550103", "ok yes")["result"] == "hs_followup"
+
+
+def test_regular_admins_run_campaigns():
+    for role in ("super_admin", "tenant_admin", "admin", "head", "dev"):
+        assert hc.can_manage(SimpleNamespace(role=role)), role
+    for role in ("agent", "manager", "lead"):
+        assert not hc.can_manage(SimpleNamespace(role=role)), role
+
+
+def test_text_after_queued_needs_reply_but_thanks_does_not(env):
+    _campaign(env)
+    _blast_all(env)
+    _reply(env, "+13055550101", "yes")
+    _reply(env, "+13055550101", "Aetna")
+    _reply(env, "+13055550101", "thanks!")
+    assert not _row(env, "Ana").needs_reply
+    _reply(env, "+13055550101", "I didn't get any link")
+    ana = _row(env, "Ana")
+    assert ana.needs_reply and hc.stage_of(ana) == "NEEDS_REPLY"
+    hc.mark_handled(env.db, env.tenant, env.stan, str(ana.id))
+    assert hc.stage_of(_row(env, "Ana")) == "HS_QUEUED"
+
+
+def test_manual_text_blocked_for_opted_out(env):
+    _campaign(env)
+    _blast_all(env)
+    _reply(env, "+13055550101", "STOP")
+    with pytest.raises(hc.CampaignError):
+        hc.send_manual(env.db, env.tenant, env.stan, str(_row(env, "Ana").id), "hello?")
+
+
+def test_needs_reply_counts_once(env):
+    c = _campaign(env)
+    _blast_all(env)
+    _reply(env, "+13055550101", "yes")
+    _reply(env, "+13055550101", "Oscar, who is this?")
+    out = hc.clients(env.db, env.tenant, campaign=str(c.id), stage=None, q=None, limit=50, offset=0)
+    counts = out["counts"]
+    assert counts["NEEDS_REPLY"] == 1
+    assert sum(v for k, v in counts.items() if k != "ALL") == counts["ALL"]
+
+
+def test_after_a_reply_nothing_waits_for_texting_hours(env, monkeypatch):
+    """Owner's rule: only the blast is limited to 8am-8pm. Once they reply, the
+    lookup (and the reminder) go right away, any hour."""
+    closed = lambda *a, **k: False  # noqa: E731 — it's 10 pm everywhere
+    monkeypatch.setattr(vc, "in_hours", closed)
+    c = _campaign(env)
+    hc.update(env.db, c, {"reminder_enabled": True})
+    monkeypatch.setattr(vc, "in_hours", lambda *a, **k: True)
+    _blast_all(env)                      # blast was in hours
+    monkeypatch.setattr(vc, "in_hours", closed)
+    _reply(env, "+13055550101", "yes")
+    _reply(env, "+13055550101", "Oscar")
+    job = hc.next_job(env.db, env.tenant, env.stan)["job"]
+    assert job and job["first_name"] == "Ana"   # not held until morning
+    service.report(env.db, job["id"], job["token"], {"step": "link", "status": "LINK_SENT", "link_sent": True})
+    n = len(env.sent)
+    env.clock.add(7.5)
+    hc.tick(env.db, env.tenant)
+    hc.tick(env.db, env.tenant)
+    assert len(env.sent) == n + 1 and env.sent[n]["text"] == hc.REMINDER_DRAFT
+    # ...but the BLAST (us reaching out first) still waits for texting hours.
+    before = len(env.sent)
+    _campaign(env)                       # a second list, started at "10 pm"
+    for _ in range(3):
+        hc.tick(env.db, env.tenant)
+    assert len(env.sent) == before

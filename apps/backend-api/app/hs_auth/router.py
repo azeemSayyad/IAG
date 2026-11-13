@@ -214,6 +214,21 @@ def campaigns_client(request_id: str, db: Session = Depends(get_db), tenant_id: 
     return _call(campaigns.client_detail, db, tenant_id, request_id)
 
 
+@router.post("/campaigns/clients/{request_id}/text")
+def campaigns_client_text(request_id: str, body: str = Body(..., embed=True), db: Session = Depends(get_db),
+                          tenant_id: str = Depends(get_tenant_id), user: User = Depends(get_current_active_user)):
+    """A text typed by a person in the client's window."""
+    _viewer(db, tenant_id, user)
+    return _call(campaigns.send_manual, db, tenant_id, user, request_id, body)
+
+
+@router.post("/campaigns/clients/{request_id}/handled")
+def campaigns_client_handled(request_id: str, db: Session = Depends(get_db),
+                             tenant_id: str = Depends(get_tenant_id), user: User = Depends(get_current_active_user)):
+    _viewer(db, tenant_id, user)
+    return _call(campaigns.mark_handled, db, tenant_id, user, request_id)
+
+
 @router.get("/campaigns/export")
 def campaigns_export(
     campaign: Optional[str] = Query(None),

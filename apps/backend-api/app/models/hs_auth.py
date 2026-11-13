@@ -95,6 +95,10 @@ class HsAuthRequest(Base):
     answered_at = Column(DateTime(timezone=True), nullable=True)
     reminder_sent_at = Column(DateTime(timezone=True), nullable=True)
     last_text_at = Column(DateTime(timezone=True), nullable=True)   # newest text either way
+    # The client wrote something the automation can't act on (a question, or a
+    # text after they were queued) — a person should answer. Cleared by sending
+    # a manual text or "Mark as handled".
+    needs_reply = Column(Boolean, nullable=False, default=False, server_default="false")
 
     created_at = Column(DateTime(timezone=True), nullable=False, default=_now)
     updated_at = Column(DateTime(timezone=True), nullable=False, default=_now, onupdate=_now)
@@ -177,8 +181,9 @@ class HsCampaignText(Base):
     request_id = Column(UUID(as_uuid=True), ForeignKey("hs_auth_requests.id", ondelete="CASCADE"), nullable=False)
     phone_number = Column(String(32), nullable=False)        # +1XXXXXXXXXX (the client)
     direction = Column(String(3), nullable=False)            # OUT | IN
-    # OUT: BLAST | FOLLOWUP | REMINDER;  IN: REPLY
+    # OUT: BLAST | FOLLOWUP | REMINDER | MANUAL (typed by a person);  IN: REPLY
     kind = Column(String(10), nullable=False)
+    sent_by = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)  # MANUAL: who typed it
     body = Column(Text, nullable=True)
     from_number = Column(String(32), nullable=True)          # our number (OUT)
     # OUT: QUEUED -> SENDING -> SENT -> DELIVERED | FAILED; SKIPPED; CANCELLED.  IN: RECEIVED
