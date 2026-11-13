@@ -620,11 +620,22 @@ def test_retext_goes_only_to_clients_who_never_replied(env):
     assert counts["retexted"] == 2 and counts["retext_ready"] == 0
     # A reply to the re-text runs the normal flow.
     assert _reply(env, "+13055550103", "yes")["result"] == "hs_followup"
-    # At most RETEXT_MAX re-texts per client.
+    # At most 3 re-texts per client in 30 days (Di has had 1)...
+    assert hc.RETEXT_MAX == 3
+    for _ in range(2):
+        env.clock.add(61)
+        assert hc.retext(env.db, c, "") == 1            # Di
+        _blast_all(env)
     env.clock.add(61)
-    assert hc.retext(env.db, c, "") == 1                # Di
+    with pytest.raises(hc.CampaignError):
+        hc.retext(env.db, c, "")
+    # ...then the count resets: 30 days later she can be re-texted again.
+    env.clock.add(60 * 24 * 30)
+    assert hc.retext(env.db, c, "") == 1
     _blast_all(env)
-    env.clock.add(61)
+    # Opting out ends it for good.
+    _reply(env, "+13055550104", "STOP")
+    env.clock.add(60 * 24 * 31)
     with pytest.raises(hc.CampaignError):
         hc.retext(env.db, c, "")
 

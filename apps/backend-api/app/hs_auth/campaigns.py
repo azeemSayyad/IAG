@@ -290,7 +290,8 @@ def delete(db: Session, c: HsTextCampaign) -> None:
 
 # ---- Re-text the clients who never replied --------------------------------------------
 
-RETEXT_MAX = 2                    # re-texts per client per campaign (blast + 2 = 3 texts at most)
+RETEXT_MAX = 3                    # re-texts per client in any 30 days (owner, 2026-11-13: don't waste leads)
+RETEXT_WINDOW = timedelta(days=30)  # the count resets after 30 days; only opting out ends it for good
 RETEXT_GAP = timedelta(hours=1)   # never re-text someone we texted within the last hour
 
 
@@ -301,7 +302,8 @@ def _retext_conditions(now: datetime) -> list:
     replied = select(T.id).where(T.request_id == R.id, T.direction == "IN").exists()
     pending = select(T.id).where(T.request_id == R.id, T.status == "QUEUED").exists()
     retexts = (select(func.count(T.id)).where(T.request_id == R.id, T.kind == "RETEXT",
-                                              T.status.notin_(("CANCELLED", "SKIPPED"))).scalar_subquery())
+                                              T.status.notin_(("CANCELLED", "SKIPPED")),
+                                              T.created_at >= now - RETEXT_WINDOW).scalar_subquery())
     return [R.convo == "BLAST_SENT", R.deleted_at.is_(None), R.needs_reply.isnot(True),
             ~replied, ~pending, retexts < RETEXT_MAX,
             or_(R.last_text_at.is_(None), R.last_text_at <= now - RETEXT_GAP)]
@@ -318,7 +320,7 @@ def retext(db: Session, c: HsTextCampaign, body: Optional[str]) -> int:
     rows = db.query(HsAuthRequest).filter(HsAuthRequest.campaign_id == c.id, *_retext_conditions(now)).all()
     if not rows:
         raise CampaignError("Nobody to re-text: everyone replied, opted out, was texted in the last hour, "
-                            f"or already got {RETEXT_MAX} re-texts.", 409)
+                            f"or already got {RETEXT_MAX} re-texts in the last 30 days.", 409)
     dnc = vc.dnc_digits(db, c.tenant_id, [e164(r.phone) for r in rows])
     n = 0
     for r in rows:
@@ -327,7 +329,7 @@ def retext(db: Session, c: HsTextCampaign, body: Optional[str]) -> int:
             continue
         db.add(HsCampaignText(tenant_id=c.tenant_id, campaign_id=c.id, request_id=r.id, phone_number=phone,
                               direction="OUT", kind="RETEXT", body=vc.render(template, r.first_name),
-                              status="QUEUED", from_number=_last_from(db, r.id)))
+                              status="QUEUED", from_number=_last_from(db, r.id), created_at=now))
         n += 1
     if c.status in ("COMPLETED", "STOPPED"):
         c.status, c.finished_at = "RUNNING", None  # sending again; completes when the re-texts are out

@@ -539,7 +539,8 @@ function RetextDrawer({ c, max, onClose, onSent }: {
         Goes to the <b>{n}</b> client{n === 1 ? "" : "s"} in this campaign who <b>never replied</b>. Anyone who replied, opted out,
         or was texted in the last hour is left out. Like the first text, it goes out paced and only <b>8 am – 8 pm in
         their time zone</b>, from the <b>same number</b> they got the first text from. Pause or Stop on the campaign stops it too.
-        Each client gets at most {max} re-texts.
+        Each client gets at most {max} re-texts in 30 days; after that the count resets, so nobody is wasted
+        unless they opt out.
       </p>
       <Field label="Message" required hint={`{name} = their first name. “Reply STOP to opt out.” is added if missing. Use approved wording. ${body.length}/480`}>
         <textarea className={`${drawerCtl} min-h-24`} value={body} maxLength={480} onChange={(e) => setBody(e.target.value)} />
