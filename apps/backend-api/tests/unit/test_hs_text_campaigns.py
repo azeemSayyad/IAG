@@ -563,3 +563,91 @@ def test_after_a_reply_nothing_waits_for_texting_hours(env, monkeypatch):
     for _ in range(3):
         hc.tick(env.db, env.tenant)
     assert len(env.sent) == before
+
+
+# ---------------------------------------------------------------- state numbers + re-text
+
+def test_area_code_states():
+    from app.core.area_codes import state_of_number
+
+    assert state_of_number("+12145550001") == "TX"
+    assert state_of_number("(305) 555-0101") == "FL"
+    assert state_of_number("+15550001111") is None
+    nums = ["+12145550001", "+13055550002", "+17135550003"]
+    assert vc.numbers_by_state(nums) == {"FL": 1, "TX": 2}
+    # A Texas client gets a Texas number; a state we have no number for gets any.
+    for p in ("+19725550000", "+18175550001", "+12105550002"):
+        assert vc.sender_for(p, nums, None, "TX") in ("+12145550001", "+17135550003")
+    assert vc.sender_for("+19725550000", nums, None, "OH") in nums
+    # The number a client already knows always wins.
+    assert vc.sender_for("+19725550000", nums, "+13055550002", "TX") == "+13055550002"
+
+
+def test_blast_texts_from_a_same_state_number(env, monkeypatch):
+    monkeypatch.setattr(vc, "senders", lambda: ["+12145550001", "+13055550002", "+14045550003"])
+    _campaign(env)
+    _blast_all(env)
+    by_to = {s["to"]: s["from"] for s in env.sent}
+    assert by_to["+13055550101"] == "+13055550002"   # Ana FL
+    assert by_to["+13055550102"] == "+12145550001"   # Bo TX
+    assert by_to["+13055550103"] == "+14045550003"   # Cy GA
+    assert by_to["+13055550104"] in ("+12145550001", "+13055550002", "+14045550003")  # Di OH: any
+    # Her follow-up comes from the same number she already knows.
+    n = len(env.sent)
+    _reply(env, "+13055550101", "yes")
+    assert env.sent[n]["from"] == "+13055550002"
+
+
+def test_retext_goes_only_to_clients_who_never_replied(env):
+    c = _campaign(env)
+    _blast_all(env)
+    first_from = {s["to"]: s["from"] for s in env.sent}
+    _reply(env, "+13055550101", "yes")                 # Ana replied
+    _reply(env, "+13055550102", "STOP")                # Bo opted out
+    with pytest.raises(hc.CampaignError):              # texted less than an hour ago
+        hc.retext(env.db, c, "")
+    env.clock.add(61)
+    assert hc.retext(env.db, c, "Hi {name}, just checking in about your 2027 plan. Reply YES") == 2
+    assert c.status == "RUNNING"
+    n = len(env.sent)
+    _blast_all(env)
+    new = env.sent[n:]
+    assert {s["to"] for s in new} == {"+13055550103", "+13055550104"}    # Cy, Di only
+    assert all(s["from"] == first_from[s["to"]] for s in new)          # same number as before
+    assert all(s["text"].startswith("Hi Cy") or s["text"].startswith("Hi Di") for s in new)
+    assert c.status == "COMPLETED"
+    counts = hc._counts(env.db, [c.id])[c.id]
+    assert counts["retexted"] == 2 and counts["retext_ready"] == 0
+    # A reply to the re-text runs the normal flow.
+    assert _reply(env, "+13055550103", "yes")["result"] == "hs_followup"
+    # At most RETEXT_MAX re-texts per client.
+    env.clock.add(61)
+    assert hc.retext(env.db, c, "") == 1                # Di
+    _blast_all(env)
+    env.clock.add(61)
+    with pytest.raises(hc.CampaignError):
+        hc.retext(env.db, c, "")
+
+
+def test_retext_waits_for_pause_and_texting_hours(env, monkeypatch):
+    c = _campaign(env)
+    _blast_all(env)
+    env.clock.add(61)
+    assert hc.retext(env.db, c, "") == 4
+    hc.pause(env.db, c)
+    n = len(env.sent)
+    _blast_all(env)
+    assert len(env.sent) == n
+    monkeypatch.setattr(vc, "in_hours", lambda *a, **k: False)
+    hc.start(env.db, c)
+    _blast_all(env)
+    assert len(env.sent) == n                           # 10 pm for them: waits
+    monkeypatch.setattr(vc, "in_hours", lambda *a, **k: True)
+    _blast_all(env)
+    assert len(env.sent) == n + 4
+    # Stop cancels re-texts that haven't gone out.
+    env.clock.add(61)
+    hc.retext(env.db, c, "")
+    hc.stop(env.db, c)
+    _blast_all(env)
+    assert len(env.sent) == n + 4

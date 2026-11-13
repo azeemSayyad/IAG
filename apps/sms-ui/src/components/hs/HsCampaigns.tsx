@@ -16,6 +16,7 @@ import { Empty, ago, errText, fmtDob, fmtPhone } from "./ui";
 export type Counts = {
   total: number; queued: number; sent: number; replied: number; positive: number; answered: number;
   no_answer: number; link_sent: number; authorized: number; expired: number; dnc: number; invalid: number; failed: number;
+  retext_ready: number; retexted: number; retext_queued: number;
 };
 export type HsCampaign = {
   id: string; name: string; template: string; status: string; pause_reason: string | null;
@@ -31,6 +32,8 @@ export type HsOverview = {
   usage: { used: number; limit: number; left: number };
   followup_text: string; blast_default: string; me: string; reminder_draft: string; stages: Record<string, string>;
   sent_today: number; daily_cap: number; simulating: boolean; needs_reply: number;
+  /** How many of our sending numbers each state has: {"TX": 2, "FL": 1}. */
+  state_numbers: Record<string, number>; retext_max: number;
 };
 type Text = {
   id: string; direction: "IN" | "OUT"; kind: string; body: string | null; status: string; sent_by_name: string | null;
@@ -70,7 +73,7 @@ const CAMP_LABEL: Record<string, string> = {
   DRAFT: "Draft", RUNNING: "Sending", PAUSED: "Paused", COMPLETED: "All texted", STOPPED: "Stopped",
 };
 const KIND_LABEL: Record<string, string> = {
-  BLAST: "Campaign text", FOLLOWUP: "Follow-up", REMINDER: "Reminder", MANUAL: "You", REPLY: "Client",
+  BLAST: "Campaign text", FOLLOWUP: "Follow-up", REMINDER: "Reminder", MANUAL: "You", REPLY: "Client", RETEXT: "Re-text",
 };
 
 const btn = "rounded-lg bg-accent px-3 py-1.5 text-xs font-bold text-white hover:bg-accent-hover disabled:opacity-50";
@@ -91,6 +94,7 @@ export default function HsCampaigns({ overview, reloadOverview, agents, onEdit, 
   const [data, setData] = useState<ClientsResp | null>(null);
   const [creating, setCreating] = useState(false);
   const [settingsFor, setSettingsFor] = useState<HsCampaign | null>(null);
+  const [retextFor, setRetextFor] = useState<HsCampaign | null>(null);
   const [detail, setDetail] = useState<Client | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
@@ -191,7 +195,7 @@ export default function HsCampaigns({ overview, reloadOverview, agents, onEdit, 
           <div className="mt-3 space-y-2">
             {overview.campaigns.map((c) => (
               <CampaignRow key={c.id} c={c} canManage={overview.can_manage} busy={busy === c.id}
-                           onAction={(a) => act(c, a)} onSettings={() => setSettingsFor(c)}
+                           onAction={(a) => act(c, a)} onSettings={() => setSettingsFor(c)} onRetext={() => setRetextFor(c)}
                            onShow={() => { setCampaignF(c.id); setStage("ALL"); }} />
             ))}
           </div>
@@ -292,6 +296,8 @@ export default function HsCampaigns({ overview, reloadOverview, agents, onEdit, 
                                         setCreating(false); onNote(msg); reloadOverview(); setCampaignF(c.id);
                                         if (started) onRunning(c);
                                       }} />}
+      {retextFor && <RetextDrawer c={retextFor} max={overview.retext_max} onClose={() => setRetextFor(null)}
+                                  onSent={(msg) => { setRetextFor(null); onNote(msg); reloadOverview(); load(); }} />}
       {settingsFor && <SettingsDrawer c={settingsFor} onClose={() => setSettingsFor(null)}
                                       onSaved={() => { setSettingsFor(null); reloadOverview(); }} />}
       {detail && <ClientDrawer c={detail} stages={stages} onClose={() => setDetail(null)}
@@ -319,8 +325,9 @@ function StageDetail({ c }: { c: Client }) {
   );
 }
 
-function CampaignRow({ c, canManage, busy, onAction, onSettings, onShow }: {
+function CampaignRow({ c, canManage, busy, onAction, onSettings, onShow, onRetext }: {
   c: HsCampaign; canManage: boolean; busy: boolean; onAction: (a: string) => void; onSettings: () => void; onShow: () => void;
+  onRetext: () => void;
 }) {
   const n = c.counts || {};
   // The funnel, left to right. The rest is one quiet line underneath.
@@ -331,6 +338,7 @@ function CampaignRow({ c, canManage, busy, onAction, onSettings, onShow }: {
   const extra = [
     n.no_answer ? `${n.no_answer} no answer yet` : "", n.expired ? `${n.expired} expired` : "",
     n.invalid ? `${n.invalid} need fixing` : "", n.failed ? `${n.failed} not delivered` : "",
+    n.retexted ? `${n.retexted} re-texted` : "", n.retext_queued ? `${n.retext_queued} re-texts waiting to send` : "",
   ].filter(Boolean).join(" · ");
   return (
     <div className="rounded-xl border border-hairline p-3" data-testid="hs-campaign-row">
@@ -356,6 +364,12 @@ function CampaignRow({ c, canManage, busy, onAction, onSettings, onShow }: {
             {c.status === "PAUSED" && <button className={btn} disabled={busy} onClick={() => onAction("resume")}>Resume</button>}
             {(c.status === "RUNNING" || c.status === "PAUSED") && (
               <button className={btnGhost} disabled={busy} onClick={() => onAction("stop")}>Stop</button>
+            )}
+            {c.status !== "DRAFT" && (n.retext_ready ?? 0) > 0 && (
+              <button className={btnGhost} disabled={busy} onClick={onRetext} data-testid="hs-retext"
+                      title="Text again everyone who never replied">
+                ↻ Re-text no-replies ({n.retext_ready})
+              </button>
             )}
             <button className={btnGhost} onClick={onSettings}>Settings</button>
             {c.status === "DRAFT" && <button className={btnGhost} disabled={busy} onClick={() => onAction("delete")}>Delete</button>}
@@ -462,6 +476,7 @@ function NewCampaignDrawer({ overview, agents, onClose, onCreated }: {
       <Field label="First text (the blast)" required hint={`{name} = their first name. “Reply STOP to opt out.” is added if missing. ${template.length}/480`}>
         <textarea className={`${drawerCtl} min-h-24`} value={template} maxLength={480} onChange={(e) => setTemplate(e.target.value)} />
       </Field>
+      <SendingNumbers byState={overview.state_numbers} />
       <DrawerSection icon="💬" title="What they get">
         <Bubble who="Campaign text" body={preview} />
         <Bubble who="If they reply positively — approved follow-up (sent as is)" body={overview.followup_text} />
@@ -469,6 +484,69 @@ function NewCampaignDrawer({ overview, agents, onClose, onCreated }: {
           Their answer (company name, “ok”, …) queues them for HealthSherpa. No answer in 10 minutes = “No answer yet”;
           a later answer still queues them. The 7-minute reminder is OFF until the wording is approved (Settings).
         </p>
+      </DrawerSection>
+    </Drawer>
+  );
+}
+
+/** Which of our numbers clients are texted from — picked automatically by the
+ * client's state (the State column), so a Texas list goes out from Texas numbers. */
+function SendingNumbers({ byState }: { byState: Record<string, number> }) {
+  const states = Object.entries(byState || {});
+  return (
+    <div className="rounded-lg bg-black/5 px-3 py-2 text-xs text-ink-muted" data-testid="hs-state-numbers">
+      <b className="text-ink">Sending number:</b>{" "}
+      {states.length ? (
+        <>each client is texted from one of our numbers <b>in their own state</b> when we have one —{" "}
+          {states.map(([st, k]) => `${st} (${k})`).join(", ")}. Other states: any of our numbers. A client always
+          hears from the same number.</>
+      ) : (
+        <>picked automatically from our numbers; a client always hears from the same number.</>
+      )}
+    </div>
+  );
+}
+
+function RetextDrawer({ c, max, onClose, onSent }: {
+  c: HsCampaign; max: number; onClose: () => void; onSent: (msg: string) => void;
+}) {
+  const n = c.counts.retext_ready ?? 0;
+  const [body, setBody] = useState(c.template);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const preview = (() => {
+    const t = body.replace(/\{\s*(first_?name|name)\s*\}/gi, "Jane").trim();
+    return /stop/i.test(t) ? t : `${t} Reply STOP to opt out.`;
+  })();
+  const send = async () => {
+    setBusy(true); setErr(null);
+    try {
+      const r = await api<{ queued: number }>(`/hs-auth/campaigns/${c.id}/retext`, { method: "POST", body: JSON.stringify({ body }) });
+      onSent(`Re-text started for ${r.queued} client${r.queued === 1 ? "" : "s"} who never replied in “${c.name}”.`);
+    } catch (e) { setErr(errText(e)); }
+    finally { setBusy(false); }
+  };
+  return (
+    <Drawer open title="Re-text no-replies" sub={c.name} icon="↻" onClose={onClose}
+            footer={<>
+              <button className={btnGhost} onClick={onClose}>Cancel</button>
+              <button className={btn} disabled={busy || !body.trim()} onClick={send} data-testid="hs-retext-send">
+                {busy ? "Starting…" : `Send to ${n} client${n === 1 ? "" : "s"}`}
+              </button>
+            </>}>
+      {err && <div className="rounded-lg bg-danger/10 px-3 py-2 text-xs font-semibold text-danger">{err}</div>}
+      <p className="text-xs text-ink-muted">
+        Goes to the <b>{n}</b> client{n === 1 ? "" : "s"} in this campaign who <b>never replied</b>. Anyone who replied, opted out,
+        or was texted in the last hour is left out. Like the first text, it goes out paced and only <b>8 am – 8 pm in
+        their time zone</b>, from the <b>same number</b> they got the first text from. Pause or Stop on the campaign stops it too.
+        Each client gets at most {max} re-texts.
+      </p>
+      <Field label="Message" required hint={`{name} = their first name. “Reply STOP to opt out.” is added if missing. Use approved wording. ${body.length}/480`}>
+        <textarea className={`${drawerCtl} min-h-24`} value={body} maxLength={480} onChange={(e) => setBody(e.target.value)} />
+      </Field>
+      <DrawerSection icon="💬" title="What they get">
+        <Bubble who="Re-text" body={preview} />
+        <p className="text-xs text-ink-muted">A reply to it works exactly like a reply to the first text.</p>
       </DrawerSection>
     </Drawer>
   );

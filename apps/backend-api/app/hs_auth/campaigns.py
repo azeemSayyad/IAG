@@ -54,7 +54,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import and_, func, or_, text as sql_text
+from sqlalchemy import and_, func, or_, select, text as sql_text
 from sqlalchemy.orm import Session
 
 from app.core.active_agents import user_is_active
@@ -267,7 +267,7 @@ def stop(db: Session, c: HsTextCampaign) -> None:
     db.query(HsAuthRequest).filter(HsAuthRequest.campaign_id == c.id, HsAuthRequest.convo == "QUEUED").update(
         {"convo": "CANCELLED", "convo_detail": "Campaign stopped before the text went out", "updated_at": now},
         synchronize_session=False)
-    db.query(HsCampaignText).filter(HsCampaignText.campaign_id == c.id, HsCampaignText.kind == "BLAST",
+    db.query(HsCampaignText).filter(HsCampaignText.campaign_id == c.id, HsCampaignText.kind.in_(("BLAST", "RETEXT")),
                                     HsCampaignText.status == "QUEUED").update({"status": "CANCELLED"}, synchronize_session=False)
     c.status = "STOPPED"
     c.finished_at = now
@@ -286,6 +286,53 @@ def delete(db: Session, c: HsTextCampaign) -> None:
     if batch_id:
         db.query(HsAuthBatch).filter(HsAuthBatch.id == batch_id).delete(synchronize_session=False)
     db.commit()
+
+
+# ---- Re-text the clients who never replied --------------------------------------------
+
+RETEXT_MAX = 2                    # re-texts per client per campaign (blast + 2 = 3 texts at most)
+RETEXT_GAP = timedelta(hours=1)   # never re-text someone we texted within the last hour
+
+
+def _retext_conditions(now: datetime) -> list:
+    """Rows a re-text may go to: texted, never replied (not one text back), not
+    re-texted too often or too recently, nothing waiting to go to them."""
+    R, T = HsAuthRequest, HsCampaignText
+    replied = select(T.id).where(T.request_id == R.id, T.direction == "IN").exists()
+    pending = select(T.id).where(T.request_id == R.id, T.status == "QUEUED").exists()
+    retexts = (select(func.count(T.id)).where(T.request_id == R.id, T.kind == "RETEXT",
+                                              T.status.notin_(("CANCELLED", "SKIPPED"))).scalar_subquery())
+    return [R.convo == "BLAST_SENT", R.deleted_at.is_(None), R.needs_reply.isnot(True),
+            ~replied, ~pending, retexts < RETEXT_MAX,
+            or_(R.last_text_at.is_(None), R.last_text_at <= now - RETEXT_GAP)]
+
+
+def retext(db: Session, c: HsTextCampaign, body: Optional[str]) -> int:
+    """Queue one more text to everyone in this campaign who never replied. Sent
+    like the blast: in their texting hours, paced, from the number they already
+    got the first text from, stops on Pause / Stop. Returns how many."""
+    if c.status == "DRAFT":
+        raise CampaignError("Run the campaign first — nobody has been texted yet", 409)
+    template = vc.check_template((body or "").strip() or c.template)
+    now = _now()
+    rows = db.query(HsAuthRequest).filter(HsAuthRequest.campaign_id == c.id, *_retext_conditions(now)).all()
+    if not rows:
+        raise CampaignError("Nobody to re-text: everyone replied, opted out, was texted in the last hour, "
+                            f"or already got {RETEXT_MAX} re-texts.", 409)
+    dnc = vc.dnc_digits(db, c.tenant_id, [e164(r.phone) for r in rows])
+    n = 0
+    for r in rows:
+        phone = e164(r.phone)
+        if not phone or vc.digits(phone) in dnc:
+            continue
+        db.add(HsCampaignText(tenant_id=c.tenant_id, campaign_id=c.id, request_id=r.id, phone_number=phone,
+                              direction="OUT", kind="RETEXT", body=vc.render(template, r.first_name),
+                              status="QUEUED", from_number=_last_from(db, r.id)))
+        n += 1
+    if c.status in ("COMPLETED", "STOPPED"):
+        c.status, c.finished_at = "RUNNING", None  # sending again; completes when the re-texts are out
+    db.commit()
+    return n
 
 
 # ---- Sending (the shared Telnyx sender) -------------------------------------------------
@@ -326,7 +373,7 @@ def tick(db: Session, tenant_id) -> int:
         _unlock(tenant_id)
 
 
-def _cancel_queued(db: Session, row: HsAuthRequest, kinds: tuple = ("FOLLOWUP", "REMINDER", "BLAST")) -> None:
+def _cancel_queued(db: Session, row: HsAuthRequest, kinds: tuple = ("FOLLOWUP", "REMINDER", "BLAST", "RETEXT")) -> None:
     db.query(HsCampaignText).filter(HsCampaignText.request_id == row.id, HsCampaignText.status == "QUEUED",
                                     HsCampaignText.kind.in_(kinds)).update({"status": "CANCELLED"}, synchronize_session=False)
 
@@ -381,10 +428,12 @@ def _timers(db: Session, tenant_id, now: datetime) -> None:
                     direction="OUT", kind="REMINDER", body=vc.render(c.reminder_text, r.first_name),
                     status="QUEUED", from_number=_last_from(db, r.id)))
 
-    # 3) Blast done -> COMPLETED (conversations carry on).
+    # 3) Blast (and any re-text) done -> COMPLETED (conversations carry on).
     for c in camps.values():
         if c.status == "RUNNING" and db.query(HsAuthRequest.id).filter(
-                HsAuthRequest.campaign_id == c.id, HsAuthRequest.convo == "QUEUED").first() is None:
+                HsAuthRequest.campaign_id == c.id, HsAuthRequest.convo == "QUEUED").first() is None \
+                and db.query(HsCampaignText.id).filter(HsCampaignText.campaign_id == c.id, HsCampaignText.kind == "RETEXT",
+                                                      HsCampaignText.status == "QUEUED").first() is None:
             c.status = "COMPLETED"
             c.finished_at = now
     db.commit()
@@ -462,7 +511,16 @@ def _send(db: Session, tenant_id, now: datetime) -> int:
                 continue
         # FOLLOWUP / REMINDER / MANUAL: any hour — the client replied, so this is
         # part of THEIR conversation, not us reaching out. Only the blast is timed.
-        num = t.from_number if t.from_number in numbers else vc.sender_for(t.phone_number, numbers, _last_from(db, row.id))
+        if t.kind == "RETEXT":
+            # Outreach again (they never replied): only to someone still silent,
+            # honours Pause and THEIR texting hours, like the blast.
+            if row.convo != "BLAST_SENT" or row.needs_reply:
+                t.status = "CANCELLED"
+                continue
+            if c.status == "PAUSED" or not (replies.is_test_number(t.phone_number) or vc.in_hours(s, now, row.state)):
+                continue
+        num = t.from_number if t.from_number in numbers else vc.sender_for(
+            t.phone_number, numbers, _last_from(db, row.id), row.state)
         if not take(num):
             continue
         t.from_number, t.status, t.sent_at = num, "SENDING", now
@@ -477,7 +535,7 @@ def _send(db: Session, tenant_id, now: datetime) -> int:
             continue
         if not (replies.is_test_number(phone) or vc.in_hours(s, now, r.state)):
             continue  # outside their texting hours — stays queued
-        num = vc.sender_for(phone, numbers, None)
+        num = vc.sender_for(phone, numbers, None, r.state)  # a same-state number when we have one
         if not take(num):
             continue
         t = HsCampaignText(tenant_id=tenant_id, campaign_id=r.campaign_id, request_id=r.id, phone_number=phone,
@@ -527,6 +585,8 @@ def _after_sent(row: Optional[HsAuthRequest], t: HsCampaignText) -> None:
         service._event(row, "followup", None, "Approved follow-up sent — waiting for the company they're renewing")
     elif t.kind == "MANUAL":
         service._event(row, "manual", None, "Text sent by hand")
+    elif t.kind == "RETEXT":
+        service._event(row, "retext", None, "Re-text sent (no reply to the earlier text)")
     elif t.kind == "REMINDER":
         row.reminder_sent_at = now
         service._event(row, "reminder", None, "Reminder text sent")
@@ -868,14 +928,25 @@ def _counts(db: Session, ids: list) -> dict:
         func.count(R.id).filter(R.convo == "DNC").label("dnc"),
         func.count(R.id).filter(R.convo == "INVALID").label("invalid"),
         func.count(R.id).filter(R.convo.in_(("SKIPPED", "BLAST_FAILED"))).label("failed"),
+        func.count(R.id).filter(and_(*_retext_conditions(_now()))).label("retext_ready"),
     ]
     for row in db.query(R.campaign_id, *cols).filter(R.campaign_id.in_(ids), R.deleted_at.is_(None)).group_by(R.campaign_id):
         out[row[0]] = {k: int(v) for k, v in row._asdict().items() if k != "campaign_id"}
     replied = dict(db.query(HsCampaignText.campaign_id, func.count(func.distinct(HsCampaignText.request_id)))
                    .filter(HsCampaignText.campaign_id.in_(ids), HsCampaignText.direction == "IN")
                    .group_by(HsCampaignText.campaign_id).all())
+    retexted = dict(db.query(HsCampaignText.campaign_id, func.count(func.distinct(HsCampaignText.request_id)))
+                    .filter(HsCampaignText.campaign_id.in_(ids), HsCampaignText.kind == "RETEXT",
+                            HsCampaignText.status.notin_(("QUEUED", "CANCELLED", "SKIPPED")))
+                    .group_by(HsCampaignText.campaign_id).all())
+    retext_queued = dict(db.query(HsCampaignText.campaign_id, func.count(HsCampaignText.id))
+                         .filter(HsCampaignText.campaign_id.in_(ids), HsCampaignText.kind == "RETEXT",
+                                 HsCampaignText.status == "QUEUED")
+                         .group_by(HsCampaignText.campaign_id).all())
     for i in ids:
         out[i]["replied"] = int(replied.get(i, 0))
+        out[i]["retexted"] = int(retexted.get(i, 0))
+        out[i]["retext_queued"] = int(retext_queued.get(i, 0))
     return out
 
 
@@ -925,6 +996,8 @@ def overview(db: Session, tenant_id, user: User) -> dict:
             HsAuthRequest.convo != "DNC").scalar() or 0),
         "sent_today": vc.sent_today(db, tenant_id),
         "daily_cap": vc.daily_cap(),
+        "state_numbers": vc.numbers_by_state(vc.senders()),
+        "retext_max": RETEXT_MAX,
         "simulating": telnyx.simulating(),
     }
 
@@ -1054,7 +1127,7 @@ def send_manual(db: Session, tenant_id, user: User, request_id: str, body: str) 
     r = db.query(HsAuthRequest).filter(HsAuthRequest.id == detail["id"]).first()
     c = db.query(HsTextCampaign).filter(HsTextCampaign.id == r.campaign_id).first()
     if not can_text(user, c):
-        raise CampaignError("Only the owner or this campaign's HealthSherpa agent can text clients.", 403)
+        raise CampaignError("Only admins, head managers or this campaign's HealthSherpa agent can text clients.", 403)
     text = (body or "").strip()
     if not text:
         raise CampaignError("Write the message first")
@@ -1079,7 +1152,7 @@ def mark_handled(db: Session, tenant_id, user: User, request_id: str) -> dict:
     r = db.query(HsAuthRequest).filter(HsAuthRequest.id == detail["id"]).first()
     c = db.query(HsTextCampaign).filter(HsTextCampaign.id == r.campaign_id).first()
     if not can_text(user, c):
-        raise CampaignError("Only the owner or this campaign's HealthSherpa agent can do that.", 403)
+        raise CampaignError("Only admins, head managers or this campaign's HealthSherpa agent can do that.", 403)
     r.needs_reply = False
     service._event(r, "handled", None, "Marked as handled — no reply needed")
     db.commit()
@@ -1110,7 +1183,8 @@ def export_csv(db: Session, tenant_id, *, campaign: Optional[str], stage: Option
                                                   HsCampaignText.status.notin_(("QUEUED", "CANCELLED")))
                   .order_by(func.coalesce(HsCampaignText.sent_at, HsCampaignText.created_at))):
             who = "Client" if t.direction == "IN" else {"BLAST": "Campaign", "FOLLOWUP": "Follow-up",
-                                                         "REMINDER": "Reminder"}.get(t.kind, "Us")
+                                                         "REMINDER": "Reminder", "RETEXT": "Re-text",
+                                                         "MANUAL": "Us (typed)"}.get(t.kind, "Us")
             texts.setdefault(t.request_id, []).append(f"[{_et(t.sent_at or t.created_at)}] {who}: {t.body or ''}")
     buf = io.StringIO()
     w = csv.writer(buf)
@@ -1143,7 +1217,7 @@ def sim_age(db: Session, tenant_id, request_id: str, minutes: float) -> dict:
     if r is None:
         raise CampaignError("Client not found", 404)
     d = timedelta(minutes=float(minutes))
-    for col in ("yes_at", "followup_sent_at", "link_sent_at", "answered_at"):
+    for col in ("yes_at", "followup_sent_at", "link_sent_at", "answered_at", "last_text_at"):
         v = getattr(r, col)
         if v is not None:
             setattr(r, col, v - d)

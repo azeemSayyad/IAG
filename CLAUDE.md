@@ -169,6 +169,14 @@ No Google Sheet: every client's details, texts and status are on the page, with
   queued also sets it. Plain no / STOP / scam = Do-Not-Call as always. Sending
   a manual text or "No reply needed" clears it. "Needs reply" outranks every
   stage but Opted out (one count per client) and has a red badge in the header.
+- **Sending number by state:** `vc.sender_for(..., state=)` picks one of our
+  numbers whose area code (`app/core/area_codes.py`) is in the client's state
+  (a Texas list goes out from Texas numbers); no number for that state = any
+  number. The number a client already heard from always wins (sticky).
+- **Re-text no-replies** (`retext`, kind `RETEXT`): one more text to clients
+  still at `BLAST_SENT` who never texted back — not within 1 h of their last
+  text, at most `RETEXT_MAX` (2) per client, same number as before, honours
+  Pause/Stop and their texting hours like the blast.
 - Who: view = managers + the campaign's HealthSherpa agent; create / start /
   pause / stop / settings / manual texts = super_admin, admin, head (`CAMPAIGN_ROLES`;
   the campaign's HealthSherpa agent may also text).

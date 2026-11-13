@@ -149,7 +149,7 @@ def _viewer(db: Session, tenant_id: str, user: User) -> None:
 
 def _manager_of_campaigns(user: User) -> None:
     if not campaigns.can_manage(user):
-        raise HTTPException(status_code=403, detail="Only the owner (super admin) can change HealthSherpa campaigns.")
+        raise HTTPException(status_code=403, detail="Only admins and head managers can change HealthSherpa campaigns.")
 
 
 @router.get("/campaigns")
@@ -260,6 +260,18 @@ def campaigns_update(campaign_id: str, data: dict = Body(...), db: Session = Dep
     c = _call(campaigns.find, db, tenant_id, campaign_id)
     _call(campaigns.update, db, c, data)
     return campaigns.campaign_dict(c, campaigns._counts(db, [c.id])[c.id], service._names(db, {c.hs_agent_id}))
+
+
+@router.post("/campaigns/{campaign_id}/retext")
+def campaigns_retext(campaign_id: str, body: str = Body("", embed=True), db: Session = Depends(get_db),
+                     tenant_id: str = Depends(get_tenant_id), user: User = Depends(get_current_active_user)):
+    """One more text to everyone in the campaign who never replied."""
+    _manager_of_campaigns(user)
+    c = _call(campaigns.find, db, tenant_id, campaign_id)
+    n = _call(campaigns.retext, db, c, body)
+    campaigns.tick(db, tenant_id)
+    return {"queued": n, "campaign": campaigns.campaign_dict(c, campaigns._counts(db, [c.id])[c.id],
+                                                             service._names(db, {c.hs_agent_id}))}
 
 
 @router.post("/campaigns/{campaign_id}/{action}")

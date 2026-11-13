@@ -291,13 +291,32 @@ def senders() -> list[str]:
     return nums
 
 
-def sender_for(phone: str, numbers: list[str], known: str | None = None) -> str:
+def sender_for(phone: str, numbers: list[str], known: str | None = None, state: str | None = None) -> str:
     """The same client always hears from the same number: the one they already
-    know (their lead's dial_from), else a stable pick by their phone."""
+    know (their lead's dial_from), else a stable pick by their phone. With
+    `state` (the client's state): only our numbers from that state's area codes
+    when we have any (a Texas client texted from a Texas number), else any."""
     if known and known in numbers:
         return known
+    pool = numbers
+    if state:
+        from app.core.area_codes import state_of_number
+
+        pool = [n for n in numbers if state_of_number(n) == state.upper()] or numbers
     h = int(hashlib.sha1(_digits(phone)[-10:].encode()).hexdigest(), 16)
-    return numbers[h % len(numbers)]
+    return pool[h % len(pool)]
+
+
+def numbers_by_state(numbers: list[str]) -> dict[str, int]:
+    """{'TX': 2, 'FL': 1} — how many of our sending numbers each state has."""
+    from app.core.area_codes import state_of_number
+
+    out: dict[str, int] = {}
+    for n in numbers:
+        st = state_of_number(n)
+        if st:
+            out[st] = out.get(st, 0) + 1
+    return dict(sorted(out.items()))
 
 
 def day_start(now: datetime | None = None) -> datetime:
