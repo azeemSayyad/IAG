@@ -44,7 +44,8 @@ export function useAutoMode(ext: ExtInfo, allowed: boolean, onChange: () => void
 
   const toggle = useCallback((v: boolean) => {
     setOn(v); writeOn(v); setAutoMode(v);
-    if (!v) setInfo(null);
+    // Tell the server at once, so admins see "Auto mode OFF" on the status panel.
+    if (!v) { setInfo(null); api("/hs-auth/auto/off", { method: "POST" }).catch(() => {}); }
     if (v) setError(null);
   }, []);
 
@@ -54,7 +55,12 @@ export function useAutoMode(ext: ExtInfo, allowed: boolean, onChange: () => void
     if (!active || busy.current) return;
     busy.current = true;
     try {
-      const r = await api<NextResp>("/hs-auth/auto/next", { method: "POST" });
+      const r = await api<NextResp>("/hs-auth/auto/next", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        // Heartbeat for the status panel: which extension, and is this tab in the background.
+        body: JSON.stringify({ ext_version: ext?.version || null, hidden: document.hidden }),
+      });
       if (r.job) {
         // The server already ended the previous one (e.g. 15-min expiry) — make
         // sure the extension stops it before taking the next.
@@ -88,7 +94,7 @@ export function useAutoMode(ext: ExtInfo, allowed: boolean, onChange: () => void
     } finally {
       busy.current = false;
     }
-  }, [active, onChange, toggle]);
+  }, [active, onChange, toggle, ext]);
 
   useEffect(() => {
     if (!active) return;

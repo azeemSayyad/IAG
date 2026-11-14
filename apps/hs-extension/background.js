@@ -119,6 +119,16 @@ var lastTabId = null; // the tab we opened last time, reused for the next job
 chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
   var kind = msg && msg.kind;
 
+  // A wait for the HealthSherpa tab while it's HIDDEN (another tab in front,
+  // window minimised/covered, screen locked): Chrome slows a hidden page's own
+  // timers to once a second, and after 5 minutes to once a MINUTE — the steps
+  // then crawl and it looks like nothing is typed. This worker's timers aren't
+  // slowed, and message replies reach a hidden page right away.
+  if (kind === "sleep") {
+    setTimeout(function () { sendResponse({ ok: true }); }, Math.max(0, Math.min(Number(msg.ms) || 0, 20000)));
+    return true;
+  }
+
   if (kind === "start-job") {
     var origin = sender.origin || (sender.url ? new URL(sender.url).origin : "");
     if (!IAG.isPortalOrigin(origin)) { sendResponse({ ok: false, reason: "Not an IAG portal page." }); return; }

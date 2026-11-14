@@ -2,7 +2,7 @@
 /* eslint-disable no-unused-vars */
 var IAG = (typeof IAG !== "undefined" && IAG) || {};
 
-IAG.VERSION = "1.1.1";
+IAG.VERSION = "1.1.2";
 IAG.PAGE_SOURCE = "iag-portal";   // messages FROM the portal page
 IAG.EXT_SOURCE = "iag-hs-ext";    // messages TO the portal page
 

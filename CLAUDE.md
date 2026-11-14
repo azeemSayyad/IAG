@@ -178,6 +178,15 @@ No Google Sheet: every client's details, texts and status are on the page, with
   text, at most `RETEXT_MAX` (3) per client per 30 days (`RETEXT_WINDOW` — then
   it resets; only opting out ends it), same number as before, honours
   Pause/Stop and their texting hours like the blast.
+- **Automation status panel** (`components/hs/HsAutomation.tsx`, `GET /hs-auth/campaigns/status`
+  → `automation_status`): top of the tab, polled every 5 s — headline (Working / needs
+  attention / Blocked), issues (HealthSherpa LOGIN wait, AUTO_OFF with clients waiting,
+  STUCK extension, outside texting HOURS per state, PAUSED, CAP, LIMIT, NEEDS_REPLY,
+  ERRORS), live stage counts, today's totals, auto-mode card, recent problems (24 h).
+  Login wait = a popup with sound + desktop notification on any tab of the page.
+  Auto mode is "seen" via `hs_auto_heartbeats` (migration 070): every `/auto/next`
+  poll beats (extension version, tab hidden); `/auto/off` on turning it off; not seen
+  for 150 s = off (closed tab / asleep PC).
 - Who: view = managers + the campaign's HealthSherpa agent; create / start /
   pause / stop / settings / manual texts = super_admin, admin, head (`CAMPAIGN_ROLES`;
   the campaign's HealthSherpa agent may also text).

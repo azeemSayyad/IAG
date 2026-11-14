@@ -25,6 +25,7 @@ import {
 import { Banner, Empty, Menu, MenuItem, ago, errText, fmtDob, fmtPhone } from "../components/hs/ui";
 import HsCampaigns, { type HsOverview } from "../components/hs/HsCampaigns";
 import { autoLabel, useAutoMode } from "../components/hs/useAutoMode";
+import { LoginAlert, useHsStatus } from "../components/hs/HsAutomation";
 
 type Row = {
   id: string;
@@ -164,6 +165,8 @@ export default function HealthSherpa() {
     const t = window.setInterval(loadOverview, tab === "campaigns" || auto.active ? 5000 : 30000);
     return () => window.clearInterval(t);
   }, [loadOverview, tab, auto.active]);
+  // The automation's full picture (campaign tab panel + the login popup on any tab).
+  const hsStatus = useHsStatus(!!hsOverview);
   const pickTab = (t: "clients" | "campaigns") => {
     setTab(t);
     try { localStorage.setItem("hsTab2", t); } catch { /* private window */ }
@@ -284,6 +287,7 @@ export default function HealthSherpa() {
           <button className={btnGhost} onClick={() => auto.toggle(false)}>Turn off</button>
         </div>
       )}
+      <LoginAlert st={hsStatus.st} meIsAgent={!!hsOverview?.is_hs_agent} />
       {auto.error && <Banner tone="danger" onClose={auto.clearError}>{auto.error}</Banner>}
       {err && <Banner tone="danger" onClose={() => setErr(null)}>{err}</Banner>}
       {note && <Banner tone="success" onClose={() => setNote(null)}>{note}</Banner>}
@@ -293,6 +297,7 @@ export default function HealthSherpa() {
 
       {showCampaigns && (
         <HsCampaigns overview={hsOverview!} reloadOverview={loadOverview} agents={agents}
+                     status={hsStatus.st} statusAt={hsStatus.at}
                      onEdit={(c) => setEditRow(c as unknown as Row)} onError={(m) => m && setErr(m)}
                      onNote={(m) => { setNote(m); setErr(null); }}
                      onRunning={(c) => {

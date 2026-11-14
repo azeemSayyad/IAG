@@ -662,3 +662,53 @@ def test_retext_waits_for_pause_and_texting_hours(env, monkeypatch):
     hc.stop(env.db, c)
     _blast_all(env)
     assert len(env.sent) == n + 4
+
+
+def test_status_panel_shows_hours_auto_mode_login_and_errors(env, monkeypatch):
+    codes = lambda st: {i["code"]: i for i in st["issues"]}  # noqa: E731
+    c = _campaign(env)
+    monkeypatch.setattr(vc, "in_hours", lambda *a, **k: False)
+    _blast_all(env)
+    st = hc.automation_status(env.db, env.tenant, env.stan)
+    assert st["hours"]["waiting_closed"] == 4 and st["hours"]["waiting_open"] == 0
+    assert "HOURS" in codes(st) and st["pipeline"]["QUEUED"] == 4
+    assert {d["state"] for d in st["hours"]["states"]} == {"FL", "TX", "GA", "OH"}
+
+    monkeypatch.setattr(vc, "in_hours", lambda *a, **k: True)
+    _blast_all(env)
+    _reply(env, "+13055550101", "Yes")
+    _reply(env, "+13055550101", "Ambetter")
+    st = hc.automation_status(env.db, env.tenant, env.stan)
+    assert "HOURS" not in codes(st)
+    assert st["pipeline"]["HS_QUEUED"] == 1 and st["today"]["answered"] == 1
+    assert codes(st)["AUTO_OFF"]["level"] == "error" and st["level"] == "error"
+    assert "never been turned on" in codes(st)["AUTO_OFF"]["detail"]
+
+    job = hc.next_job(env.db, env.tenant, env.stan, ext_version="1.1.2", hidden=True)["job"]
+    st = hc.automation_status(env.db, env.tenant, env.stan)
+    a = st["agents"][0]
+    assert a["alive"] and a["ext_version"] == "1.1.2" and a["tab_hidden"] is True
+    assert a["running"]["name"] == "Ana L" or a["running"]["name"].startswith("Ana")
+    assert "AUTO_OFF" not in codes(st)
+
+    service.report(env.db, job["id"], job["token"], {"step": "login", "detail": "Please log in"})
+    st = hc.automation_status(env.db, env.tenant, env.stan)
+    assert codes(st)["LOGIN"]["request_id"] == job["id"] and st["agents"][0]["running"]["login"]
+
+    service.report(env.db, job["id"], job["token"],
+                   {"step": "search", "status": "INVALID", "detail": "HealthSherpa didn't accept the search: x"})
+    st = hc.automation_status(env.db, env.tenant, env.stan)
+    assert "LOGIN" not in codes(st) and "ERRORS" in codes(st)
+    assert st["recent_problems"][0]["detail"].startswith("HealthSherpa didn't accept")
+
+    # Turned off -> said at once; a tab not seen for a few minutes counts as off too.
+    hc.beat(env.db, env.tenant, env.stan, on=False)
+    assert "AUTO_IDLE" in codes(hc.automation_status(env.db, env.tenant, env.stan))
+    hc.next_job(env.db, env.tenant, env.stan)
+    assert hc.automation_status(env.db, env.tenant, env.stan)["agents"][0]["alive"]
+    env.clock.add(5)
+    assert not hc.automation_status(env.db, env.tenant, env.stan)["agents"][0]["alive"]
+
+    c.status, c.pause_reason = "PAUSED", "3 texts in a row failed — paused."
+    env.db.commit()
+    assert codes(hc.automation_status(env.db, env.tenant, env.stan))["PAUSED"]["level"] == "error"

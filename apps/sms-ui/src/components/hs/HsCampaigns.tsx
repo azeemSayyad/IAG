@@ -12,6 +12,7 @@ import { api, apiUpload, authedFetch } from "../../lib/api";
 import { stopJob } from "../../lib/hsBridge";
 import { Drawer, DrawerSection, Field, drawerCtl } from "../Drawer";
 import { Empty, ago, errText, fmtDob, fmtPhone } from "./ui";
+import { AutomationPanel, type HsStatus } from "./HsAutomation";
 
 export type Counts = {
   total: number; queued: number; sent: number; replied: number; positive: number; answered: number;
@@ -82,8 +83,10 @@ const inputCls = "rounded-lg border border-hairline bg-white px-2 py-1.5 text-xs
 
 const TEMPLATE_CSV = "First Name,Last Name,Date of Birth,State,Phone\nJane,Doe,01/31/1985,FL,(555) 123-4567\n";
 
-export default function HsCampaigns({ overview, reloadOverview, agents, onEdit, onError, onNote, onRunning }: {
+export default function HsCampaigns({ overview, reloadOverview, agents, status, statusAt, onEdit, onError, onNote, onRunning }: {
   overview: HsOverview; reloadOverview: () => void; agents: Agent[];
+  /** The automation's full picture (HsAutomation.tsx), polled by the page. */
+  status: HsStatus | null; statusAt: number;
   onEdit: (c: Client) => void; onError: (m: string) => void; onNote: (m: string) => void;
   /** A campaign was started from here — the page turns on auto mode if it's this user's. */
   onRunning: (c: HsCampaign) => void;
@@ -165,6 +168,10 @@ export default function HsCampaigns({ overview, reloadOverview, agents, onEdit, 
   const stages = overview.stages;
   return (
     <div className="space-y-4" data-testid="hs-campaigns">
+      {status && overview.campaigns.length > 0 && (
+        <AutomationPanel st={status} at={statusAt} onOpen={openDetail}
+                         onStage={(k) => { setStage(k); setCampaignF(""); }} />
+      )}
       <section className="glass rounded-2xl p-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="max-w-2xl">
@@ -629,6 +636,7 @@ const EVENT_LINE: Record<string, string> = {
   PENDING: "Queued for HealthSherpa", IN_PROGRESS: "HealthSherpa lookup started", LINK_SENT: "HealthSherpa texted them the link",
   AUTHORIZED: "Authorized ✓", EXPIRED: "Link expired — not authorized", NOT_FOUND: "Not found in HealthSherpa",
   NEEDS_REVIEW: "HealthSherpa needs a look", FAILED: "HealthSherpa stopped — problem", CANCELLED: "HealthSherpa stopped",
+  INVALID: "HealthSherpa didn't accept the search",
 };
 const STEP_LINE: Record<string, string> = {
   no_answer: "No answer yet", opted_out: "Opted out (Do-Not-Call)", handled: "Marked as handled",

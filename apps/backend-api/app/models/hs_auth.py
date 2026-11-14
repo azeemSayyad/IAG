@@ -201,3 +201,19 @@ class HsCampaignText(Base):
         Index("ix_hs_campaign_texts_queue", "tenant_id", "status"),
         Index("ix_hs_campaign_texts_message", "provider_message_id"),
     )
+
+
+class HsAutoHeartbeat(Base):
+    """The HealthSherpa agent's AUTO MODE tab, as last seen by the server: so
+    admins can see on the campaign page whether auto mode is actually running
+    (tab open, extension connected) — one row per agent (migration 070)."""
+
+    __tablename__ = "hs_auto_heartbeats"
+
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True)
+    auto_on = Column(Boolean, nullable=False, default=True, server_default="true")
+    seen_at = Column(DateTime(timezone=True), nullable=False, default=_now)
+    ext_version = Column(String(20), nullable=True)
+    tab_hidden = Column(Boolean, nullable=True)
+    reason = Column(String(16), nullable=True)  # last answer of /auto/next (running, idle, limit…)

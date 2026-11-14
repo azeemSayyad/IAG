@@ -60,7 +60,7 @@ from sqlalchemy.orm import Session
 from app.core.active_agents import user_is_active
 from app.hs_auth import service
 from app.hs_auth.sheet import clean_rows, read_rows
-from app.models.hs_auth import HsAuthBatch, HsAuthRequest, HsAuthRun, HsCampaignText, HsTextCampaign
+from app.models.hs_auth import HsAuthBatch, HsAuthRequest, HsAuthRun, HsAutoHeartbeat, HsCampaignText, HsTextCampaign
 from app.models.sms import SmsMessage, TextCampaignRecipient
 from app.models.user import User
 from app.voice_dialer import campaigns as vc
@@ -813,7 +813,31 @@ def consent_note(row: HsAuthRequest) -> str:
             f"answered “{(row.renewing_company or '')[:200]}” at {_et(row.answered_at)}.")
 
 
-def next_job(db: Session, tenant_id, user: User) -> dict:
+def beat(db: Session, tenant_id, user: User, *, on: bool = True, ext_version: Optional[str] = None,
+         hidden: Optional[bool] = None, reason: Optional[str] = None) -> None:
+    """Remember the agent's auto-mode tab was just seen (for the status panel)."""
+    hb = db.get(HsAutoHeartbeat, user.id)
+    if hb is None:
+        hb = HsAutoHeartbeat(user_id=user.id, tenant_id=tenant_id)
+        db.add(hb)
+    hb.auto_on, hb.seen_at = bool(on), _now()
+    if ext_version is not None:
+        hb.ext_version = str(ext_version)[:20] or None
+    if hidden is not None:
+        hb.tab_hidden = bool(hidden)
+    hb.reason = (reason or None) if on else "off"
+
+
+def next_job(db: Session, tenant_id, user: User, ext_version: Optional[str] = None,
+             hidden: Optional[bool] = None) -> dict:
+    out = _next_job(db, tenant_id, user)
+    beat(db, tenant_id, user, ext_version=ext_version, hidden=hidden,
+         reason="started" if out.get("job") else out.get("reason"))
+    db.commit()
+    return out
+
+
+def _next_job(db: Session, tenant_id, user: User) -> dict:
     """Start the next answered client for THIS agent, or say why not. The
     server still enforces the daily limit and one client at a time."""
     tick(db, tenant_id)
@@ -1001,6 +1025,209 @@ def overview(db: Session, tenant_id, user: User) -> dict:
         "state_numbers": vc.numbers_by_state(vc.senders()),
         "retext_max": RETEXT_MAX,
         "simulating": telnyx.simulating(),
+    }
+
+
+# ---- Automation status: the "full picture" panel on the campaign page -----------------
+
+AUTO_ALIVE = timedelta(seconds=150)    # a hidden tab's 5-s poll can slow to once a minute
+STUCK_AFTER = timedelta(minutes=3)     # a running job with no report for this long
+REVIEW = ("NOT_FOUND", "NEEDS_REVIEW", "FAILED", "CANCELLED", "INVALID")
+
+
+def _next_open(s, now: datetime, state: Optional[str]) -> Optional[datetime]:
+    """When texting hours next open for this state (15-minute steps, 2 days ahead)."""
+    t = now.replace(second=0, microsecond=0)
+    t = t - timedelta(minutes=t.minute % 15)
+    for i in range(1, 4 * 48 + 1):
+        c = t + timedelta(minutes=15 * i)
+        if vc.in_hours(s, c, state):
+            return c
+    return None
+
+
+def _iso(dt: Optional[datetime]) -> Optional[str]:
+    return dt.isoformat() if dt else None
+
+
+def automation_status(db: Session, tenant_id, user: User) -> dict:
+    """Everything an admin needs to see whether the automation is working,
+    what it's waiting for and what's blocking it — one call, polled by the page."""
+    now = _now()
+    R = HsAuthRequest
+    issues: list[dict] = []
+
+    def issue(level: str, code: str, title: str, detail: str = "", **extra):
+        issues.append({"level": level, "code": code, "title": title, "detail": detail, **extra})
+
+    camps = (db.query(HsTextCampaign).filter(HsTextCampaign.tenant_id == tenant_id,
+                                             HsTextCampaign.status != "DRAFT").all())
+    base = db.query(R).filter(R.tenant_id == tenant_id, R.campaign_id.isnot(None), R.deleted_at.is_(None))
+
+    # Live pipeline (one stage per client, same as the table's chips).
+    conds = _stage_conditions()
+    row = base.with_entities(*[func.count(R.id).filter(cond).label(k) for k, (_l, cond) in conds.items()]).one()
+    pipeline = {k: int(v or 0) for k, v in row._asdict().items()}
+
+    # Today (midnight Eastern).
+    day = service._today_start_utc()
+    t = base.with_entities(
+        func.count(R.id).filter(R.link_sent_at >= day).label("links_sent"),
+        func.count(R.id).filter(R.authorized_at >= day).label("authorized"),
+        func.count(R.id).filter(R.answered_at >= day).label("answered"),
+        func.count(R.id).filter(and_(R.convo == "DNC", R.updated_at >= day)).label("opted_out"),
+        func.count(R.id).filter(and_(R.status.in_(REVIEW), R.convo == "ANSWERED", R.updated_at >= day)).label("stopped"),
+    ).one()
+    today = {k: int(v or 0) for k, v in t._asdict().items()}
+    today["replies"] = int(db.query(func.count(func.distinct(HsCampaignText.request_id))).filter(
+        HsCampaignText.tenant_id == tenant_id, HsCampaignText.direction == "IN",
+        HsCampaignText.created_at >= day).scalar() or 0)
+    today["texts_sent"] = vc.sent_today(db, tenant_id)
+    today["daily_cap"] = vc.daily_cap()
+
+    # Texting hours (only the blast + re-texts wait for them).
+    s = vc.hours_settings(db, tenant_id)
+    start_h = int(getattr(s, "window_start_hour", None) or 8)
+    end_h = int(getattr(s, "window_end_hour", None) or 20)
+    # Not texted yet (the blast is sent straight from these rows) + queued re-texts.
+    waiting_rows = (db.query(R.state, HsTextCampaign.status, func.count(R.id))
+                    .join(HsTextCampaign, HsTextCampaign.id == R.campaign_id)
+                    .filter(R.tenant_id == tenant_id, R.deleted_at.is_(None), R.convo == "QUEUED",
+                            HsTextCampaign.status.in_(("RUNNING", "PAUSED")))
+                    .group_by(R.state, HsTextCampaign.status).all())
+    waiting_rows += (db.query(R.state, HsTextCampaign.status, func.count(HsCampaignText.id))
+                     .join(R, R.id == HsCampaignText.request_id)
+                     .join(HsTextCampaign, HsTextCampaign.id == HsCampaignText.campaign_id)
+                     .filter(HsCampaignText.tenant_id == tenant_id, HsCampaignText.status == "QUEUED",
+                             HsCampaignText.kind == "RETEXT")
+                     .group_by(R.state, HsTextCampaign.status).all())
+    states: dict[str, dict] = {}
+    paused_texts = 0
+    for st, cstatus, n in waiting_rows:
+        if cstatus == "PAUSED":
+            paused_texts += int(n)
+            continue
+        key = (st or "").upper() or "??"
+        d = states.setdefault(key, {"state": key, "waiting": 0})
+        d["waiting"] += int(n)
+    for key, d in states.items():
+        st = None if key == "??" else key
+        d["open"] = vc.in_hours(s, now, st)
+        d["opens_at"] = None if d["open"] else _iso(_next_open(s, now, st))
+    hours = {
+        "start_hour": start_h, "end_hour": end_h, "ignored": s is None,
+        "states": sorted(states.values(), key=lambda d: (d["open"], d["opens_at"] or "", d["state"])),
+        "waiting_open": sum(d["waiting"] for d in states.values() if d["open"]),
+        "waiting_closed": sum(d["waiting"] for d in states.values() if not d["open"]),
+        "paused": paused_texts,
+        # Is it daytime for the main US zones right now? (for the clock line)
+        "eastern_open": vc.in_hours(s, now, "NY"), "pacific_open": vc.in_hours(s, now, "CA"),
+    }
+    if hours["waiting_closed"]:
+        nxt = min((d["opens_at"] for d in states.values() if not d["open"] and d["opens_at"]), default=None)
+        closed = ", ".join(d["state"] for d in hours["states"] if not d["open"])
+        issue("info", "HOURS", f"{hours['waiting_closed']} campaign text(s) waiting for texting hours "
+              f"({start_h % 12 or 12} am – {end_h % 12 or 12} pm client time)",
+              f"Outside hours now for: {closed}. They go out by themselves when hours open. "
+              "Replies, follow-ups and HealthSherpa links are NOT held — they go any hour.", opens_at=nxt)
+
+    # Campaigns / numbers / carrier cap.
+    for c in camps:
+        if c.status == "PAUSED":
+            reason = c.pause_reason or "Paused by a manager."
+            issue("error" if c.pause_reason else "warn", "PAUSED", f"“{c.name}” is paused", reason,
+                  campaign_id=str(c.id))
+    if any(c.status == "RUNNING" for c in camps) and not vc.senders():
+        issue("error", "NO_NUMBERS", "No sending numbers", "Telnyx has no numbers set up — nothing can be texted.")
+    if today["texts_sent"] >= today["daily_cap"] > 0:
+        issue("warn", "CAP", "Daily text cap reached",
+              f"{today['texts_sent']} of {today['daily_cap']} texts sent today — campaign texts wait until tomorrow.")
+
+    # The HealthSherpa agent(s): auto mode, login, running client.
+    agents = []
+    agent_ids = {c.hs_agent_id for c in camps}
+    names = service._names(db, agent_ids)
+    for aid in agent_ids:
+        name = names.get(aid) or "the HealthSherpa agent"
+        queue = int(db.query(func.count(R.id)).join(HsTextCampaign, HsTextCampaign.id == R.campaign_id)
+                    .filter(R.tenant_id == tenant_id, R.status == "PENDING", R.convo == "ANSWERED",
+                            R.deleted_at.is_(None), HsTextCampaign.hs_agent_id == aid).scalar() or 0)
+        hb = db.get(HsAutoHeartbeat, aid)
+        alive = bool(hb and hb.auto_on and hb.seen_at and hb.seen_at >= now - AUTO_ALIVE)
+        run = (db.query(R).filter(R.tenant_id == tenant_id, R.started_by == aid, R.status.in_(service.ACTIVE),
+                                  R.deleted_at.is_(None)).order_by(R.started_at.desc()).first())
+        u = service.usage(db, tenant_id, aid)
+        running = None
+        if run is not None:
+            last = run.last_report_at or run.started_at
+            running = {
+                "id": str(run.id), "name": f"{run.first_name} {run.last_name}".strip(), "status": run.status,
+                "step": run.step, "detail": run.status_detail, "started_at": _iso(run.started_at),
+                "link_sent_at": _iso(run.link_sent_at), "last_report_at": _iso(last),
+                "login": run.step == "login",
+            }
+            if running["login"]:
+                issue("error", "LOGIN", f"HealthSherpa login needed on {name}'s computer",
+                      f"{running['name']} is waiting. Log in to HealthSherpa in the Chrome tab the extension "
+                      "opened (email, password and the code) — it carries on by itself. If nobody logs in "
+                      "within 15 minutes this client stops as “Needs a look”.",
+                      request_id=running["id"], since=_iso(last), agent=name)
+            elif last and last < now - STUCK_AFTER and run.status == "IN_PROGRESS":
+                issue("warn", "STUCK", f"The extension hasn't reported for {int((now - last).total_seconds() // 60)} min",
+                      f"{running['name']} is at step “{run.step or 'start'}”. {name}'s computer may be asleep "
+                      "or Chrome closed.", request_id=running["id"])
+        if queue and not alive:
+            if hb is None:
+                why = "Auto mode has never been turned on."
+            elif not hb.auto_on:
+                why = f"Auto mode was turned off at {_et(hb.seen_at)}."
+            else:
+                why = (f"Their HealthSherpa page was last seen at {_et(hb.seen_at)} — the tab is closed, "
+                       "the computer is asleep or Chrome is closed.")
+            issue("error", "AUTO_OFF", f"{queue} client(s) waiting, but auto mode isn't running for {name}",
+                  why + " Open the HealthSherpa page on that computer and turn Auto mode on.")
+        elif not alive and any(c.hs_agent_id == aid and (c.status in ("RUNNING", "PAUSED") or (
+                c.finished_at and c.finished_at >= now - timedelta(days=3))) for c in camps):
+            # Replies keep coming for days after the blast is done.
+            issue("warn", "AUTO_IDLE", f"Auto mode is off for {name}",
+                  "Nobody is waiting right now, but it must be on (page open, HealthSherpa logged in) "
+                  "when clients answer — links only live 15 minutes.")
+        if queue and u["left"] <= 0:
+            issue("warn", "LIMIT", f"{name} reached today's HealthSherpa limit ({u['limit']})",
+                  f"{queue} client(s) wait until midnight Eastern.")
+        agents.append({
+            "id": str(aid), "name": name, "queue": queue, "alive": alive,
+            "auto_on": bool(hb and hb.auto_on), "seen_at": _iso(hb.seen_at if hb else None),
+            "ext_version": hb.ext_version if hb else None, "tab_hidden": hb.tab_hidden if hb else None,
+            "reason": hb.reason if hb else None, "usage": u, "running": running,
+        })
+
+    if pipeline.get("NEEDS_REPLY"):
+        issue("warn", "NEEDS_REPLY", f"{pipeline['NEEDS_REPLY']} client(s) need a reply from a person",
+              "They asked something or hesitated — open “Needs reply” and answer them.")
+
+    # Recent stops (last 24 h) with the reason, newest first.
+    recent = (base.filter(R.status.in_(REVIEW), R.convo == "ANSWERED", R.updated_at >= now - timedelta(hours=24))
+              .order_by(R.updated_at.desc()).limit(10).all())
+    if recent:
+        issue("warn", "ERRORS", f"{len(recent)} HealthSherpa run(s) stopped in the last 24 h",
+              "See “Recent problems” below — open a client for the full steps.")
+    if telnyx.simulating():
+        issue("info", "SIM", "Test mode", "No real texts are sent (simulator).")
+
+    order = {"error": 0, "warn": 1, "info": 2}
+    issues.sort(key=lambda i: order.get(i["level"], 3))
+    level = "error" if any(i["level"] == "error" for i in issues) else \
+        "warn" if any(i["level"] == "warn" for i in issues) else "ok"
+    return {
+        "now": _iso(now), "level": level, "issues": issues, "pipeline": pipeline, "today": today,
+        "hours": hours, "agents": sorted(agents, key=lambda a: a["name"]),
+        "recent_problems": [{
+            "id": str(r.id), "name": f"{r.first_name} {r.last_name}".strip(), "status": r.status,
+            "detail": r.status_detail, "step": r.step, "at": _iso(r.updated_at),
+        } for r in recent],
+        "campaigns": {"running": sum(c.status == "RUNNING" for c in camps),
+                      "paused": sum(c.status == "PAUSED" for c in camps)},
     }
 
 

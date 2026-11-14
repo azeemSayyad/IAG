@@ -30,7 +30,7 @@ from app.models.hiree import HireeOnboarding, OnboardingDocument
 from app.models.applicant_message import ApplicantMessage
 from app.models.direct_message import DirectMessage, DmGroup, DmGroupMember
 from app.models.training import TrainingStep
-from app.models.hs_auth import HsAuthBatch, HsAuthRequest, HsAuthRun, HsCampaignText, HsTextCampaign
+from app.models.hs_auth import HsAuthBatch, HsAuthRequest, HsAuthRun, HsAutoHeartbeat, HsCampaignText, HsTextCampaign
 from app.models.notification import Notification
 from app.models.api_key import ApiKey
 from app.models.sms import (

@@ -40,7 +40,18 @@
   });
 
   // ------------------------------------------------------------ utilities
-  function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+  function pageSleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+  /* A hidden tab's timers are throttled by Chrome (1/s, then 1/min after 5 min)
+     — so while hidden, the extension's background worker keeps the time. */
+  function sleep(ms) {
+    if (!document.hidden) return pageSleep(ms);
+    return new Promise(function (r) {
+      var done = false, fin = function () { if (!done) { done = true; r(); } };
+      try {
+        chrome.runtime.sendMessage({ kind: "sleep", ms: ms }, function () { void chrome.runtime.lastError; fin(); });
+      } catch (e) { pageSleep(ms).then(fin); }  // extension reloaded: page timer as before
+    });
+  }
   function norm(s) { return String(s || "").replace(/\s+/g, " ").trim(); }
   function digits(s) { return String(s || "").replace(/\D/g, ""); }
   function last10(s) { var d = digits(s); return d.length >= 10 ? d.slice(-10) : d; }
@@ -129,7 +140,8 @@
      failure report so the real HealthSherpa markup can be fixed against (we
      can't open HealthSherpa from outside the US). No client data in it. */
   function formSnapshot() {
-    var out = ["url " + location.pathname];
+    var out = ["url " + location.pathname + " · ext " + IAG.VERSION + " · tab " + (document.hidden ? "HIDDEN" : "visible")
+      + (document.hasFocus() ? " focused" : "")];
     var heads = Array.prototype.slice.call(document.querySelectorAll("h1,h2,label")).filter(visible).slice(0, 25);
     out.push("labels: " + heads.map(function (h) { return h.tagName.toLowerCase() + (h.htmlFor ? "[for=" + h.htmlFor + "]" : "") + "“" + norm(h.textContent).slice(0, 40) + "”"; }).join(" | "));
     Array.prototype.slice.call(document.querySelectorAll(FIELD_TAGS + ", input[type=checkbox], [role=checkbox]")).filter(visible).slice(0, 20).forEach(function (el) {
@@ -485,7 +497,7 @@
     var problems = [];
     var st = await chooseState(form.s);   // state first: changing it can re-render the form
     if (st === "missing") {
-      await final("INVALID", "HealthSherpa's state list has no " + job.state_name + " (it may run its own state exchange).");
+      await final("INVALID", "HealthSherpa's state list has no " + job.state_name + " (it may run its own state exchange).", { diag: formSnapshot() });
     }
     if (!st) problems.push("state");
     for (var round = 0; round < 3; round++) {
@@ -577,7 +589,8 @@
     if (outcome === "errors") {
       await sleep(800);
       if (!readResults().length && !pageHas(/no results found/i)) {
-        await final("INVALID", "HealthSherpa didn't accept the search: " + collectFormErrors().slice(0, 3).join(" · "));
+        await final("INVALID", "HealthSherpa didn't accept the search: " + (collectFormErrors().slice(0, 3).join(" · ") || "(no message shown)"),
+          { diag: formSnapshot() + "\nerrors: " + collectFormErrors().join(" | ") });
       }
     }
     if (pageHas(/no results found/i) && !readResults().length) {

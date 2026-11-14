@@ -160,6 +160,14 @@ def campaigns_overview(db: Session = Depends(get_db), tenant_id: str = Depends(g
     return campaigns.overview(db, tenant_id, user)
 
 
+@router.get("/campaigns/status")
+def campaigns_status(db: Session = Depends(get_db), tenant_id: str = Depends(get_tenant_id),
+                     user: User = Depends(get_current_active_user)):
+    """The automation's full picture (pipeline, hours, auto mode, login, errors)."""
+    _viewer(db, tenant_id, user)
+    return campaigns.automation_status(db, tenant_id, user)
+
+
 @router.post("/campaigns")
 async def campaigns_create(
     file: UploadFile = File(...),
@@ -301,9 +309,20 @@ def campaigns_delete(campaign_id: str, db: Session = Depends(get_db),
 # ---- auto mode: the HealthSherpa agent's portal tab asks for the next job
 
 @router.post("/auto/next")
-def auto_next(db: Session = Depends(get_db), tenant_id: str = Depends(get_tenant_id),
-              user: User = Depends(get_current_active_user)):
-    return _call(campaigns.next_job, db, tenant_id, user)
+def auto_next(data: Optional[dict] = Body(None), db: Session = Depends(get_db),
+              tenant_id: str = Depends(get_tenant_id), user: User = Depends(get_current_active_user)):
+    data = data or {}
+    return _call(campaigns.next_job, db, tenant_id, user,
+                 ext_version=data.get("ext_version"), hidden=data.get("hidden"))
+
+
+@router.post("/auto/off")
+def auto_off(db: Session = Depends(get_db), tenant_id: str = Depends(get_tenant_id),
+             user: User = Depends(get_current_active_user)):
+    """The agent turned auto mode off — the status panel says so at once."""
+    campaigns.beat(db, tenant_id, user, on=False)
+    db.commit()
+    return {"ok": True}
 
 
 @router.post("/auto/{request_id}/release")
