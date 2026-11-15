@@ -35,6 +35,9 @@ def _call(fn, *args, **kwargs):
         raise HTTPException(status_code=e.status_code, detail=e.detail)
     except campaigns.CampaignError as e:
         raise HTTPException(status_code=e.status, detail=str(e))
+    except campaigns.vc.CampaignError as e:
+        # The shared sender's checks (message too long / empty…) — a message, not a 500.
+        raise HTTPException(status_code=getattr(e, "status", 400), detail=str(e))
 
 
 @router.post("/upload")
@@ -160,6 +163,14 @@ def campaigns_overview(db: Session = Depends(get_db), tenant_id: str = Depends(g
     return campaigns.overview(db, tenant_id, user)
 
 
+@router.post("/campaigns/add-client")
+def campaigns_add_client(data: dict = Body(...), db: Session = Depends(get_db),
+                         tenant_id: str = Depends(get_tenant_id), user: User = Depends(get_current_active_user)):
+    """Type in ONE client: texted now, then the same flow as a campaign client."""
+    _manager_of_campaigns(user)
+    return _call(campaigns.add_client, db, tenant_id, user, data)
+
+
 @router.get("/campaigns/status")
 def campaigns_status(db: Session = Depends(get_db), tenant_id: str = Depends(get_tenant_id),
                      user: User = Depends(get_current_active_user)):
@@ -168,12 +179,35 @@ def campaigns_status(db: Session = Depends(get_db), tenant_id: str = Depends(get
     return campaigns.automation_status(db, tenant_id, user)
 
 
+@router.post("/campaigns/check")
+async def campaigns_check(file: UploadFile = File(...), db: Session = Depends(get_db),
+                          tenant_id: str = Depends(get_tenant_id), user: User = Depends(get_current_active_user)):
+    """Check a client file's mandatory columns and rows BEFORE creating the campaign (nothing is saved)."""
+    _manager_of_campaigns(user)
+    fname = file.filename or "clients.csv"
+    if not fname.lower().endswith((".csv", ".xlsx", ".xls")):
+        raise HTTPException(status_code=400, detail="Upload an Excel (.xlsx) or CSV file.")
+    raw = await file.read()
+    if not raw:
+        raise HTTPException(status_code=400, detail="The file is empty.")
+    if len(raw) > MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="File is too large — up to 5 MB.")
+
+    def work():
+        try:
+            return _call(campaigns.check_file, db, tenant_id, fname, raw)
+        except SheetError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+    return await run_in_threadpool(work)
+
+
 @router.post("/campaigns")
 async def campaigns_create(
     file: UploadFile = File(...),
     name: str = Form(""),
     template: str = Form(""),
     hs_agent_id: str = Form(None),
+    followup_text: str = Form(""),
     db: Session = Depends(get_db),
     tenant_id: str = Depends(get_tenant_id),
     user: User = Depends(get_current_active_user),
@@ -191,6 +225,7 @@ async def campaigns_create(
     def work():
         try:
             c = _call(campaigns.create, db, tenant_id, user, name=name, template=template, file_name=fname,
+                      followup_text=followup_text,
                       raw=raw, hs_agent_id=hs_agent_id or None)
         except SheetError as e:
             raise HTTPException(status_code=400, detail=str(e))
@@ -287,7 +322,7 @@ def campaigns_action(campaign_id: str, action: str, db: Session = Depends(get_db
                      tenant_id: str = Depends(get_tenant_id), user: User = Depends(get_current_active_user)):
     _manager_of_campaigns(user)
     fn = {"start": campaigns.start, "resume": campaigns.start, "pause": campaigns.pause,
-          "stop": campaigns.stop}.get(action)
+          "stop": campaigns.stop, "archive": campaigns.archive, "unarchive": campaigns.unarchive}.get(action)
     if fn is None:
         raise HTTPException(status_code=404, detail="Unknown action")
     c = _call(campaigns.find, db, tenant_id, campaign_id)

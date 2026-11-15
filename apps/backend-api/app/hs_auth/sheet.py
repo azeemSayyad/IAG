@@ -228,6 +228,17 @@ def parse_email(raw: object) -> Optional[str]:
     return s[:200] if re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", s) else None
 
 
+def find_columns(header_row: list) -> dict[str, int]:
+    """Which column holds what: {"first_name": 0, "dob": 2, …} (accepted spellings in _HEADERS)."""
+    header = [_norm_header(str(h)) for h in header_row]
+    col: dict[str, int] = {}
+    for key, spellings in _HEADERS.items():
+        for i, h in enumerate(header):
+            if h in spellings and key not in col:
+                col[key] = i
+    return col
+
+
 def clean_rows(rows: list[list]) -> list[dict]:
     """Map headers, clean each row. Every returned dict has `errors` (list)."""
     # Skip blank lines above the header.
@@ -235,12 +246,7 @@ def clean_rows(rows: list[list]) -> list[dict]:
         rows = rows[1:]
     if not rows:
         raise SheetError("The file is empty.")
-    header = [_norm_header(str(h)) for h in rows[0]]
-    col: dict[str, int] = {}
-    for key, spellings in _HEADERS.items():
-        for i, h in enumerate(header):
-            if h in spellings and key not in col:
-                col[key] = i
+    col = find_columns(rows[0])
     has_name = ("first_name" in col and "last_name" in col) or "full_name" in col
     missing = []
     if not has_name:

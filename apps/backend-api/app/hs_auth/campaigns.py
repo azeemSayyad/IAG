@@ -41,7 +41,8 @@ locally the page's own poll. All of this is synchronous DB code: routes run it
 in the threadpool (never on the event loop).
 
 The follow-up wording is Stan's approved 10DLC exception to "one text per
-person per campaign" and is sent VERBATIM (FOLLOWUP_TEXT).
+person per campaign"; the approved FOLLOWUP_TEXT unless the campaign's own
+followup_text was edited (followup_of).
 """
 from __future__ import annotations
 
@@ -59,7 +60,7 @@ from sqlalchemy.orm import Session
 
 from app.core.active_agents import user_is_active
 from app.hs_auth import service
-from app.hs_auth.sheet import clean_rows, read_rows
+from app.hs_auth.sheet import SheetError, clean_rows, find_columns, read_rows
 from app.models.hs_auth import HsAuthBatch, HsAuthRequest, HsAuthRun, HsAutoHeartbeat, HsCampaignText, HsTextCampaign
 from app.models.sms import SmsMessage, TextCampaignRecipient
 from app.models.user import User
@@ -124,32 +125,108 @@ def _et(dt: Optional[datetime]) -> str:
 
 # ---- Campaign lifecycle ---------------------------------------------------------------
 
-def create(db: Session, tenant_id, user: User, *, name: str, template: str, file_name: str,
-           raw: bytes, hs_agent_id: Optional[str]) -> HsTextCampaign:
-    template = vc.check_template(template)
-    agent_id = hs_agent_id or str(user.id)
-    agent = db.query(User).filter(User.id == agent_id, User.tenant_id == tenant_id).first()
-    if not agent or not user_is_active(agent):
-        raise CampaignError("The HealthSherpa agent wasn't found or is disabled.")
-
-    cleaned = clean_rows(read_rows(file_name or "clients.csv", raw))
-    if not cleaned:
-        raise CampaignError("No client rows found under the header row.")
-
-    keep, no_phone, dupes = [], 0, 0
+def _sort_rows(db: Session, tenant_id, cleaned: list[dict]):
+    """-> (rows to text [(row, +1phone)], no phone, duplicate phones, on Do-Not-Call)."""
+    keep, no_phone, dupes = [], [], []
     seen: set[str] = set()
     for c in cleaned:
         phone = e164(c["phone"])
         if not phone:
-            no_phone += 1
+            no_phone.append(c)
             continue
         if phone in seen:
-            dupes += 1
+            dupes.append(c)
             continue
         seen.add(phone)
         keep.append((c, phone))
     dnc = vc.dnc_digits(db, tenant_id, [p for _c, p in keep])
     texted = [(c, p) for c, p in keep if vc.digits(p) not in dnc]
+    return texted, len(no_phone), len(dupes), len(keep) - len(texted)
+
+
+# What a campaign file must have (the "check" shown as soon as a file is chosen).
+FILE_COLUMNS = [
+    ("first_name", "First Name", True), ("last_name", "Last Name", True), ("dob", "Date of Birth", True),
+    ("state", "State", True), ("phone", "Phone", True), ("email", "Email", False),
+]
+
+
+def check_file(db: Session, tenant_id, file_name: str, raw: bytes) -> dict:
+    """Read the file the way create() will and say what's there — nothing is saved.
+    ok = every mandatory column is present and at least one client can be texted."""
+    rows = read_rows(file_name or "clients.csv", raw)
+    rows = [r for r in rows if any(str(x).strip() for x in r)]
+    if not rows:
+        raise CampaignError("The file is empty.")
+    header = [str(h).strip() for h in rows[0]]
+    col = find_columns(rows[0])
+    columns = []
+    for key, label, required in FILE_COLUMNS:
+        i = col.get(key)
+        if i is None and key in ("first_name", "last_name") and "full_name" in col:
+            i = col["full_name"]        # one "Name" column is split into first + last
+        columns.append({"key": key, "label": label, "required": required,
+                        "found": header[i] if i is not None and i < len(header) else None})
+    missing = [c["label"] for c in columns if c["required"] and not c["found"]]
+    out = {"columns": columns, "missing": missing, "rows": max(0, len(rows) - 1), "ready": 0, "fix_data": 0,
+           "no_phone": 0, "duplicates": 0, "dnc": 0, "problems": [], "ok": False}
+    if missing:
+        return out
+    try:
+        cleaned = clean_rows(rows)
+    except SheetError as e:
+        out["missing"] = [str(e)]
+        return out
+    texted, no_phone, dupes, dnc_n = _sort_rows(db, tenant_id, cleaned)
+    fix = [c for c, _p in texted if c["errors"]]
+    out.update(rows=len(cleaned), ready=len(texted) - len(fix), fix_data=len(fix), no_phone=no_phone,
+               duplicates=dupes, dnc=dnc_n)
+    problems = []
+    for c in cleaned:
+        errs = list(c["errors"])
+        if not c["phone"] and not any(e.startswith("Phone") for e in errs):
+            errs.append("Phone is missing — won't be texted")
+        if errs:
+            problems.append({"row": c["row_number"], "name": f"{c['first_name']} {c['last_name']}".strip() or "—",
+                             "errors": errs})
+    out["problem_count"] = len(problems)
+    out["problems"] = problems[:50]
+    out["ok"] = out["ready"] > 0
+    return out
+
+
+def followup_of(c: HsTextCampaign) -> str:
+    """This campaign's follow-up (editable per campaign; default = the approved text)."""
+    return (c.followup_text or "").strip() or FOLLOWUP_TEXT
+
+
+def _check_followup(t: Optional[str]) -> Optional[str]:
+    """None = use the approved default. The follow-up must still ask the company —
+    the client's answer to it is what queues HealthSherpa."""
+    t = (t or "").strip()
+    if not t or t == FOLLOWUP_TEXT:
+        return None
+    return vc.check_template(t)
+
+
+def create(db: Session, tenant_id, user: User, *, name: str, template: str, file_name: str,
+           raw: bytes, hs_agent_id: Optional[str], followup_text: Optional[str] = None) -> HsTextCampaign:
+    template = vc.check_template(template)
+    followup = _check_followup(followup_text)
+    agent_id = hs_agent_id or str(user.id)
+    agent = db.query(User).filter(User.id == agent_id, User.tenant_id == tenant_id).first()
+    if not agent or not user_is_active(agent):
+        raise CampaignError("The HealthSherpa agent wasn't found or is disabled.")
+
+    rows = read_rows(file_name or "clients.csv", raw)
+    if rows and "phone" not in find_columns(next((r for r in rows if any(str(x).strip() for x in r)), [])):
+        raise CampaignError("Missing column: Phone — a text campaign needs each client's mobile number.")
+    cleaned = clean_rows(rows)
+    if not cleaned:
+        raise CampaignError("No client rows found under the header row.")
+
+    keep, no_phone, dupes, dnc_n = _sort_rows(db, tenant_id, cleaned)
+    texted = keep
     if not texted:
         raise CampaignError("Nobody left to text — every row had no valid mobile number, was a duplicate or is on Do-Not-Call.")
 
@@ -161,7 +238,7 @@ def create(db: Session, tenant_id, user: User, *, name: str, template: str, file
         tenant_id=tenant_id, name=(name or "").strip()[:120] or (file_name or "Campaign")[:120],
         template=template, status="DRAFT", file_name=(file_name or "")[:255], hs_agent_id=agent.id,
         batch_id=batch.id, rows_in_file=len(cleaned), skipped_no_phone=no_phone, skipped_duplicate=dupes,
-        skipped_dnc=len(keep) - len(texted), reminder_text=REMINDER_DRAFT, created_by=user.id,
+        skipped_dnc=dnc_n, reminder_text=REMINDER_DRAFT, created_by=user.id, followup_text=followup,
     )
     db.add(camp)
     db.flush()
@@ -191,7 +268,8 @@ def find(db: Session, tenant_id, campaign_id) -> HsTextCampaign:
         cid = uuid.UUID(str(campaign_id))
     except (ValueError, TypeError):
         cid = None
-    c = db.query(HsTextCampaign).filter(HsTextCampaign.id == cid, HsTextCampaign.tenant_id == tenant_id).first() if cid else None
+    c = db.query(HsTextCampaign).filter(HsTextCampaign.id == cid, HsTextCampaign.tenant_id == tenant_id,
+                                        HsTextCampaign.deleted_at.is_(None)).first() if cid else None
     if c is None:
         raise CampaignError("Campaign not found", 404)
     return c
@@ -215,6 +293,9 @@ def update(db: Session, c: HsTextCampaign, data: dict) -> None:
         c.template = vc.check_template(data["template"])
     if data.get("name") and str(data["name"]).strip():
         c.name = str(data["name"]).strip()[:120]
+    if "followup_text" in data:
+        # Any time: it only changes follow-ups sent from now on.
+        c.followup_text = _check_followup(data["followup_text"])
     if "reminder_text" in data:
         t = str(data["reminder_text"] or "").strip()
         if len(t) > vc.MAX_TEMPLATE:
@@ -259,6 +340,17 @@ def pause(db: Session, c: HsTextCampaign, reason: Optional[str] = None) -> None:
     db.commit()
 
 
+def archive(db: Session, c: HsTextCampaign) -> None:
+    """Hide it from the campaign list. Nothing else changes."""
+    c.archived_at = c.archived_at or _now()
+    db.commit()
+
+
+def unarchive(db: Session, c: HsTextCampaign) -> None:
+    c.archived_at = None
+    db.commit()
+
+
 def stop(db: Session, c: HsTextCampaign) -> None:
     """No more blasts. Clients already talking to us still finish (they asked)."""
     if c.status in ("COMPLETED", "STOPPED"):
@@ -270,13 +362,18 @@ def stop(db: Session, c: HsTextCampaign) -> None:
     db.query(HsCampaignText).filter(HsCampaignText.campaign_id == c.id, HsCampaignText.kind.in_(("BLAST", "RETEXT")),
                                     HsCampaignText.status == "QUEUED").update({"status": "CANCELLED"}, synchronize_session=False)
     c.status = "STOPPED"
+    c.pause_reason = None
     c.finished_at = now
     db.commit()
 
 
 def delete(db: Session, c: HsTextCampaign) -> None:
+    """A draft is deleted for good. A campaign that already texted is REMOVED:
+    nothing more is sent, queued/running HealthSherpa jobs are cancelled, and it
+    and its clients leave the page — but its texts stay, so a late reply is
+    still recognised as ours (saved; STOP still = Do-Not-Call; never dialed)."""
     if c.status != "DRAFT":
-        raise CampaignError("Only a campaign that never sent can be deleted — stop it instead", 409)
+        return _remove(db, c)
     rows = db.query(HsAuthRequest.id).filter(HsAuthRequest.campaign_id == c.id)
     db.query(HsAuthRun).filter(HsAuthRun.request_id.in_(rows.subquery())).delete(synchronize_session=False)
     db.query(HsAuthRequest).filter(HsAuthRequest.campaign_id == c.id).delete(synchronize_session=False)
@@ -286,6 +383,111 @@ def delete(db: Session, c: HsTextCampaign) -> None:
     if batch_id:
         db.query(HsAuthBatch).filter(HsAuthBatch.id == batch_id).delete(synchronize_session=False)
     db.commit()
+
+
+def _remove(db: Session, c: HsTextCampaign) -> None:
+    now = _now()
+    stop(db, c)
+    R = HsAuthRequest
+    db.query(HsCampaignText).filter(HsCampaignText.campaign_id == c.id, HsCampaignText.status == "QUEUED").update(
+        {"status": "CANCELLED"}, synchronize_session=False)
+    for row in db.query(R).filter(R.campaign_id == c.id, R.deleted_at.is_(None),
+                                  R.status.in_(("PENDING",) + tuple(service.ACTIVE))).all():
+        if row.status != "PENDING" or row.convo == "ANSWERED":
+            service._set_status(row, "CANCELLED", "Campaign removed.", "cancelled")
+    db.query(R).filter(R.campaign_id == c.id, R.deleted_at.is_(None)).update(
+        {"deleted_at": now, "needs_reply": False}, synchronize_session=False)
+    c.deleted_at = now
+    db.commit()
+
+
+MANUAL_CAMPAIGN = "Manual entries"
+
+
+def add_client(db: Session, tenant_id, user: User, data: dict) -> dict:
+    """ONE client typed in by hand (owner, 2026-11-15): texted now with the
+    campaign's message (or an edited one), then exactly the same flow as a
+    campaign client — YES → follow-up → company → HealthSherpa. The first text
+    still waits for THEIR texting hours and Pause, like any blast."""
+    from app.sms_queue.services import queue_service as qs
+
+    hdr = ["First Name", "Last Name", "DOB", "State", "Phone", "Email"]
+    row = [data.get("first_name") or "", data.get("last_name") or "", data.get("dob") or "",
+           data.get("state") or "", data.get("phone") or "", data.get("email") or ""]
+    try:
+        cleaned = clean_rows([hdr, row])
+    except SheetError as e:
+        raise CampaignError(str(e))
+    cl = cleaned[0] if cleaned else None
+    if cl is None:
+        raise CampaignError("Fill in the client's details.")
+    errors = list(cl["errors"])
+    phone = e164(cl["phone"])
+    if not phone:
+        errors.append("Mobile number is missing or isn't a 10-digit US number")
+    if errors:
+        raise CampaignError("; ".join(errors))
+    if qs.is_dnc(db, tenant_id, phone):
+        raise CampaignError("This number is on Do-Not-Call — it can't be texted.")
+
+    # Which campaign: an existing one, or the shared "Manual entries" campaign.
+    cid = data.get("campaign_id")
+    if cid:
+        c = find(db, tenant_id, cid)
+        if c.status == "DRAFT":
+            raise CampaignError("Run that campaign first, or pick another one.")
+    else:
+        agent_id = data.get("hs_agent_id") or str(user.id)
+        agent = db.query(User).filter(User.id == agent_id, User.tenant_id == tenant_id).first()
+        if not agent or not user_is_active(agent):
+            raise CampaignError("The HealthSherpa agent wasn't found or is disabled.")
+        c = (db.query(HsTextCampaign).filter(HsTextCampaign.tenant_id == tenant_id, HsTextCampaign.name == MANUAL_CAMPAIGN,
+                                             HsTextCampaign.hs_agent_id == agent.id, HsTextCampaign.deleted_at.is_(None))
+             .order_by(HsTextCampaign.created_at.desc()).first())
+        if c is None:
+            c = HsTextCampaign(tenant_id=tenant_id, name=MANUAL_CAMPAIGN,
+                               template=vc.check_template(data.get("message") or BLAST_DEFAULT), status="RUNNING",
+                               file_name=None, hs_agent_id=agent.id, rows_in_file=0, reminder_text=REMINDER_DRAFT,
+                               created_by=user.id, started_at=_now())
+            db.add(c)
+            db.flush()
+    if db.query(HsAuthRequest.id).filter(HsAuthRequest.campaign_id == c.id, HsAuthRequest.deleted_at.is_(None),
+                                         HsAuthRequest.phone == cl["phone"]).first():
+        raise CampaignError(f"{fmt_phone(cl['phone'])} is already in “{c.name}”.")
+
+    message = vc.check_template((data.get("message") or "").strip() or c.template)
+    now = _now()
+    r = HsAuthRequest(
+        tenant_id=tenant_id, campaign_id=c.id, first_name=cl["first_name"], last_name=cl["last_name"], dob=cl["dob"],
+        state=cl["state"], phone=cl["phone"], email=cl["email"], assigned_to=c.hs_agent_id, status="TEXTING",
+        convo="QUEUED", events=[], row_number=0)
+    db.add(r)
+    db.flush()
+    service._event(r, "added", None, f"Added by hand by {(user.first_name or '').strip() or user.email}")
+    db.add(HsCampaignText(tenant_id=tenant_id, campaign_id=c.id, request_id=r.id, phone_number=phone,
+                          direction="OUT", kind="BLAST", body=vc.render(message, cl["first_name"]), status="QUEUED",
+                          sent_by=user.id, created_at=now))
+    c.rows_in_file = (c.rows_in_file or 0) + 1
+    if c.status in ("COMPLETED", "STOPPED"):
+        c.status, c.finished_at = "RUNNING", None   # completes again once it's sent
+    db.commit()
+    tick(db, tenant_id)        # goes now when we can
+    db.refresh(r)
+    s = vc.hours_settings(db, tenant_id)
+    if r.convo == "BLAST_SENT":
+        note = "Texted — their reply will move them along like any campaign client."
+    elif c.status == "PAUSED":
+        note = f"Queued — “{c.name}” is paused, so it goes when you resume it."
+    elif not (replies.is_test_number(phone) or vc.in_hours(s, now, r.state)):
+        note = "Queued — it's outside 8 am – 8 pm in their time zone; it goes out by itself when their hours open."
+    else:
+        note = "Queued — it goes out in a few seconds."
+    return {"id": str(r.id), "campaign_id": str(c.id), "campaign_name": c.name, "convo": r.convo, "note": note}
+
+
+def fmt_phone(p: Optional[str]) -> str:
+    d = re.sub(r"\D", "", p or "")[-10:]
+    return f"({d[:3]}) {d[3:6]}-{d[6:]}" if len(d) == 10 else (p or "")
 
 
 # ---- Re-text the clients who never replied --------------------------------------------
@@ -471,9 +673,12 @@ def _send(db: Session, tenant_id, now: datetime) -> int:
     for c in running:
         if len(blast_rows) >= CANDIDATES:
             break
+        own_text = select(HsCampaignText.id).where(
+            HsCampaignText.request_id == HsAuthRequest.id, HsCampaignText.status == "QUEUED",
+            HsCampaignText.kind == "BLAST").exists()
         blast_rows += (db.query(HsAuthRequest)
                        .filter(HsAuthRequest.campaign_id == c.id, HsAuthRequest.convo == "QUEUED",
-                               HsAuthRequest.deleted_at.is_(None))
+                               HsAuthRequest.deleted_at.is_(None), ~own_text)
                        .order_by(HsAuthRequest.row_number)
                        .limit(CANDIDATES - len(blast_rows)).all())
     if not queued and not blast_rows:
@@ -513,6 +718,14 @@ def _send(db: Session, tenant_id, now: datetime) -> int:
                 continue
         # FOLLOWUP / REMINDER / MANUAL: any hour — the client replied, so this is
         # part of THEIR conversation, not us reaching out. Only the blast is timed.
+        if t.kind == "BLAST":
+            # A client typed in by hand (add_client): the first text, so it waits
+            # for Pause / THEIR texting hours exactly like the campaign blast.
+            if row.convo != "QUEUED":
+                t.status = "CANCELLED"
+                continue
+            if c.status == "PAUSED" or not (replies.is_test_number(t.phone_number) or vc.in_hours(s, now, row.state)):
+                continue
         if t.kind == "RETEXT":
             # Outreach again (they never replied): only to someone still silent,
             # honours Pause and THEIR texting hours, like the blast.
@@ -594,6 +807,10 @@ def _after_sent(row: Optional[HsAuthRequest], t: HsCampaignText) -> None:
         service._event(row, "reminder", None, "Reminder text sent")
 
 
+SPAM_WINDOW = 20      # look at the last 20 texts sent…
+SPAM_PAUSE_MIN = 5    # …and pause when 5+ of them were refused as spam (40002/40003)
+
+
 def _failed(db: Session, t: HsCampaignText, row: Optional[HsAuthRequest], code: Optional[str], message: str) -> None:
     t.status = "FAILED"
     t.error = f"{code}: {message}" if code else message
@@ -613,10 +830,23 @@ def _failed(db: Session, t: HsCampaignText, row: Optional[HsAuthRequest], code: 
     c = db.query(HsTextCampaign).filter(HsTextCampaign.id == t.campaign_id).first()
     if c is None or c.status != "RUNNING":
         return
-    if action == "pause":
-        c.status, c.pause_reason = "PAUSED", why
-        return
     db.flush()
+    if action == "pause" and t.error and t.error.split(":")[0] in vc.SPAM_CODES:
+        # One refused text isn't a blocked campaign (owner, 2026-11-15: "if messages
+        # are going, no need to show carriers blocking"). Pause only when it's a
+        # pattern: SPAM_PAUSE_MIN of the last SPAM_WINDOW texts flagged as spam.
+        recent = [e for (e,) in db.query(HsCampaignText.error).filter(
+            HsCampaignText.campaign_id == c.id, HsCampaignText.direction == "OUT", HsCampaignText.sent_at.isnot(None),
+        ).order_by(HsCampaignText.sent_at.desc()).limit(SPAM_WINDOW).all()]
+        flagged = sum(1 for e in recent if e and e.split(":")[0] in vc.SPAM_CODES)
+        if flagged >= SPAM_PAUSE_MIN:
+            c.status, c.pause_reason = "PAUSED", (
+                f"Carriers flagged {flagged} of the last {len(recent)} texts as spam — paused to protect our numbers. "
+                "Change the message (pick another approved text) before resuming.")
+        return
+    if action == "pause":
+        c.status, c.pause_reason = "PAUSED", why   # number not approved for texting (10DLC)
+        return
     last = [s for (s,) in db.query(HsCampaignText.status).filter(
         HsCampaignText.campaign_id == c.id, HsCampaignText.direction == "OUT", HsCampaignText.sent_at.isnot(None),
     ).order_by(HsCampaignText.sent_at.desc()).limit(vc.FAIL_STREAK).all()]
@@ -760,6 +990,10 @@ def on_inbound(db: Session, tenant_id, phone: str, to_raw: Optional[str], text: 
     elif row.convo == "DNC" or qs.is_dnc(db, tenant_id, phone):
         service._event(row, "reply", None, f"Text saved (number is on Do-Not-Call): “{body[:200]}”")
         result = "hs_saved_dnc"
+    elif c.deleted_at is not None or row.deleted_at is not None:
+        # Campaign removed: keep the text (and keep it away from the dialer), send nothing.
+        service._event(row, "reply", None, f"Text saved (campaign removed — nothing sent): “{body[:200]}”")
+        result = "hs_saved_removed"
     elif row.convo in ("BLAST_SENT", "BLAST_FAILED") and looks_hesitant(body):
         # "How did you get my number?" — not a yes yet: no follow-up, a person answers.
         row.needs_reply = True
@@ -770,7 +1004,8 @@ def on_inbound(db: Session, tenant_id, phone: str, to_raw: Optional[str], text: 
         row.convo, row.convo_detail = "REPLIED", None
         to = replies.normalize_phone(to_raw) or last.from_number
         db.add(HsCampaignText(tenant_id=tenant_id, campaign_id=c.id, request_id=row.id, phone_number=phone,
-                              direction="OUT", kind="FOLLOWUP", body=FOLLOWUP_TEXT, from_number=to, status="QUEUED"))
+                              direction="OUT", kind="FOLLOWUP", body=vc.render(followup_of(c), row.first_name),
+                              from_number=to, status="QUEUED"))
         service._event(row, "replied", None, f"Replied “{body[:200]}” — sending the follow-up")
         if question:
             row.needs_reply = True  # the follow-up still goes; a person may want to answer too
@@ -989,14 +1224,16 @@ def campaign_dict(c: HsTextCampaign, counts: dict, names: dict) -> dict:
         "expire_minutes": c.expire_minutes, "resend_on_expiry": c.resend_on_expiry,
         "created_at": c.created_at.isoformat() if c.created_at else None,
         "started_at": c.started_at.isoformat() if c.started_at else None,
+        "archived_at": c.archived_at.isoformat() if c.archived_at else None,
         "finished_at": c.finished_at.isoformat() if c.finished_at else None,
+        "followup_text": followup_of(c), "followup_custom": bool((c.followup_text or "").strip()),
         "counts": counts or {},
         "preview": vc.render(c.template, "Jane"),
     }
 
 
 def overview(db: Session, tenant_id, user: User) -> dict:
-    camps = (db.query(HsTextCampaign).filter(HsTextCampaign.tenant_id == tenant_id)
+    camps = (db.query(HsTextCampaign).filter(HsTextCampaign.tenant_id == tenant_id, HsTextCampaign.deleted_at.is_(None))
              .order_by(HsTextCampaign.created_at.desc()).limit(100).all())
     counts = _counts(db, [c.id for c in camps])
     names = service._names(db, {c.hs_agent_id for c in camps})
@@ -1060,7 +1297,7 @@ def automation_status(db: Session, tenant_id, user: User) -> dict:
     def issue(level: str, code: str, title: str, detail: str = "", **extra):
         issues.append({"level": level, "code": code, "title": title, "detail": detail, **extra})
 
-    camps = (db.query(HsTextCampaign).filter(HsTextCampaign.tenant_id == tenant_id,
+    camps = (db.query(HsTextCampaign).filter(HsTextCampaign.tenant_id == tenant_id, HsTextCampaign.deleted_at.is_(None),
                                              HsTextCampaign.status != "DRAFT").all())
     base = db.query(R).filter(R.tenant_id == tenant_id, R.campaign_id.isnot(None), R.deleted_at.is_(None))
 
@@ -1068,6 +1305,7 @@ def automation_status(db: Session, tenant_id, user: User) -> dict:
     conds = _stage_conditions()
     row = base.with_entities(*[func.count(R.id).filter(cond).label(k) for k, (_l, cond) in conds.items()]).one()
     pipeline = {k: int(v or 0) for k, v in row._asdict().items()}
+    pipeline["YES"] = int(base.filter(R.yes_at.isnot(None)).count())
 
     # Today (midnight Eastern).
     day = service._today_start_utc()
@@ -1245,6 +1483,9 @@ def _client_query(db: Session, tenant_id, *, campaign: Optional[str], stage: Opt
             conds.append(R.phone.ilike(f"%{digits}%"))
         base = base.filter(or_(*conds))
     conds = _stage_conditions()
+    if stage == "YES":
+        # Not a stage: everyone who replied positively, wherever they are now (status panel chip).
+        return base, base.filter(R.yes_at.isnot(None))
     rows_q = base.filter(conds[stage][1]) if stage and stage in conds else base
     return base, rows_q
 

@@ -247,19 +247,134 @@
       await sleep(200);
       return el.value === opt.value;
     }
-    // A custom dropdown: open it, type, pick the option.
-    await click(el);
-    if (el.tagName === "INPUT") { await typeInto(el, name, function () { return true; }); }
-    if (pageHas(new RegExp("^\\s*" + name + "\\s*$", "i"), el)) return true;  // already shows it
-    var option = await waitFor(function () {
-      var cands = document.querySelectorAll("[role=option], li, [class*=option]");
-      for (var i = 0; i < cands.length; i++) if (visible(cands[i]) && norm(cands[i].textContent).toLowerCase() === name.toLowerCase()) return cands[i];
-      return null;
-    }, 4000);
-    if (!option) return false;  // couldn't read a list — a person checks, never "bad data"
-    await click(option);
-    var box = el.closest("div") || el;
-    return pageHas(new RegExp(name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i"), box.parentElement || box);
+    return chooseStateTyped(el, code, name);
+  }
+
+  /* A state box you can TYPE into (HealthSherpa, 2026-11-15: "dropdown + free
+     text"): an <input list> (datalist) or a type-to-search combobox. Typing
+     alone isn't enough for a combobox — an option from its list must be chosen;
+     and the list must stay open while we pick (no blur until it's chosen). */
+  function esc(t) { return t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }
+  function stateOptionScore(t, code, name) {
+    t = norm(t).toLowerCase(); var n = name.toLowerCase(), c = code.toLowerCase();
+    if (!t) return 0;
+    if (t === n) return 3;
+    if (t === c) return 2;
+    if (new RegExp("^" + esc(n) + "\\b").test(t)) return 2;                 // "Florida (FL)"
+    if (new RegExp("\\b" + esc(c) + "\\b").test(t) && t.indexOf(n) !== -1) return 2;  // "FL - Florida"
+    return 0;
+  }
+  function comboInput(el) {
+    if (el.tagName === "INPUT") return el;
+    var inp = el.querySelector("input:not([type=hidden])");
+    if (inp) return inp;
+    var box = el.closest("div");
+    return box ? box.querySelector("input:not([type=hidden])") : null;
+  }
+  function comboWrap(inp, el) {
+    return (inp && inp.closest("[class*=container i], [class*=select i], [class*=combo i], [class*=autocomplete i], [class*=dropdown i]"))
+      || (el !== inp ? el : null) || (inp && inp.parentElement) || el;
+  }
+  function visibleStateOptions() {
+    var cands = document.querySelectorAll("[role=option], [role=listbox] li, [class*=option i], [class*=menu i] li, [class*=suggestion i]");
+    return Array.prototype.slice.call(cands).filter(function (o) {
+      return visible(o) && o.childElementCount <= 3 && norm(o.textContent).length < 60;
+    });
+  }
+  function pressKey(el, key, keyCode) {
+    ["keydown", "keyup"].forEach(function (type) {
+      el.dispatchEvent(new KeyboardEvent(type, { key: key, code: key, keyCode: keyCode, which: keyCode, bubbles: true, cancelable: true }));
+    });
+  }
+  function pointerClick(o) {
+    ["pointerdown", "mousedown", "pointerup", "mouseup", "click"].forEach(function (type) {
+      var E = type.indexOf("pointer") === 0 && typeof PointerEvent === "function" ? PointerEvent : MouseEvent;
+      o.dispatchEvent(new E(type, { bubbles: true, cancelable: true, view: window, button: 0 }));
+    });
+  }
+  function shownState(inp, wrap, code, name) {
+    // What the box SHOWS once chosen: the input's value or the wrapper's text
+    // (without an open option list).
+    var v = inp ? inp.value : "";
+    if (stateOptionScore(v, code, name)) return true;
+    if (!wrap) return false;
+    var t = Array.prototype.slice.call(wrap.childNodes).map(function (n) {
+      return n.nodeType === 1 && (n.matches("[role=listbox]") || n.querySelector("[role=option]")) ? "" : (n.textContent || "");
+    }).join(" ");
+    return stateOptionScore(t, code, name) > 0 || new RegExp("(^|\\s)" + esc(name) + "(\\s|$)", "i").test(norm(t));
+  }
+
+  async function chooseStateTyped(el, code, name) {
+    var inp = comboInput(el), wrap = comboWrap(inp, el);
+    var isCombo = !!(inp && (inp.getAttribute("role") === "combobox" || inp.getAttribute("aria-autocomplete")
+      || el.getAttribute("role") === "combobox" || (wrap && wrap.querySelector("[role=combobox]"))));
+    var expanded = function () { return inp && (inp.getAttribute("aria-expanded") === "true" || el.getAttribute("aria-expanded") === "true"); };
+
+    // Already showing it (Florida can be preselected) — and no list open.
+    if (shownState(inp, wrap, code, name) && !expanded() && !visibleStateOptions().length) return true;
+    if (!inp) {
+      // Not typeable: open it and pick from the list.
+      await highlight(el); pointerClick(el); await sleep(400);
+    }
+
+    // 1) <input list=…>: free text that must be one of the datalist values.
+    if (inp && inp.list && inp.list.options && inp.list.options.length) {
+      var dl = Array.prototype.slice.call(inp.list.options), best = null, bs = 0;
+      dl.forEach(function (o) { var sc = Math.max(stateOptionScore(o.value, code, name), stateOptionScore(o.label || o.textContent, code, name)); if (sc > bs) { bs = sc; best = o; } });
+      if (!best) return dl.length >= 10 ? "missing" : false;
+      await highlight(inp);
+      viaTyping(inp, best.value);
+      await sleep(300);
+      if (inp.value !== best.value) { inp.focus(); setNative(inp, best.value); fire(inp, "input"); fire(inp, "change"); await sleep(200); }
+      inp.blur(); fire(inp, "blur"); fire(inp, "change");
+      await sleep(250);
+      return inp.value === best.value;
+    }
+
+    // 2) A combobox: open, type the name (then the code), choose the option.
+    for (var attempt = 0; attempt < 2; attempt++) {
+      var typed = attempt === 0 ? name : code;
+      if (inp) {
+        await highlight(inp);
+        checkStop();
+        pointerClick(inp);
+        inp.focus();
+        await sleep(200);
+        viaTyping(inp, typed);   // the browser's own typing; NO blur — that would close the list
+      }
+      var option = await waitFor(function () {
+        var opts = visibleStateOptions(), best = null, bs = 0;
+        opts.forEach(function (o) { var sc = stateOptionScore(o.textContent, code, name); if (sc > bs) { bs = sc; best = o; } });
+        return best;
+      }, 3000, 150);
+      if (option) {
+        try { option.scrollIntoView({ block: "nearest" }); } catch (e) { /* fine */ }
+        option.classList.add("iag-hl");
+        await sleep(300);
+        pointerClick(option);
+        await sleep(400);
+        if (!shownState(inp, wrap, code, name) || expanded()) {
+          // Some lists only take the keyboard: first option + Enter.
+          if (inp) { inp.focus(); pressKey(inp, "ArrowDown", 40); await sleep(150); pressKey(inp, "Enter", 13); await sleep(400); }
+        }
+      } else if (inp && isCombo && attempt === 1) {
+        pressKey(inp, "ArrowDown", 40); await sleep(150); pressKey(inp, "Enter", 13); await sleep(400);
+      }
+      if (shownState(inp, wrap, code, name) && !expanded()) {
+        if (inp) { inp.blur(); fire(inp, "blur"); }
+        await sleep(300);
+        // A combobox can clear an un-chosen value on blur — check it stuck.
+        if (shownState(inp, wrap, code, name)) return true;
+      }
+      // A list that's open but has nothing like the state = HealthSherpa doesn't offer it.
+      if (attempt === 1 && !option && (visibleStateOptions().length >= 1 || pageHas(/no (options|results|matches)/i, wrap || document.body))
+          && !visibleStateOptions().some(function (o) { return stateOptionScore(o.textContent, code, name); })) {
+        if (inp) { inp.blur(); fire(inp, "blur"); }
+        return "missing";
+      }
+    }
+    if (inp) { inp.blur(); fire(inp, "blur"); }
+    return false;   // couldn't choose it — the agent picks it (never "bad data")
   }
 
   async function highlight(el) {

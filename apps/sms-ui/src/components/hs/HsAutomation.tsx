@@ -1,11 +1,10 @@
-/* AUTOMATION STATUS — the "full picture" at the top of the HealthSherpa text
- * campaigns tab, for admins and the HealthSherpa agent:
- *   - one headline: Working / Needs attention / Blocked
- *   - what is blocking or waiting (login needed, auto mode off, outside texting
- *     hours, paused, daily limits, needs reply, recent errors)
- *   - live counts per stage (click = filter the table) and today's totals
- *   - the HealthSherpa agent's auto mode (tab seen, extension version, client
- *     running now + step + time) and texting hours per state
+/* AUTOMATION STATUS — a slim bar at the top of the HealthSherpa text campaigns tab:
+ *   1 one health line: Working / Needs attention / Blocked · auto mode · texting hours
+ *   2 alerts ONLY when a person has to act (login, auto mode off with clients
+ *     waiting, stuck, carrier pause, limits, needs reply) — each with one button
+ *   3 chips (No reply, Replied YES, HealthSherpa queue, Working now, Link sent,
+ *     Opted out…) — each opens a drawer with those clients
+ *   4 today as a funnel  5 the client being worked on right now  6 details ▾
  * plus a POPUP (sound + desktop notification) when HealthSherpa needs a login.
  * Server: GET /hs-auth/campaigns/status (app/hs_auth/campaigns.automation_status).
  */
@@ -93,196 +92,204 @@ const LEVEL = {
   warn: { dot: "bg-pending", box: "border-pending/30 bg-pending/5", text: "text-pending", icon: "⚠️" },
   info: { dot: "bg-accent", box: "border-accent/20 bg-accent/5", text: "text-accent", icon: "ℹ️" },
   ok: { dot: "bg-success", box: "border-success/30 bg-success/5", text: "text-success", icon: "✅" },
+  idle: { dot: "bg-ink-faint", box: "border-hairline bg-black/5", text: "text-ink-muted", icon: "⏸" },
 } as const;
 
 // ------------------------------------------------------------------ panel
 
-const TILES: { key: string; label: string; hint: string }[] = [
-  { key: "QUEUED", label: "Not texted yet", hint: "Waiting for the blast (texting hours / daily cap / pause)" },
-  { key: "TEXTED", label: "Texted, no reply", hint: "Got the campaign text, haven't answered" },
-  { key: "ASKED", label: "Asked company", hint: "Said yes — we asked which company they're renewing" },
-  { key: "NEEDS_REPLY", label: "Needs reply", hint: "A person should answer them" },
+/* The chips — each opens a drawer with those clients (onList). */
+export const CHIPS: { key: string; label: string; hint: string; tone?: "danger" | "warn" | "success" }[] = [
+  { key: "QUEUED", label: "Not texted yet", hint: "Waiting for the first text (texting hours / daily cap / pause)" },
+  { key: "TEXTED", label: "No reply", hint: "Got the campaign text, never replied" },
+  { key: "YES", label: "Replied YES", hint: "Everyone who replied positively, wherever they are now" },
+  { key: "ASKED", label: "Asked company", hint: "Said yes — waiting for which company they're renewing" },
+  { key: "NEEDS_REPLY", label: "Needs reply", hint: "A person should answer them", tone: "danger" },
   { key: "HS_QUEUED", label: "HealthSherpa queue", hint: "Answered — waiting for auto mode to run them" },
-  { key: "HS_RUNNING", label: "Running now", hint: "The extension is working on them in HealthSherpa" },
-  { key: "LINK_SENT", label: "Link sent", hint: "HealthSherpa link sent — waiting for the client to authorize (15 min)" },
-  { key: "AUTHORIZED", label: "Authorized", hint: "Done ✔" },
+  { key: "HS_RUNNING", label: "Working now", hint: "The extension is on this client in HealthSherpa" },
+  { key: "LINK_SENT", label: "Link sent", hint: "HealthSherpa link sent — waiting for the client (15 min)" },
+  { key: "AUTHORIZED", label: "Authorized", hint: "Done ✔", tone: "success" },
   { key: "EXPIRED", label: "Expired", hint: "The 15-minute link ran out" },
-  { key: "HS_REVIEW", label: "Needs a look", hint: "HealthSherpa run stopped — open the client for the reason" },
+  { key: "HS_REVIEW", label: "Needs a look", hint: "The HealthSherpa run stopped — open a client for the reason", tone: "warn" },
   { key: "DNC", label: "Opted out", hint: "STOP / no / wrong number — never texted again" },
 ];
+export const CHIP_LABEL: Record<string, string> = Object.fromEntries(CHIPS.map((c) => [c.key, c.label]));
 
-export function AutomationPanel({ st, at, onStage, onOpen }: {
-  st: HsStatus; at: number; onStage: (stage: string) => void; onOpen: (id: string) => void;
+// Only these become alerts — each is something a person has to DO.
+const ACTION_CODES = new Set(["LOGIN", "AUTO_OFF", "STUCK", "PAUSED", "CAP", "LIMIT", "NO_NUMBERS", "NEEDS_REPLY"]);
+
+export function AutomationPanel({ st, at, onList, onOpen }: {
+  st: HsStatus; at: number; onList: (stage: string) => void; onOpen: (id: string) => void;
 }) {
-  const [open, setOpen] = useState(() => { try { return localStorage.getItem("hsStatusOpen") !== "0"; } catch { return true; } });
+  const [open, setOpen] = useState(() => { try { return localStorage.getItem("hsStatusDetails") === "1"; } catch { return false; } });
   const [nowMs, setNowMs] = useState(Date.now());
   useEffect(() => { const t = window.setInterval(() => setNowMs(Date.now()), 1000); return () => window.clearInterval(t); }, []);
-  const toggle = () => { const v = !open; setOpen(v); try { localStorage.setItem("hsStatusOpen", v ? "1" : "0"); } catch { /* */ } };
+  const toggle = () => { const v = !open; setOpen(v); try { localStorage.setItem("hsStatusDetails", v ? "1" : "0"); } catch { /* */ } };
 
-  const lv = LEVEL[st.level];
-  const headline = st.level === "error" ? "Blocked — needs action" : st.level === "warn" ? "Running — needs attention" : "Working normally";
-  const errors = st.issues.filter((i) => i.level !== "info");
-  const infos = st.issues.filter((i) => i.level === "info");
+  const alerts = st.issues.filter((i) => ACTION_CODES.has(i.code) && !(i.code === "PAUSED" && i.level !== "error"));
+  const runningNow = st.agents.map((a) => a.running).filter(Boolean) as Running[];
+  const open_ = (st.pipeline.ASKED || 0) + (st.pipeline.HS_QUEUED || 0) + (st.pipeline.LINK_SENT || 0) + (st.pipeline.NO_ANSWER || 0);
+  // Say what is REALLY going on — "Working" only when something is actually moving.
+  const [level, headline, what]: [keyof typeof LEVEL, string, string] =
+    alerts.some((i) => i.level === "error") ? ["error", "Blocked", ""]
+    : alerts.length ? ["warn", "Needs attention", ""]
+    : runningNow.length ? ["ok", "Working", `HealthSherpa on ${runningNow.map((r) => r.name).join(", ")}`]
+    : st.campaigns.running > 0 ? ["ok", "Working", `sending texts (${st.campaigns.running} campaign${st.campaigns.running === 1 ? "" : "s"})`]
+    : ["idle", "No campaigns running", open_ > 0 ? `${open_} conversation${open_ === 1 ? "" : "s"} still open` : ""];
   const h = st.hours;
-  const hoursLine = h.ignored ? { tone: "info" as const, text: "Texting hours ignored (test mode)" }
-    : h.eastern_open && h.pacific_open ? { tone: "ok" as const, text: `Inside texting hours (${hourLabel(h.start_hour)} – ${hourLabel(h.end_hour)} client time) — blasts are going out` }
-    : h.eastern_open ? { tone: "warn" as const, text: `Texting hours open for Eastern/Central — Pacific opens at ${hourLabel(h.start_hour)} PT` }
-    : h.pacific_open ? { tone: "warn" as const, text: `Texting hours closed for Eastern (after ${hourLabel(h.end_hour)} ET) — still open out West` }
-    : { tone: "error" as const, text: `OUTSIDE texting hours (${hourLabel(h.start_hour)} – ${hourLabel(h.end_hour)} client time) — campaign texts wait` };
+  const hours = h.ignored ? "Texting hours ignored (test)"
+    : h.eastern_open && h.pacific_open ? `Texting hours open until ${hourLabel(h.end_hour)} client time`
+    : h.eastern_open ? `Texting hours open (Pacific from ${hourLabel(h.start_hour)} PT)`
+    : h.pacific_open ? `Texting hours closed in the East — open out West`
+    : `Outside texting hours — first texts wait until ${hourLabel(h.start_hour)} client time`;
+  const hoursTone = h.ignored || (h.eastern_open && h.pacific_open) ? "text-ink-muted" : "text-pending";
+  const running = runningNow;
+  const t = st.today;
+  const pct = t.links_sent ? Math.round((100 * t.authorized) / t.links_sent) : null;
+
+  const chipClick = (key: string) => {
+    if (key === "HS_RUNNING" && running.length === 1) { onOpen(running[0].id); return; }  // the lead being worked on
+    onList(key);
+  };
 
   return (
-    <section className={`rounded-2xl border p-4 ${lv.box}`} data-testid="hs-automation">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2.5">
-          <span className="relative flex h-3 w-3">
-            {st.level !== "ok" && <span className={`absolute inline-flex h-full w-full animate-ping rounded-full opacity-60 ${lv.dot}`} />}
-            <span className={`relative inline-flex h-3 w-3 rounded-full ${lv.dot}`} />
+    <section className="rounded-2xl border border-hairline bg-white/70 p-3" data-testid="hs-automation">
+      {/* 1 — health in one line */}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+          <span className="relative flex h-2.5 w-2.5 shrink-0">
+            {(level === "error" || level === "warn") && <span className={`absolute inline-flex h-full w-full animate-ping rounded-full opacity-60 ${LEVEL[level].dot}`} />}
+            <span className={`relative inline-flex h-2.5 w-2.5 rounded-full ${LEVEL[level].dot}`} />
           </span>
-          <div>
-            <div className="text-sm font-extrabold text-ink">Automation: <span className={lv.text} data-testid="hs-automation-level">{headline}</span></div>
-            <div className="text-[0.7rem] text-ink-muted">
-              Now {clock(st.now, "America/New_York")} ET · {clock(st.now, "America/Los_Angeles")} PT · your time {clock(new Date(nowMs).toISOString())}
-              {" · "}updated {Math.max(0, Math.round((nowMs - at) / 1000))}s ago
-            </div>
-          </div>
+          <b className={`text-sm ${LEVEL[level].text}`} data-testid="hs-automation-level">{headline}</b>
+          {what && <span className="text-ink-soft">· {what}</span>}
+          {st.agents.map((a) => (
+            <span key={a.id} className="text-ink-soft">
+              · Auto mode <b className={a.alive ? "text-success" : "text-danger"}>{a.alive ? "ON" : "OFF"}</b> ({a.name}
+              {a.seen_at ? `, seen ${ago(a.seen_at)}` : ""})
+            </span>
+          ))}
+          <span className={hoursTone}>· 🕗 {hours}</span>
         </div>
-        <div className="flex items-center gap-2">
-          <span className={`rounded-full px-3 py-1 text-[0.7rem] font-bold ${LEVEL[hoursLine.tone].box} ${LEVEL[hoursLine.tone].text} border`}
-                data-testid="hs-hours-pill">
-            🕗 {hoursLine.text}
-          </span>
-          <button onClick={toggle} className="rounded-lg px-2 py-1 text-xs font-semibold text-ink-muted hover:bg-black/5">
-            {open ? "Hide details ▴" : "Show details ▾"}
-          </button>
-        </div>
+        <button onClick={toggle} className="rounded-lg px-2 py-0.5 text-[0.7rem] font-semibold text-ink-muted hover:bg-black/5">
+          {open ? "Hide details ▴" : "Details ▾"}
+        </button>
       </div>
 
-      {/* What's blocking / needs attention — always visible */}
-      {errors.length > 0 && (
-        <ul className="mt-3 space-y-1.5" data-testid="hs-issues">
-          {errors.map((i, n) => (
-            <li key={n} className={`flex flex-wrap items-start justify-between gap-2 rounded-lg border bg-white/70 px-3 py-2 ${LEVEL[i.level].box}`}>
+      {/* 2 — alerts, only when someone has to act */}
+      {alerts.length > 0 && (
+        <ul className="mt-2 space-y-1.5" data-testid="hs-issues">
+          {alerts.map((i, n) => (
+            <li key={n} className={`flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-1.5 ${LEVEL[i.level].box}`}>
               <div className="min-w-0 flex-1 text-xs">
-                <div className={`font-bold ${LEVEL[i.level].text}`}>{LEVEL[i.level].icon} {i.title}
-                  {i.since && <span className="ml-1 font-normal text-ink-faint">· since {dayClock(i.since)}</span>}</div>
-                {i.detail && <div className="mt-0.5 text-ink-soft">{i.detail}</div>}
+                <b className={LEVEL[i.level].text}>{i.code === "LOGIN" ? "🔐" : LEVEL[i.level].icon} {i.title}</b>
+                {i.since && <span className="text-ink-faint"> · since {dayClock(i.since)}</span>}
+                {i.detail && <div className="text-ink-soft">{i.detail}</div>}
               </div>
-              {i.request_id && <button onClick={() => onOpen(i.request_id!)} className="rounded-lg border border-hairline bg-white px-2 py-1 text-[0.7rem] font-semibold text-ink-muted hover:text-ink">Open client</button>}
-              {i.code === "NEEDS_REPLY" && <button onClick={() => onStage("NEEDS_REPLY")} className="rounded-lg border border-hairline bg-white px-2 py-1 text-[0.7rem] font-semibold text-ink-muted hover:text-ink">Show them</button>}
+              {i.request_id && <button onClick={() => onOpen(i.request_id!)} className={chipBtn}>Open client</button>}
+              {i.code === "NEEDS_REPLY" && <button onClick={() => onList("NEEDS_REPLY")} className={chipBtn}>Show them</button>}
+              {i.code === "AUTO_OFF" && <button onClick={() => onList("HS_QUEUED")} className={chipBtn}>Who's waiting</button>}
             </li>
           ))}
         </ul>
       )}
 
-      {/* Live pipeline */}
-      <div className="mt-3 grid grid-cols-3 gap-1.5 sm:grid-cols-4 lg:grid-cols-6 xl:grid-cols-11" data-testid="hs-pipeline">
-        {TILES.map((t) => {
-          const n = st.pipeline[t.key] || 0;
-          const hot = n > 0 && ["NEEDS_REPLY", "HS_REVIEW"].includes(t.key);
+      {/* 3 — clickable cards: each opens the list */}
+      <div className="mt-2.5 grid gap-2" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(92px, 1fr))" }} data-testid="hs-pipeline">
+        {CHIPS.map((c) => {
+          const n = st.pipeline[c.key] || 0;
+          if (c.key === "QUEUED" && !n) return null;
+          const bar = !n ? "transparent"
+            : c.tone === "danger" ? "var(--color-danger, #c0392b)"
+            : c.tone === "warn" ? "var(--color-pending, #b7791f)"
+            : c.tone === "success" ? "var(--color-success, #2f855a)"
+            : "var(--color-accent, #23408e)";
+          const num = !n ? "text-ink-faint"
+            : c.tone === "danger" ? "text-danger" : c.tone === "warn" ? "text-pending"
+            : c.tone === "success" ? "text-success" : "text-ink";
+          const bg = n && c.tone === "danger" ? "bg-danger/5" : n && c.tone === "warn" ? "bg-pending/5" : "bg-white/70";
           return (
-            <button key={t.key} title={t.hint} onClick={() => onStage(t.key)} data-testid={`hs-tile-${t.key}`}
-                    className={`rounded-lg border px-2 py-1.5 text-left hover:border-accent/50 ${hot ? "border-danger/30 bg-danger/5" : "border-hairline bg-white/70"}`}>
-              <div className={`text-lg font-extrabold tabular-nums ${hot ? "text-danger" : n ? "text-ink" : "text-ink-faint"}`}>{n.toLocaleString()}</div>
-              <div className="text-[0.66rem] font-semibold leading-tight text-ink-muted">{t.label}</div>
+            <button key={c.key} title={c.hint} onClick={() => chipClick(c.key)} data-testid={`hs-chip-${c.key}`}
+                    className={`group relative overflow-hidden rounded-xl border border-hairline ${bg} px-2 py-2 text-center transition hover:-translate-y-px hover:border-accent/40 hover:shadow-md`}>
+              <span className="absolute inset-y-0 left-0 w-1" style={{ background: bar }} />
+              {c.key === "HS_RUNNING" && n > 0
+                ? <span className="absolute right-1.5 top-1.5 h-2 w-2 animate-pulse rounded-full bg-accent" />
+                : <span className="absolute right-1.5 top-0.5 text-xs text-ink-faint opacity-0 transition group-hover:opacity-100">›</span>}
+              <div className={`text-xl font-extrabold tabular-nums leading-none ${num}`}>{n.toLocaleString()}</div>
+              <div className={`mt-1 text-[0.68rem] font-semibold leading-tight ${n ? "text-ink-muted" : "text-ink-faint"}`}>{c.label}</div>
             </button>
           );
         })}
       </div>
 
-      <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[0.72rem] text-ink-soft" data-testid="hs-today">
-        <b className="text-ink">Today:</b>
-        <span>Texts sent <b className="tabular-nums text-ink">{st.today.texts_sent}</b> / {st.today.daily_cap}</span>
-        <span>Replied <b className="tabular-nums text-ink">{st.today.replies}</b></span>
-        <span>Answered company <b className="tabular-nums text-ink">{st.today.answered}</b></span>
-        <span>Links sent <b className="tabular-nums text-ink">{st.today.links_sent}</b></span>
-        <span>Authorized <b className="tabular-nums text-success">{st.today.authorized}</b></span>
-        <span>Stopped <b className={`tabular-nums ${st.today.stopped ? "text-danger" : "text-ink"}`}>{st.today.stopped}</b></span>
-        <span>Opted out <b className="tabular-nums text-ink">{st.today.opted_out}</b></span>
+      {/* 4 — today as a funnel */}
+      <div className="mt-2 text-[0.72rem] text-ink-soft" data-testid="hs-today">
+        <b className="text-ink">Today:</b> {t.texts_sent} texts sent → {t.replies} replied → {t.answered} answered company →{" "}
+        {t.links_sent} links sent → <b className="text-success">{t.authorized} authorized</b>
+        {pct !== null && <span className="text-ink-faint"> ({pct}% of links)</span>}
+        {t.opted_out > 0 && <span className="text-ink-faint"> · {t.opted_out} opted out</span>}
       </div>
 
+      {/* 5 — what's happening right now */}
+      {running.map((r) => (
+        <button key={r.id} onClick={() => onOpen(r.id)} data-testid="hs-now"
+                className={`mt-2 flex w-full flex-wrap items-center gap-x-2 rounded-lg px-3 py-1.5 text-left text-xs ${r.login ? "bg-danger/10 text-danger" : "bg-accent/10 text-accent"}`}>
+          <b>▶ Now: {r.name}</b>
+          <span>{STEP[r.step || "start"] || r.step}</span>
+          <span className="tabular-nums opacity-80">
+            {r.status === "LINK_SENT" ? `link sent ${mmss(r.link_sent_at, nowMs)} ago (15:00 limit)` : `running ${mmss(r.started_at, nowMs)}`}
+          </span>
+          <span className="ml-auto font-semibold underline">Open</span>
+        </button>
+      ))}
+
+      {/* 6 — details: rarely needed */}
       {open && (
-        <div className="mt-3 grid gap-3 lg:grid-cols-3">
-          {/* Auto mode per HealthSherpa agent */}
-          <div className="rounded-xl border border-hairline bg-white/70 p-3 text-xs">
-            <div className="mb-1.5 text-[0.68rem] font-bold uppercase tracking-wide text-ink-faint">Auto mode (HealthSherpa)</div>
-            {st.agents.length === 0 ? <div className="text-ink-faint">No campaign running yet.</div> : st.agents.map((a) => (
-              <div key={a.id} className="space-y-1 border-b border-hairline-soft py-1.5 last:border-0" data-testid="hs-agent-card">
-                <div className="flex items-center justify-between gap-2">
-                  <b className="text-ink">{a.name}</b>
-                  <span className={`rounded-full px-2 py-0.5 text-[0.66rem] font-bold ${a.alive ? "bg-success/15 text-success" : "bg-danger/10 text-danger"}`}>
-                    {a.alive ? "● ON" : a.auto_on ? "● NOT SEEN" : "● OFF"}
-                  </span>
-                </div>
-                <div className="text-ink-muted">
-                  {a.seen_at ? <>Page last seen {ago(a.seen_at)}</> : "Never turned on"}
-                  {a.ext_version && <> · extension v{a.ext_version}</>}
-                  {a.alive && a.tab_hidden && <> · tab in background</>}
-                </div>
-                <div className="text-ink-muted">
-                  Queue <b className="text-ink">{a.queue}</b> · HealthSherpa runs today <b className={a.usage.left ? "text-ink" : "text-danger"}>{a.usage.used}/{a.usage.limit}</b>
-                </div>
-                {a.running && (
-                  <button onClick={() => onOpen(a.running!.id)}
-                          className={`mt-1 block w-full rounded-lg px-2 py-1.5 text-left ${a.running.login ? "bg-danger/10 text-danger" : "bg-accent/10 text-accent"}`}>
-                    <div className="font-bold">▶ {a.running.name}</div>
-                    <div>{STEP[a.running.step || "start"] || a.running.step} · {a.running.status === "LINK_SENT"
-                      ? <>link sent {mmss(a.running.link_sent_at, nowMs)} ago (expires at 15:00)</>
-                      : <>running {mmss(a.running.started_at, nowMs)}</>}</div>
-                    {a.running.detail && !a.running.login && <div className="truncate opacity-80">{a.running.detail}</div>}
-                  </button>
-                )}
+        <div className="mt-3 grid gap-3 border-t border-hairline pt-3 text-xs lg:grid-cols-3" data-testid="hs-details">
+          <div>
+            <div className={detailHead}>Auto mode</div>
+            {st.agents.length === 0 ? <div className="text-ink-faint">No campaign yet.</div> : st.agents.map((a) => (
+              <div key={a.id} className="text-ink-soft">
+                <b className="text-ink">{a.name}</b> — {a.alive ? "on" : a.auto_on ? "not seen recently" : "off"}
+                {a.seen_at && <>, page seen {ago(a.seen_at)}</>}{a.ext_version && <>, extension v{a.ext_version}</>}
+                {a.alive && a.tab_hidden && <>, tab in background</>}. Queue {a.queue} · HealthSherpa runs today {a.usage.used}/{a.usage.limit}.
               </div>
             ))}
-          </div>
-
-          {/* Texting hours per state */}
-          <div className="rounded-xl border border-hairline bg-white/70 p-3 text-xs" data-testid="hs-hours">
-            <div className="mb-1.5 text-[0.68rem] font-bold uppercase tracking-wide text-ink-faint">
-              Campaign texts waiting · {hourLabel(h.start_hour)} – {hourLabel(h.end_hour)} client time
+            <div className="mt-1 text-ink-faint">
+              Now {clock(st.now, "America/New_York")} ET · {clock(st.now, "America/Los_Angeles")} PT · updated {Math.max(0, Math.round((nowMs - at) / 1000))}s ago
             </div>
-            {h.states.length === 0 && !h.paused ? (
-              <div className="text-ink-faint">Nothing waiting to be texted.</div>
-            ) : (
-              <div className="flex flex-wrap gap-1.5">
-                {h.states.map((s) => (
-                  <span key={s.state} className={`rounded-full px-2 py-0.5 font-semibold ${s.open ? "bg-success/15 text-success" : "bg-black/5 text-ink-muted"}`}
-                        title={s.open ? "Sending now" : s.opens_at ? `Opens ${dayClock(s.opens_at)} your time` : "Closed"}>
-                    {s.state} · {s.waiting} · {s.open ? "sending" : s.opens_at ? `opens ${dayClock(s.opens_at)}` : "closed"}
+          </div>
+          <div>
+            <div className={detailHead}>First texts waiting · {hourLabel(h.start_hour)}–{hourLabel(h.end_hour)} client time</div>
+            {h.states.length === 0 && !h.paused ? <div className="text-ink-faint">Nothing waiting.</div> : (
+              <div className="flex flex-wrap gap-1">
+                {h.states.map((x) => (
+                  <span key={x.state} className={`rounded-full px-2 py-0.5 font-semibold ${x.open ? "bg-success/15 text-success" : "bg-black/5 text-ink-muted"}`}>
+                    {x.state} {x.waiting} · {x.open ? "sending" : x.opens_at ? `opens ${dayClock(x.opens_at)}` : "closed"}
                   </span>
                 ))}
                 {h.paused > 0 && <span className="rounded-full bg-pending/15 px-2 py-0.5 font-semibold text-pending">{h.paused} in paused campaigns</span>}
               </div>
             )}
-            <div className="mt-2 text-[0.68rem] text-ink-faint">
-              Only the first text (and re-texts) wait for hours. Replies, follow-ups and HealthSherpa links go any hour. Times shown in your time.
-            </div>
-            {infos.filter((i) => i.code !== "HOURS").map((i, n) => (
-              <div key={n} className="mt-1.5 text-[0.7rem] text-accent">ℹ️ {i.title}{i.detail ? ` — ${i.detail}` : ""}</div>
-            ))}
+            <div className="mt-1 text-ink-faint">Replies, follow-ups and links go any hour.</div>
           </div>
-
-          {/* Recent problems */}
-          <div className="rounded-xl border border-hairline bg-white/70 p-3 text-xs" data-testid="hs-problems">
-            <div className="mb-1.5 text-[0.68rem] font-bold uppercase tracking-wide text-ink-faint">Recent problems (24 h)</div>
-            {st.recent_problems.length === 0 ? <div className="text-ink-faint">None 🎉</div> : (
-              <ul className="space-y-1">
-                {st.recent_problems.map((p) => (
-                  <li key={p.id}>
-                    <button onClick={() => onOpen(p.id)} className="block w-full rounded-lg px-1.5 py-1 text-left hover:bg-black/5">
-                      <div className="flex justify-between gap-2"><b className="text-ink">{p.name}</b><span className="shrink-0 text-ink-faint">{dayClock(p.at)}</span></div>
-                      <div className="text-danger">{PROBLEM[p.status] || p.status}{p.step && STEP[p.step] && p.step !== "done" ? ` (at “${STEP[p.step]}”)` : ""}</div>
-                      {p.detail && <div className="line-clamp-2 text-ink-muted">{p.detail}</div>}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
+          <div>
+            <div className={detailHead}>Recent problems (24 h)</div>
+            {st.recent_problems.length === 0 ? <div className="text-ink-faint">None.</div> : st.recent_problems.slice(0, 5).map((p) => (
+              <button key={p.id} onClick={() => onOpen(p.id)} className="block w-full rounded px-1 py-0.5 text-left hover:bg-black/5">
+                <b className="text-ink">{p.name}</b> <span className="text-danger">{PROBLEM[p.status] || p.status}</span>
+                <span className="text-ink-faint"> · {dayClock(p.at)}</span>
+                {p.detail && <div className="truncate text-ink-muted">{p.detail}</div>}
+              </button>
+            ))}
           </div>
         </div>
       )}
     </section>
   );
 }
+
+const chipBtn = "rounded-lg border border-hairline bg-white px-2 py-1 text-[0.7rem] font-semibold text-ink-muted hover:text-ink";
+const detailHead = "mb-1 text-[0.66rem] font-bold uppercase tracking-wide text-ink-faint";
 
 // ------------------------------------------------------------------ login popup
 

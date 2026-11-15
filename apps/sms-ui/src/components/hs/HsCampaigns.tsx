@@ -11,8 +11,10 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 import { api, apiUpload, authedFetch } from "../../lib/api";
 import { stopJob } from "../../lib/hsBridge";
 import { Drawer, DrawerSection, Field, drawerCtl } from "../Drawer";
-import { Empty, ago, errText, fmtDob, fmtPhone } from "./ui";
-import { AutomationPanel, type HsStatus } from "./HsAutomation";
+import { Empty, ago, errText, fmtDob, fmtPhone, useConfirm } from "./ui";
+import { AutomationPanel, CHIPS, CHIP_LABEL, type HsStatus } from "./HsAutomation";
+import { TemplatePicker, TextLength } from "./HsTemplatePicker";
+import { previewText } from "./hsTemplates";
 
 export type Counts = {
   total: number; queued: number; sent: number; replied: number; positive: number; answered: number;
@@ -25,8 +27,10 @@ export type HsCampaign = {
   rows_in_file: number; skipped_invalid: number; skipped_no_phone: number; skipped_duplicate: number; skipped_dnc: number;
   answer_wait_minutes: number; reminder_enabled: boolean; reminder_text: string | null; reminder_minutes: number;
   expire_minutes: number; resend_on_expiry: boolean;
-  created_at: string | null; started_at: string | null; finished_at: string | null;
+  created_at: string | null; started_at: string | null; finished_at: string | null; archived_at?: string | null;
   counts: Partial<Counts>; preview: string;
+  /** This campaign's follow-up after a YES (the approved text unless edited). */
+  followup_text?: string; followup_custom?: boolean;
 };
 export type HsOverview = {
   campaigns: HsCampaign[]; can_manage: boolean; is_hs_agent: boolean; my_queue: number;
@@ -66,9 +70,17 @@ const STAGE_CLS: Record<string, string> = {
 };
 const STAGE_ORDER = ["ALL", "NEEDS_REPLY", "QUEUED", "TEXTED", "ASKED", "NO_ANSWER", "HS_QUEUED", "HS_RUNNING", "LINK_SENT",
   "AUTHORIZED", "EXPIRED", "HS_REVIEW", "DNC", "NOT_SENT", "INVALID"];
+// Each campaign state has its own colour so the list reads at a glance.
 const CAMP_PILL: Record<string, string> = {
-  DRAFT: "bg-black/5 text-ink-muted", RUNNING: "bg-success/15 text-success", PAUSED: "bg-pending/15 text-pending",
-  COMPLETED: "bg-accent/10 text-accent", STOPPED: "bg-black/5 text-ink-muted",
+  DRAFT: "bg-black/5 text-ink-muted", RUNNING: "bg-success text-white", PAUSED: "bg-pending text-white",
+  COMPLETED: "bg-accent text-white", STOPPED: "bg-black/10 text-ink-muted",
+};
+const CAMP_ROW: Record<string, { box: string; bar: string }> = {
+  RUNNING: { box: "border-success/40 bg-success/[0.06]", bar: "bg-success" },
+  PAUSED: { box: "border-pending/40 bg-pending/[0.07]", bar: "bg-pending" },
+  COMPLETED: { box: "border-accent/30 bg-accent/[0.04]", bar: "bg-accent" },
+  STOPPED: { box: "border-hairline bg-black/[0.02] opacity-80", bar: "bg-ink-faint" },
+  DRAFT: { box: "border-dashed border-ink-faint/60 bg-transparent", bar: "bg-transparent" },
 };
 const CAMP_LABEL: Record<string, string> = {
   DRAFT: "Draft", RUNNING: "Sending", PAUSED: "Paused", COMPLETED: "All texted", STOPPED: "Stopped",
@@ -101,6 +113,12 @@ export default function HsCampaigns({ overview, reloadOverview, agents, status, 
   const [detail, setDetail] = useState<Client | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
+  const [confirm, confirmEl] = useConfirm();
+  const [showArchived, setShowArchived] = useState(false);
+  const [listStage, setListStage] = useState<string | null>(null);  // a status-panel chip's drawer
+  const [addingOne, setAddingOne] = useState(false);
+  const active = overview.campaigns.filter((c) => !c.archived_at);
+  const archivedN = overview.campaigns.length - active.length;
 
   const params = useCallback(() => {
     const p = new URLSearchParams();
@@ -110,14 +128,56 @@ export default function HsCampaigns({ overview, reloadOverview, agents, status, 
     return p;
   }, [campaignF, stage, q]);
 
-  const load = useCallback(() => {
-    const p = params();
-    p.set("limit", "300");
-    return api<ClientsResp>(`/hs-auth/campaigns/clients?${p}`).then(setData).catch((e) => onError(errText(e)));
-  }, [params, onError]);
+  // The table loads PAGE clients at a time; scrolling to the bottom loads the next
+  // PAGE. The 5-s refresh re-reads only the top of what's loaded (≤ REFRESH_MAX) so a
+  // long scrolled list isn't re-fetched every time; deeper rows refresh on the next page.
+  const PAGE = 30, REFRESH_MAX = 300;
+  const [rows, setRows] = useState<Client[]>([]);
+  const rowsRef = useRef<Client[]>([]);
+  rowsRef.current = rows;
+  const [loadingMore, setLoadingMore] = useState(false);
+  const moreRef = useRef(false);
+  const scrollBox = useRef<HTMLDivElement>(null);
 
-  useEffect(() => { const t = window.setTimeout(load, q ? 300 : 0); return () => window.clearTimeout(t); }, [load, q]);
-  useEffect(() => { const t = window.setInterval(load, 5000); return () => window.clearInterval(t); }, [load]);
+  // The parent passes a new onError function on every render (it re-renders every
+  // 5 s) — keep it in a ref so it doesn't look like a filter change and reset the list.
+  const onErrorRef = useRef(onError);
+  onErrorRef.current = onError;
+  const load = useCallback((reset = false) => {
+    const p = params();
+    const n = reset ? PAGE : Math.min(Math.max(rowsRef.current.length, PAGE), REFRESH_MAX);
+    p.set("limit", String(n));
+    return api<ClientsResp>(`/hs-auth/campaigns/clients?${p}`).then((r) => {
+      setData(r);
+      setRows((prev) => {
+        if (reset) return r.rows;
+        const seen = new Set(r.rows.map((x) => x.id));
+        return [...r.rows, ...prev.slice(n).filter((x) => !seen.has(x.id))];
+      });
+    }).catch((e) => onErrorRef.current(errText(e)));
+  }, [params]);
+
+  const loadMore = useCallback(() => {
+    if (moreRef.current || !data || rowsRef.current.length >= data.total) return;
+    moreRef.current = true; setLoadingMore(true);
+    const p = params();
+    p.set("limit", String(PAGE)); p.set("offset", String(rowsRef.current.length));
+    api<ClientsResp>(`/hs-auth/campaigns/clients?${p}`).then((r) => {
+      setRows((prev) => { const seen = new Set(prev.map((x) => x.id)); return [...prev, ...r.rows.filter((x) => !seen.has(x.id))]; });
+    }).catch((e) => onErrorRef.current(errText(e)))
+      .finally(() => { moreRef.current = false; setLoadingMore(false); });
+  }, [data, params]);
+
+  // Filters / search changed: start again from the first page.
+  useEffect(() => { const t = window.setTimeout(() => load(true), q ? 300 : 0); return () => window.clearTimeout(t); }, [load, q]);
+  useEffect(() => { const t = window.setInterval(() => load(false), 5000); return () => window.clearInterval(t); }, [load]);
+  // Load the next page when the rows' own scroll box nears its bottom (and right
+  // away if the loaded rows don't even fill the box).
+  const nearBottom = useCallback(() => {
+    const b = scrollBox.current;
+    if (b && b.scrollTop + b.clientHeight >= b.scrollHeight - 300) loadMore();
+  }, [loadMore]);
+  useEffect(() => { nearBottom(); }, [nearBottom, rows.length]);
 
   // Keep an open detail drawer live (new texts / status).
   useEffect(() => {
@@ -129,8 +189,23 @@ export default function HsCampaigns({ overview, reloadOverview, agents, status, 
   }, [detail?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const act = async (c: HsCampaign, action: string) => {
-    if (action === "stop" && !window.confirm(`Stop “${c.name}”? Nobody still waiting gets the text. Clients already talking to us carry on.`)) return;
-    if (action === "delete" && !window.confirm(`Delete the draft “${c.name}”?`)) return;
+    if (action === "stop" && !(await confirm({
+      title: `Stop “${c.name}”?`, icon: "⏹", tone: "danger", confirmLabel: "Stop campaign",
+      points: ["Nobody still waiting gets the first text.", "Clients already talking to us carry on (follow-ups, HealthSherpa links)."],
+    }))) return;
+    if (action === "delete" && c.status === "DRAFT" && !(await confirm({
+      title: `Delete the draft “${c.name}”?`, tone: "danger", confirmLabel: "Delete draft",
+      body: "Nothing was texted yet. The draft and its client list are deleted." }))) return;
+    if (action === "delete" && c.status !== "DRAFT" && !(await confirm({
+      title: `Remove “${c.name}”?`, tone: "danger", confirmLabel: "Remove campaign",
+      body: <>It and its <b>{c.counts.total ?? 0} clients</b> leave this page.</>,
+      points: [
+        "Nothing more is texted, and anyone queued or running in HealthSherpa is cancelled.",
+        "Opt-outs stay on Do-Not-Call.",
+        "If one of these clients replies later, the text is saved but nothing is sent back — and they're never called.",
+      ],
+      note: "This can't be undone. Export to Excel first if you need the list — or use Archive to just hide it.",
+    }))) return;
     setBusy(c.id);
     try {
       if (action === "delete") await api(`/hs-auth/campaigns/${c.id}`, { method: "DELETE" });
@@ -169,8 +244,7 @@ export default function HsCampaigns({ overview, reloadOverview, agents, status, 
   return (
     <div className="space-y-4" data-testid="hs-campaigns">
       {status && overview.campaigns.length > 0 && (
-        <AutomationPanel st={status} at={statusAt} onOpen={openDetail}
-                         onStage={(k) => { setStage(k); setCampaignF(""); }} />
+        <AutomationPanel st={status} at={statusAt} onOpen={openDetail} onList={setListStage} />
       )}
       <section className="glass rounded-2xl p-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
@@ -192,6 +266,16 @@ export default function HsCampaigns({ overview, reloadOverview, agents, status, 
                   title="Every text from our numbers today (all campaigns) — carrier daily cap">
               Texts today: {overview.sent_today.toLocaleString()} / {overview.daily_cap.toLocaleString()}
             </span>
+            {archivedN > 0 && (
+              <button type="button" onClick={() => setShowArchived(!showArchived)} data-testid="hs-archived-toggle"
+                      title="Archived campaigns are only hidden — they keep working in the background"
+                      className={`rounded-full px-3 py-1 text-xs font-bold ${showArchived ? "bg-ink text-white" : "bg-black/5 text-ink-soft hover:text-ink"}`}>
+                🗂️ {showArchived ? "Hide archived" : "Show archived"} ({archivedN})
+              </button>
+            )}
+            {overview.can_manage && (
+              <button className={btnGhost} onClick={() => setAddingOne(true)} data-testid="hs-add-one">+ Text one client</button>
+            )}
             {overview.can_manage && <button className={btn} onClick={() => setCreating(true)}>New campaign</button>}
           </div>
         </div>
@@ -200,7 +284,10 @@ export default function HsCampaigns({ overview, reloadOverview, agents, status, 
           <Empty>No HealthSherpa campaigns yet.{overview.can_manage ? " Press New campaign to upload a list." : ""}</Empty>
         ) : (
           <div className="mt-3 space-y-2">
-            {overview.campaigns.map((c) => (
+            {active.length === 0 && !showArchived && (
+              <div className="py-4 text-center text-xs text-ink-muted">All campaigns are archived — they keep working in the background.</div>
+            )}
+            {(showArchived ? overview.campaigns : active).map((c) => (
               <CampaignRow key={c.id} c={c} canManage={overview.can_manage} busy={busy === c.id}
                            onAction={(a) => act(c, a)} onSettings={() => setSettingsFor(c)} onRetext={() => setRetextFor(c)}
                            onShow={() => { setCampaignF(c.id); setStage("ALL"); }} />
@@ -209,7 +296,7 @@ export default function HsCampaigns({ overview, reloadOverview, agents, status, 
         )}
       </section>
 
-      <section className="glass rounded-2xl p-4">
+      <section className="glass flex flex-col rounded-2xl p-4" style={{ height: "calc(100vh - 96px)", minHeight: 420 }} data-testid="hs-clients">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-sm font-bold text-ink">Clients</h2>
           <button className={btnGhost} disabled={exporting} onClick={doExport}
@@ -239,12 +326,12 @@ export default function HsCampaigns({ overview, reloadOverview, agents, status, 
           </select>
         </div>
 
-        {!data ? <Empty>Loading…</Empty> : data.rows.length === 0 ? (
+        {!data ? <Empty>Loading…</Empty> : rows.length === 0 ? (
           <Empty>{overview.campaigns.length ? "Nothing matches these filters." : "Clients show up here once a campaign is uploaded."}</Empty>
         ) : (
-          <div className="mt-3 overflow-x-auto">
+          <div ref={scrollBox} onScroll={nearBottom} className="mt-3 min-h-0 flex-1 overflow-auto" data-testid="hs-clients-scroll">
             <table className="w-full min-w-[900px] text-left text-xs">
-              <thead>
+              <thead className="sticky top-0 z-10 bg-white">
                 <tr className="border-b border-hairline text-[0.68rem] uppercase tracking-wide text-ink-faint">
                   <th className="py-2 pr-3 font-bold">Client</th>
                   <th className="py-2 pr-3 font-bold">DOB · State</th>
@@ -254,7 +341,7 @@ export default function HsCampaigns({ overview, reloadOverview, agents, status, 
                 </tr>
               </thead>
               <tbody className="divide-y divide-hairline-soft">
-                {data.rows.map((r) => (
+                {rows.map((r) => (
                   <tr key={r.id} className="cursor-pointer align-top hover:bg-black/[0.02]" onClick={() => openDetail(r.id)}>
                     <td className="py-2.5 pr-3">
                       <div className="flex items-center gap-1.5 font-bold text-ink">
@@ -289,11 +376,11 @@ export default function HsCampaigns({ overview, reloadOverview, agents, status, 
                 ))}
               </tbody>
             </table>
-            {data.total > data.rows.length && (
-              <div className="mt-3 text-center text-xs text-ink-faint">
-                Showing {data.rows.length} of {data.total} — narrow it down, or Export for all of them.
-              </div>
-            )}
+            <div className="mt-3 text-center text-xs text-ink-faint" data-testid="hs-clients-more">
+              {rows.length < data.total
+                ? (loadingMore ? "Loading more…" : <button className="underline" onClick={loadMore}>Showing {rows.length} of {data.total} — load more</button>)
+                : data.total > PAGE ? `All ${data.total} clients shown` : null}
+            </div>
           </div>
         )}
       </section>
@@ -305,8 +392,12 @@ export default function HsCampaigns({ overview, reloadOverview, agents, status, 
                                       }} />}
       {retextFor && <RetextDrawer c={retextFor} max={overview.retext_max} onClose={() => setRetextFor(null)}
                                   onSent={(msg) => { setRetextFor(null); onNote(msg); reloadOverview(); load(); }} />}
-      {settingsFor && <SettingsDrawer c={settingsFor} onClose={() => setSettingsFor(null)}
+      {settingsFor && <SettingsDrawer c={settingsFor} approvedFollowup={overview.followup_text} onClose={() => setSettingsFor(null)}
                                       onSaved={() => { setSettingsFor(null); reloadOverview(); }} />}
+      {confirmEl}
+      {addingOne && <AddClientDrawer overview={overview} agents={agents} onClose={() => setAddingOne(false)}
+                                     onAdded={(r) => { setAddingOne(false); onNote(r.note); reloadOverview(); load(true); openDetail(r.id); }} />}
+      {listStage && <StageListDrawer stage={listStage} onClose={() => setListStage(null)} onOpen={openDetail} onError={onError} />}
       {detail && <ClientDrawer c={detail} stages={stages} onClose={() => setDetail(null)}
                                onChanged={(d) => { setDetail(d); load(); reloadOverview(); }}
                                onEdit={() => { onEdit(detail); setDetail(null); }}
@@ -348,14 +439,18 @@ function CampaignRow({ c, canManage, busy, onAction, onSettings, onShow, onRetex
     n.retexted ? `${n.retexted} re-texted` : "", n.retext_queued ? `${n.retext_queued} re-texts waiting to send` : "",
   ].filter(Boolean).join(" · ");
   return (
-    <div className="rounded-xl border border-hairline p-3" data-testid="hs-campaign-row">
+    <div className={`relative rounded-xl border p-3 pl-4 ${(CAMP_ROW[c.status] || CAMP_ROW.STOPPED).box}`}
+         data-testid="hs-campaign-row" data-status={c.status}>
+      <span className={`absolute inset-y-0 left-0 w-1.5 rounded-l-xl ${(CAMP_ROW[c.status] || CAMP_ROW.STOPPED).bar}`} />
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
             <button className="truncate text-sm font-bold text-ink hover:underline" onClick={onShow}>{c.name}</button>
-            <span className={`rounded-full px-2 py-0.5 text-[0.66rem] font-bold ${CAMP_PILL[c.status] || CAMP_PILL.DRAFT}`}>
+            <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[0.66rem] font-bold ${CAMP_PILL[c.status] || CAMP_PILL.DRAFT}`}>
+              {c.status === "RUNNING" && <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" />}
               {CAMP_LABEL[c.status] || c.status}
             </span>
+            {c.archived_at && <span className="rounded-full bg-black/5 px-2 py-0.5 text-[0.66rem] font-bold text-ink-muted">🗂️ Archived</span>}
           </div>
           <div className="text-[0.7rem] text-ink-faint">
             HealthSherpa agent: <b className="text-ink-soft">{c.hs_agent_name || "—"}</b>
@@ -379,11 +474,27 @@ function CampaignRow({ c, canManage, busy, onAction, onSettings, onShow, onRetex
               </button>
             )}
             <button className={btnGhost} onClick={onSettings}>Settings</button>
-            {c.status === "DRAFT" && <button className={btnGhost} disabled={busy} onClick={() => onAction("delete")}>Delete</button>}
+            {c.status !== "DRAFT" && (c.archived_at ? (
+              <button className={btnGhost} disabled={busy} onClick={() => onAction("unarchive")} data-testid="hs-unarchive">
+                Unarchive
+              </button>
+            ) : (
+              <span className="inline-flex items-center">
+                <button className={btnGhost} disabled={busy} onClick={() => onAction("archive")} data-testid="hs-archive">
+                  🗂️ Archive
+                </button>
+                <InfoTip text="Archive only hides this campaign from the list to keep the page clean. Everything keeps working — texts, replies, follow-ups, HealthSherpa links — and its clients stay in the table. Bring it back any time from “Archived”." />
+              </span>
+            ))}
+            <button className={`${btnGhost} hover:!border-danger/40 hover:!text-danger`} disabled={busy}
+                    onClick={() => onAction("delete")} data-testid="hs-remove"
+                    title={c.status === "DRAFT" ? "Delete this draft" : "End this campaign and take it off the page"}>
+              {c.status === "DRAFT" ? "Delete" : "Remove"}
+            </button>
           </div>
         )}
       </div>
-      {c.pause_reason && <div className="mt-2 rounded-lg bg-pending/10 px-3 py-1.5 text-xs font-semibold text-pending">{c.pause_reason}</div>}
+      {c.status === "PAUSED" && c.pause_reason && <div className="mt-2 rounded-lg bg-pending/10 px-3 py-1.5 text-xs font-semibold text-pending">{c.pause_reason}</div>}
       <div className="mt-2 grid grid-cols-3 gap-1.5 sm:grid-cols-6">
         {stats.map(([label, v]) => (
           <div key={label} className={`rounded-lg px-2 py-1.5 text-center ${label === "Authorized" ? "bg-success/10" : "bg-black/5"}`}>
@@ -405,22 +516,37 @@ function NewCampaignDrawer({ overview, agents, onClose, onCreated }: {
   const [name, setName] = useState("");
   const [agent, setAgent] = useState("");
   const [template, setTemplate] = useState(overview.blast_default);
+  const [followup, setFollowup] = useState(overview.followup_text);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const preview = (() => {
-    const t = template.replace(/\{\s*(first_?name|name)\s*\}/gi, "Jane").trim();
-    return /stop/i.test(t) ? t : `${t} Reply STOP to opt out.`;
-  })();
+  const [check, setCheck] = useState<FileCheckResult | null>(null);
+  const [checking, setChecking] = useState(false);
+  const preview = previewText(template);
+
+  // Check the file the moment it's chosen: mandatory columns + every row (nothing is saved).
+  const pickFile = async (f: File | null) => {
+    setFile(f); setCheck(null); setErr(null);
+    if (!f) return;
+    setChecking(true);
+    const fd = new FormData();
+    fd.append("file", f);
+    try { setCheck(await apiUpload<FileCheckResult>("/hs-auth/campaigns/check", fd)); }
+    catch (e) { setErr(errText(e)); }
+    finally { setChecking(false); }
+  };
+  const fileOk = !!check?.ok && !checking;
 
   // run=true: ONE button — upload, start texting, and (on the HealthSherpa
   // agent's own computer) switch auto mode on. run=false: keep it as a draft.
   const save = async (run: boolean) => {
     if (!file) { setErr("Choose the client file first."); return; }
+    if (!fileOk) { setErr(check?.missing.length ? `The file is missing: ${check.missing.join(", ")}.` : "Nobody in this file can be texted — fix the file first."); return; }
     setBusy(true); setErr(null);
     const fd = new FormData();
     fd.append("file", file);
     fd.append("name", name || file.name.replace(/\.[^.]+$/, ""));
     fd.append("template", template);
+    fd.append("followup_text", followup);
     if (agent) fd.append("hs_agent_id", agent);
     try {
       const c = await apiUpload<HsCampaign>("/hs-auth/campaigns", fd);
@@ -456,17 +582,20 @@ function NewCampaignDrawer({ overview, agents, onClose, onCreated }: {
             sub="Replies are never called — they go to HealthSherpa, not the Auto Dialer."
             footer={<>
               <button className={btnGhost} onClick={onClose}>Cancel</button>
-              <button className={btnGhost} disabled={busy} onClick={() => save(false)}>Save as draft</button>
-              <button className={btn} disabled={busy} onClick={() => save(true)} data-testid="hs-run-campaign">
+              <button className={btnGhost} disabled={busy || !fileOk} onClick={() => save(false)}>Save as draft</button>
+              <button className={btn} disabled={busy || !fileOk} onClick={() => save(true)} data-testid="hs-run-campaign"
+                      title={!file ? "Choose the client file first" : !fileOk ? "Fix the file first (see the check above)" : undefined}>
                 {busy ? "Starting…" : "▶ Run campaign"}
               </button>
             </>}>
       {err && <div className="rounded-lg bg-danger/10 px-3 py-2 text-xs font-semibold text-danger">{err}</div>}
       <Field label="Client file" required
              hint="Excel or CSV with First Name, Last Name, Date of Birth, State and Phone. Names are cleaned, dates become MM/DD/YYYY.">
-        <input type="file" accept=".xlsx,.csv" className={drawerCtl}
-               onChange={(e) => setFile(e.target.files?.[0] || null)} />
+        <input type="file" accept=".xlsx,.csv" className={drawerCtl} data-testid="hs-campaign-file"
+               onChange={(e) => pickFile(e.target.files?.[0] || null)} />
       </Field>
+      {checking && <div className="rounded-lg bg-black/5 px-3 py-2 text-xs text-ink-muted">Checking the file…</div>}
+      {check && <FileCheck r={check} />}
       <button type="button" className="-mt-2 text-xs font-semibold text-accent underline" onClick={downloadTemplate}>
         Download a template
       </button>
@@ -480,19 +609,292 @@ function NewCampaignDrawer({ overview, agents, onClose, onCreated }: {
           {agents.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
         </select>
       </Field>
-      <Field label="First text (the blast)" required hint={`{name} = their first name. “Reply STOP to opt out.” is added if missing. ${template.length}/480`}>
-        <textarea className={`${drawerCtl} min-h-24`} value={template} maxLength={480} onChange={(e) => setTemplate(e.target.value)} />
+      <TemplatePicker value={template} onPick={setTemplate} />
+      <Field label="First text (the blast)" required hint="[Name] or {name} = their first name. “Reply STOP to opt out.” is added if missing. Pick a text above or write your own — you can edit it here.">
+        <textarea className={`${drawerCtl} min-h-24`} value={template} maxLength={480} onChange={(e) => setTemplate(e.target.value)}
+                  data-testid="hs-blast-text" />
+        <div className="mt-1"><TextLength text={template} /></div>
       </Field>
+      <FollowupField value={followup} approved={overview.followup_text} onChange={setFollowup} />
       <SendingNumbers byState={overview.state_numbers} />
       <DrawerSection icon="💬" title="What they get">
         <Bubble who="Campaign text" body={preview} />
-        <Bubble who="If they reply positively — approved follow-up (sent as is)" body={overview.followup_text} />
+        <Bubble who={`If they reply positively — follow-up${followup.trim() === overview.followup_text.trim() ? " (approved wording)" : " (edited)"}`}
+                body={previewText(followup)} />
         <p className="text-xs text-ink-muted">
           Their answer (company name, “ok”, …) queues them for HealthSherpa. No answer in 10 minutes = “No answer yet”;
           a later answer still queues them. The 7-minute reminder is OFF until the wording is approved (Settings).
         </p>
       </DrawerSection>
     </Drawer>
+  );
+}
+
+/** Type in ONE client: texted now (in their texting hours), then the same flow as a
+ * campaign client — YES → follow-up → company → HealthSherpa. */
+function AddClientDrawer({ overview, agents, onClose, onAdded }: {
+  overview: HsOverview; agents: Agent[]; onClose: () => void;
+  onAdded: (r: { id: string; note: string; campaign_name: string }) => void;
+}) {
+  const camps = overview.campaigns.filter((c) => c.status !== "DRAFT" && c.name !== "Manual entries");
+  const [campaign, setCampaign] = useState("");          // "" = the shared "Manual entries" campaign
+  const [agent, setAgent] = useState("");
+  const [f, setF] = useState({ first_name: "", last_name: "", dob: "", state: "", phone: "", email: "" });
+  const manualCamp = overview.campaigns.find((c) => c.name === "Manual entries");
+  const templateOf = (id: string) => overview.campaigns.find((c) => c.id === id)?.template || manualCamp?.template || overview.blast_default;
+  const [message, setMessage] = useState(() => templateOf(""));
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const pick = (id: string) => { setCampaign(id); setMessage(templateOf(id)); };
+  const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement>) => setF({ ...f, [k]: e.target.value });
+  const ready = f.first_name.trim() && f.last_name.trim() && f.dob.trim() && f.state.trim() && f.phone.trim() && message.trim();
+  const followup = overview.campaigns.find((c) => c.id === campaign)?.followup_text || manualCamp?.followup_text || overview.followup_text;
+  const send = async () => {
+    setBusy(true); setErr(null);
+    try {
+      const r = await api<{ id: string; note: string; campaign_name: string }>("/hs-auth/campaigns/add-client", {
+        method: "POST",
+        body: JSON.stringify({ ...f, message, campaign_id: campaign || null, hs_agent_id: campaign ? null : agent || null }),
+      });
+      onAdded(r);
+    } catch (e) { setErr(errText(e)); }
+    finally { setBusy(false); }
+  };
+  return (
+    <Drawer open title="Text one client" icon="✍️" onClose={onClose}
+            sub="Type their details — they get the text, and their reply works exactly like a campaign client's."
+            footer={<>
+              <button className={btnGhost} onClick={onClose}>Cancel</button>
+              <button className={btn} disabled={busy || !ready} onClick={send} data-testid="hs-add-one-send">
+                {busy ? "Sending…" : "Send text"}
+              </button>
+            </>}>
+      {err && <div className="rounded-lg bg-danger/10 px-3 py-2 text-xs font-semibold text-danger" data-testid="hs-add-one-error">{err}</div>}
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="First name" required><input className={drawerCtl} value={f.first_name} onChange={set("first_name")} data-testid="hs-one-first" /></Field>
+        <Field label="Last name" required><input className={drawerCtl} value={f.last_name} onChange={set("last_name")} data-testid="hs-one-last" /></Field>
+        <Field label="Date of birth" required><input className={drawerCtl} value={f.dob} placeholder="MM/DD/YYYY" onChange={set("dob")} data-testid="hs-one-dob" /></Field>
+        <Field label="State" required><input className={drawerCtl} value={f.state} placeholder="TX or Texas" onChange={set("state")} data-testid="hs-one-state" /></Field>
+        <Field label="Mobile" required><input className={drawerCtl} value={f.phone} placeholder="(555) 123-4567" inputMode="tel" onChange={set("phone")} data-testid="hs-one-phone" /></Field>
+        <Field label="Email"><input className={drawerCtl} value={f.email} placeholder="optional" onChange={set("email")} /></Field>
+      </div>
+      <Field label="Campaign" hint="Their texts and status show under this campaign. “Manual entries” collects everyone typed in by hand.">
+        <select className={drawerCtl} value={campaign} onChange={(e) => pick(e.target.value)} data-testid="hs-one-campaign">
+          <option value="">✍️ Manual entries</option>
+          {camps.map((c) => <option key={c.id} value={c.id}>{c.name}{c.archived_at ? " (archived)" : ""}</option>)}
+        </select>
+      </Field>
+      {!campaign && !manualCamp && (
+        <Field label="HealthSherpa agent" hint="Whose HealthSherpa account sends the link (they close the sale).">
+          <select className={drawerCtl} value={agent} onChange={(e) => setAgent(e.target.value)}>
+            <option value="">Me</option>
+            {agents.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+          </select>
+        </Field>
+      )}
+      <TemplatePicker value={message} onPick={setMessage} />
+      <Field label="First text" required hint="[Name] = their first name. Goes now if it's 8 am – 8 pm in their time zone, otherwise when their hours open.">
+        <textarea className={`${drawerCtl} min-h-24`} value={message} maxLength={480} onChange={(e) => setMessage(e.target.value)} />
+        <div className="mt-1"><TextLength text={message} /></div>
+      </Field>
+      <DrawerSection icon="💬" title="What they get">
+        <Bubble who="First text" body={previewText(message, f.first_name.trim().split(" ")[0] || "Jane")} />
+        <Bubble who="If they reply YES — follow-up" body={previewText(followup, f.first_name.trim().split(" ")[0] || "Jane")} />
+        <p className="text-xs text-ink-muted">Then their answer queues them for HealthSherpa — auto mode sends the link. STOP or “no” = Do-Not-Call.</p>
+      </DrawerSection>
+    </Drawer>
+  );
+}
+
+/** A status-panel chip's clients (No reply, Replied YES, HealthSherpa queue, Link
+ * sent, Opted out…), newest first; click one for the full conversation. */
+function StageListDrawer({ stage, onClose, onOpen, onError }: {
+  stage: string; onClose: () => void; onOpen: (id: string) => void; onError: (m: string) => void;
+}) {
+  const [data, setData] = useState<ClientsResp | null>(null);
+  const [q, setQ] = useState("");
+  const [exporting, setExporting] = useState(false);
+  const chip = CHIPS.find((c) => c.key === stage);
+  useEffect(() => {
+    const load = () => {
+      const p = new URLSearchParams({ stage, limit: "300" });
+      if (q.trim()) p.set("q", q.trim());
+      api<ClientsResp>(`/hs-auth/campaigns/clients?${p}`).then(setData).catch((e) => onError(errText(e)));
+    };
+    const t0 = window.setTimeout(load, q ? 300 : 0);
+    const t = window.setInterval(load, 5000);
+    return () => { window.clearTimeout(t0); window.clearInterval(t); };
+  }, [stage, q]); // eslint-disable-line react-hooks/exhaustive-deps
+  const doExport = async () => {
+    setExporting(true);
+    try {
+      const res = await authedFetch(`/hs-auth/campaigns/export?${new URLSearchParams({ stage })}`);
+      if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
+      const url = URL.createObjectURL(await res.blob());
+      const a = document.createElement("a");
+      a.href = url; a.download = `healthsherpa-${(CHIP_LABEL[stage] || stage).toLowerCase().replace(/\W+/g, "-")}.csv`; a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) { onError(errText(e)); }
+    finally { setExporting(false); }
+  };
+  const rows = data?.rows || [];
+  return (
+    <Drawer open title={`${CHIP_LABEL[stage] || stage}${data ? ` · ${data.total.toLocaleString()}` : ""}`} sub={chip?.hint} icon="📋" onClose={onClose}
+            footer={<>
+              <button className={btnGhost} disabled={exporting || !rows.length} onClick={doExport}>{exporting ? "Exporting…" : "⬇ Export this list"}</button>
+              <button className={btn} onClick={onClose}>Close</button>
+            </>}>
+      <input className={`${inputCls} w-full`} placeholder="Search name, phone, company…" value={q} onChange={(e) => setQ(e.target.value)} />
+      {!data ? <Empty>Loading…</Empty> : rows.length === 0 ? <Empty>Nobody here right now.</Empty> : (
+        <ul className="divide-y divide-hairline-soft" data-testid="hs-stage-list">
+          {rows.map((r) => (
+            <li key={r.id}>
+              <button onClick={() => onOpen(r.id)} className="block w-full rounded-lg px-1 py-2 text-left hover:bg-black/[0.03]">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="flex min-w-0 items-center gap-1.5 truncate text-sm font-bold text-ink">
+                    {r.needs_reply && <span className="h-2 w-2 shrink-0 rounded-full bg-danger" title="Needs a reply" />}
+                    {r.first_name} {r.last_name}
+                  </span>
+                  {stage === "YES" || stage === "HS_RUNNING" ? (
+                    <span className={`shrink-0 rounded-full px-2 py-0.5 text-[0.62rem] font-bold ${STAGE_CLS[r.stage] || STAGE_CLS.QUEUED}`}>{CHIP_LABEL[r.stage] || r.stage}</span>
+                  ) : <span className="shrink-0 text-[0.66rem] text-ink-faint">{ago(r.last_text?.at || r.updated_at)}</span>}
+                </div>
+                <div className="text-[0.7rem] tabular-nums text-ink-muted">
+                  {fmtPhone(r.phone)} · {r.state || "—"} · DOB {fmtDob(r.dob)}
+                  {r.renewing_company && <> · <b className="text-ink-soft">{r.renewing_company}</b></>}
+                  <span className="text-ink-faint"> · {r.campaign_name}</span>
+                </div>
+                {r.last_text && (
+                  <div className="truncate text-[0.72rem] text-ink-soft">
+                    <span className="font-semibold">{r.last_text.direction === "IN" ? "Client: " : "Us: "}</span>{r.last_text.body}
+                  </div>
+                )}
+                {(stage === "HS_REVIEW" || stage === "HS_RUNNING" || stage === "LINK_SENT") && r.status_detail && (
+                  <div className="truncate text-[0.7rem] text-pending">{r.status_detail}</div>
+                )}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {data && data.total > rows.length && <div className="text-center text-xs text-ink-faint">Showing {rows.length} of {data.total} — Export for all.</div>}
+    </Drawer>
+  );
+}
+
+/** A small ⓘ that shows an explanation on hover (desktop) or tap (phone). */
+function InfoTip({ text }: { text: string }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: MouseEvent) => { if (!ref.current?.contains(e.target as Node)) setOpen(false); };
+    document.addEventListener("mousedown", close);
+    return () => document.removeEventListener("mousedown", close);
+  }, [open]);
+  return (
+    <span ref={ref} className="relative ml-1 inline-flex" onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)}>
+      <button type="button" aria-label="What does this do?" onClick={() => setOpen(!open)} data-testid="hs-info"
+              className="flex h-4 w-4 items-center justify-center rounded-full border border-ink-faint text-[0.6rem] font-bold not-italic leading-none text-ink-muted hover:border-accent hover:text-accent">
+        i
+      </button>
+      {open && (
+        <span role="tooltip" className="absolute right-0 top-6 z-30 w-64 rounded-lg border border-hairline bg-white p-2.5 text-left text-[0.7rem] font-normal leading-snug text-ink-soft shadow-lg">
+          {text}
+        </span>
+      )}
+    </span>
+  );
+}
+
+/** The follow-up after a YES — editable; the approved wording is the default. */
+function FollowupField({ value, approved, onChange }: { value: string; approved: string; onChange: (v: string) => void }) {
+  const custom = value.trim() !== approved.trim();
+  return (
+    <Field label="Follow-up after they reply YES" required
+           hint="Sent the moment they reply positively. It must ask which company they're renewing — their answer is what queues HealthSherpa. [Name] = first name.">
+      <textarea className={`${drawerCtl} min-h-20`} value={value} maxLength={480} onChange={(e) => onChange(e.target.value)}
+                data-testid="hs-followup-text" />
+      <div className="mt-1 flex flex-wrap items-center gap-2">
+        <TextLength text={value} />
+        {custom ? (
+          <>
+            <span className="rounded-full bg-pending/15 px-2 py-0.5 text-[0.62rem] font-bold text-pending">Edited — not the approved wording</span>
+            <button type="button" className="text-[0.7rem] font-semibold text-accent underline" onClick={() => onChange(approved)}>
+              Reset to approved text
+            </button>
+          </>
+        ) : <span className="rounded-full bg-success/15 px-2 py-0.5 text-[0.62rem] font-bold text-success">✓ Approved wording</span>}
+      </div>
+    </Field>
+  );
+}
+
+type FileCheckResult = {
+  ok: boolean; missing: string[]; rows: number; ready: number; fix_data: number; no_phone: number;
+  duplicates: number; dnc: number; problem_count?: number;
+  columns: { key: string; label: string; required: boolean; found: string | null }[];
+  problems: { row: number; name: string; errors: string[] }[];
+};
+
+/** The file check, shown as soon as a file is chosen. */
+function FileCheck({ r }: { r: FileCheckResult }) {
+  const [showAll, setShowAll] = useState(false);
+  const bad = r.missing.length > 0;
+  const tone = bad || !r.ok ? "border-danger/30 bg-danger/5" : r.problems.length ? "border-pending/30 bg-pending/5" : "border-success/30 bg-success/5";
+  const rows = showAll ? r.problems : r.problems.slice(0, 5);
+  return (
+    <div className={`space-y-2 rounded-lg border px-3 py-2.5 text-xs ${tone}`} data-testid="hs-file-check">
+      <div className="font-bold text-ink">
+        {bad ? "✗ Can't use this file — mandatory column missing"
+          : !r.ok ? "✗ Nobody in this file can be texted"
+          : r.problems.length ? `✓ File OK — ${r.ready} ready to text, some rows need attention` : `✓ File OK — all ${r.ready} clients ready to text`}
+      </div>
+      <div className="flex flex-wrap gap-1.5">
+        {r.columns.map((c) => (
+          <span key={c.key} title={c.found ? `Found as “${c.found}”` : c.required ? "Missing — add this column" : "Optional"}
+                className={`rounded-full px-2 py-0.5 font-semibold ${c.found ? "bg-success/15 text-success" : c.required ? "bg-danger text-white" : "bg-black/5 text-ink-faint"}`}>
+            {c.found ? "✓" : c.required ? "✗" : "–"} {c.label}{!c.required && " (optional)"}
+            {c.found && c.found.toLowerCase().replace(/[^a-z]/g, "") !== c.label.toLowerCase().replace(/[^a-z]/g, "") && <span className="font-normal opacity-75"> = “{c.found}”</span>}
+          </span>
+        ))}
+      </div>
+      {bad ? (
+        <p className="text-danger">
+          Missing: <b>{r.missing.join(", ")}</b>. The first row must be the headers: First Name, Last Name, Date of Birth, State, Phone
+          (Download a template below).
+        </p>
+      ) : (
+        <>
+          <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-ink-soft">
+            <span>{r.rows} rows</span>
+            <span className="text-success">✓ <b>{r.ready}</b> ready to text</span>
+            {r.fix_data > 0 && <span className="text-danger"><b>{r.fix_data}</b> need fixing (not texted until fixed)</span>}
+            {r.no_phone > 0 && <span className="text-danger"><b>{r.no_phone}</b> no valid mobile (skipped)</span>}
+            {r.duplicates > 0 && <span><b>{r.duplicates}</b> duplicate numbers (skipped)</span>}
+            {r.dnc > 0 && <span><b>{r.dnc}</b> on Do-Not-Call (skipped)</span>}
+          </div>
+          {r.problems.length > 0 && (
+            <div className="rounded-md bg-white/70">
+              <table className="w-full text-left text-[0.7rem]">
+                <thead><tr className="text-ink-faint"><th className="px-2 py-1 font-semibold">Row</th><th className="px-2 py-1 font-semibold">Client</th><th className="px-2 py-1 font-semibold">Problem</th></tr></thead>
+                <tbody className="divide-y divide-hairline-soft">
+                  {rows.map((p) => (
+                    <tr key={p.row}><td className="px-2 py-1 tabular-nums text-ink-faint">{p.row}</td><td className="px-2 py-1 font-semibold text-ink">{p.name}</td>
+                      <td className="px-2 py-1 text-danger">{p.errors.join(" · ")}</td></tr>
+                  ))}
+                </tbody>
+              </table>
+              {(r.problem_count ?? r.problems.length) > 5 && (
+                <button type="button" className="px-2 py-1 text-[0.7rem] font-semibold text-accent underline" onClick={() => setShowAll(!showAll)}>
+                  {showAll ? "Show fewer" : `Show all ${r.problem_count ?? r.problems.length} rows with problems${(r.problem_count ?? 0) > r.problems.length ? ` (first ${r.problems.length})` : ""}`}
+                </button>
+              )}
+            </div>
+          )}
+        </>
+      )}
+    </div>
   );
 }
 
@@ -521,10 +923,7 @@ function RetextDrawer({ c, max, onClose, onSent }: {
   const [body, setBody] = useState(c.template);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const preview = (() => {
-    const t = body.replace(/\{\s*(first_?name|name)\s*\}/gi, "Jane").trim();
-    return /stop/i.test(t) ? t : `${t} Reply STOP to opt out.`;
-  })();
+  const preview = previewText(body);
   const send = async () => {
     setBusy(true); setErr(null);
     try {
@@ -549,8 +948,10 @@ function RetextDrawer({ c, max, onClose, onSent }: {
         Each client gets at most {max} re-texts in 30 days; after that the count resets, so nobody is wasted
         unless they opt out.
       </p>
-      <Field label="Message" required hint={`{name} = their first name. “Reply STOP to opt out.” is added if missing. Use approved wording. ${body.length}/480`}>
+      <TemplatePicker value={body} onPick={setBody} />
+      <Field label="Message" required hint="[Name] or {name} = their first name. “Reply STOP to opt out.” is added if missing. Use approved wording — a different text than the first one often works better.">
         <textarea className={`${drawerCtl} min-h-24`} value={body} maxLength={480} onChange={(e) => setBody(e.target.value)} />
+        <div className="mt-1"><TextLength text={body} /></div>
       </Field>
       <DrawerSection icon="💬" title="What they get">
         <Bubble who="Re-text" body={preview} />
@@ -560,11 +961,13 @@ function RetextDrawer({ c, max, onClose, onSent }: {
   );
 }
 
-function SettingsDrawer({ c, onClose, onSaved }: { c: HsCampaign; onClose: () => void; onSaved: () => void }) {
+function SettingsDrawer({ c, approvedFollowup, onClose, onSaved }: {
+  c: HsCampaign; approvedFollowup: string; onClose: () => void; onSaved: () => void;
+}) {
   const [f, setF] = useState({
     name: c.name, template: c.template, reminder_enabled: c.reminder_enabled, reminder_text: c.reminder_text || "",
     reminder_minutes: c.reminder_minutes, answer_wait_minutes: c.answer_wait_minutes, expire_minutes: c.expire_minutes,
-    resend_on_expiry: c.resend_on_expiry,
+    resend_on_expiry: c.resend_on_expiry, followup_text: c.followup_text || approvedFollowup,
   });
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -593,6 +996,8 @@ function SettingsDrawer({ c, onClose, onSaved }: { c: HsCampaign; onClose: () =>
         <textarea className={`${drawerCtl} min-h-20`} disabled={!editable} value={f.template} maxLength={480}
                   onChange={(e) => setF({ ...f, template: e.target.value })} />
       </Field>
+      <FollowupField value={f.followup_text} approved={approvedFollowup} onChange={(v) => setF({ ...f, followup_text: v })} />
+      <p className="-mt-2 text-[0.7rem] text-ink-faint">Changes apply to follow-ups sent from now on — any time, no need to pause.</p>
       <Field label="Wait for their answer (minutes)" hint="After the follow-up. Then they show as “No answer yet” — a later answer still queues them.">
         {num("answer_wait_minutes")}
       </Field>

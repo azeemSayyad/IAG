@@ -22,7 +22,7 @@ import {
   focusHealthSherpa, sendJob, stopJob, useExtension, useExtensionUpdates,
   type ExtUpdate, type HsJob,
 } from "../lib/hsBridge";
-import { Banner, Empty, Menu, MenuItem, ago, errText, fmtDob, fmtPhone } from "../components/hs/ui";
+import { Banner, Empty, Menu, MenuItem, ago, errText, fmtDob, fmtPhone, useConfirm } from "../components/hs/ui";
 import HsCampaigns, { type HsOverview } from "../components/hs/HsCampaigns";
 import { autoLabel, useAutoMode } from "../components/hs/useAutoMode";
 import { LoginAlert, useHsStatus } from "../components/hs/HsAutomation";
@@ -122,6 +122,7 @@ export default function HealthSherpa() {
     try { return localStorage.getItem("hsTab2") === "clients" ? "clients" : "campaigns"; } catch { return "campaigns"; }
   });
   const [hsOverview, setHsOverview] = useState<HsOverview | null>(null);
+  const [confirm, confirmEl] = useConfirm();
 
   const load = useCallback(() => {
     const p = new URLSearchParams();
@@ -215,7 +216,8 @@ export default function HealthSherpa() {
   };
 
   const doRemove = async (row: Row) => {
-    if (!window.confirm(`Remove ${row.first_name} ${row.last_name} from this list?`)) return;
+    if (!(await confirm({ title: `Remove ${row.first_name} ${row.last_name}?`, tone: "danger", confirmLabel: "Remove",
+                          body: "They're taken off this list." }))) return;
     setBusyId(row.id);
     try { await api(`/hs-auth/requests/${row.id}`, { method: "DELETE" }); }
     catch (e) { setErr(errText(e)); }
@@ -287,6 +289,7 @@ export default function HealthSherpa() {
           <button className={btnGhost} onClick={() => auto.toggle(false)}>Turn off</button>
         </div>
       )}
+      {confirmEl}
       <LoginAlert st={hsStatus.st} meIsAgent={!!hsOverview?.is_hs_agent} />
       {auto.error && <Banner tone="danger" onClose={auto.clearError}>{auto.error}</Banner>}
       {err && <Banner tone="danger" onClose={() => setErr(null)}>{err}</Banner>}

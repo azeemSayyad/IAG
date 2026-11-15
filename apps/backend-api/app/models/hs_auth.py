@@ -168,6 +168,14 @@ class HsTextCampaign(Base):
     created_at = Column(DateTime(timezone=True), nullable=False, default=_now)
     started_at = Column(DateTime(timezone=True), nullable=True)
     finished_at = Column(DateTime(timezone=True), nullable=True)
+    # Removed from the page (migration 071). Its texts are KEPT so a late reply
+    # is still recognised as HealthSherpa's (saved, never dialed).
+    deleted_at = Column(DateTime(timezone=True), nullable=True)
+    # Archived (migration 072): only hidden from the campaign list to keep the page
+    # clean — EVERYTHING else keeps working (texts, replies, auto mode, counts, clients).
+    archived_at = Column(DateTime(timezone=True), nullable=True)
+    # The follow-up after a YES (migration 073). NULL = the approved FOLLOWUP_TEXT.
+    followup_text = Column(Text, nullable=True)
 
 
 class HsCampaignText(Base):

@@ -712,3 +712,141 @@ def test_status_panel_shows_hours_auto_mode_login_and_errors(env, monkeypatch):
     c.status, c.pause_reason = "PAUSED", "3 texts in a row failed — paused."
     env.db.commit()
     assert codes(hc.automation_status(env.db, env.tenant, env.stan))["PAUSED"]["level"] == "error"
+
+
+def test_remove_a_sent_campaign_keeps_replies_away_from_the_dialer(env):
+    from app.models.sms import SmsLead
+    from app.sms_queue.services import queue_service as qs
+
+    c = _campaign(env)
+    _blast_all(env)
+    _reply(env, "+13055550101", "Yes")
+    _reply(env, "+13055550101", "Ambetter")              # Ana queued for HealthSherpa
+    hc.delete(env.db, c)
+
+    assert c.deleted_at is not None and c.status in ("STOPPED", "COMPLETED")
+    ana = _row(env, "Ana")
+    assert ana.deleted_at is not None and ana.status == "CANCELLED"
+    assert hc.next_job(env.db, env.tenant, env.stan)["reason"] == "idle"
+    assert all(x["id"] != str(c.id) for x in hc.overview(env.db, env.tenant, env.stan)["campaigns"])
+    with pytest.raises(hc.CampaignError):
+        hc.find(env.db, env.tenant, str(c.id))
+
+    n = len(env.sent)
+    assert _reply(env, "+13055550102", "Yes please")["result"] == "hs_saved_removed"
+    _blast_all(env)
+    assert len(env.sent) == n                                   # no follow-up
+    assert env.db.query(SmsLead).filter(SmsLead.tenant_id == env.tenant).count() == 0   # never the dialer
+    assert _reply(env, "+13055550103", "STOP")["result"] == "hs_dnc"
+    assert qs.is_dnc(env.db, env.tenant, "+13055550103")
+
+
+def test_one_spam_refusal_does_not_pause_but_a_pattern_does(env):
+    from app.models.hs_auth import HsCampaignText
+
+    c = _campaign(env)
+    _blast_all(env)                      # 4 texts delivered
+    c.status = "RUNNING"
+    env.db.commit()
+    ana = _row(env, "Ana")
+
+    def refused(code="40002"):
+        env.clock.add(1)
+        t = HsCampaignText(tenant_id=env.tenant, campaign_id=c.id, request_id=ana.id, phone_number="+13055550101",
+                           direction="OUT", kind="RETEXT", body="x", from_number="+15550001111",
+                           status="SENDING", sent_at=env.clock())
+        env.db.add(t)
+        env.db.flush()
+        hc._failed(env.db, t, ana, code, "Message flagged as spam")
+        env.db.commit()
+
+    refused()
+    assert c.status == "RUNNING" and c.pause_reason is None          # texts are still going: no warning
+    for _ in range(3):
+        refused("40003")
+    assert c.status == "RUNNING"                                      # 4 of the last 8
+    refused()
+    assert c.status == "PAUSED" and "5 of the last" in c.pause_reason
+    hc.stop(env.db, c)
+    assert c.status == "STOPPED" and c.pause_reason is None          # no stale warning after Stop
+
+
+def test_file_check_before_upload(env):
+    st = hc.check_file(env.db, env.tenant, "c.csv", CSV)
+    assert st["missing"] == [] and st["rows"] == 7
+    assert (st["ready"], st["fix_data"], st["no_phone"], st["duplicates"]) == (4, 1, 1, 1) and st["ok"]
+    found = {c["key"]: c["found"] for c in st["columns"]}
+    assert found["dob"] == "DOB" and found["phone"] == "Phone" and found["email"] is None
+    rows = {p["name"]: p["errors"] for p in st["problems"]}
+    assert any("Date of birth" in e for e in rows["Ed Bad"]) and any("Phone is missing" in e for e in rows["Fy Nophone"])
+
+    no_phone_col = b"First Name,Last Name,DOB,State\nAna,Diaz,01/31/1985,FL\n"
+    st = hc.check_file(env.db, env.tenant, "c.csv", no_phone_col)
+    assert st["missing"] == ["Phone"] and not st["ok"]
+    with pytest.raises(hc.CampaignError, match="Phone"):
+        hc.create(env.db, env.tenant, env.stan, name="x", template="Hi {name}", file_name="c.csv",
+                  raw=no_phone_col, hs_agent_id=None)
+
+    st = hc.check_file(env.db, env.tenant, "c.csv", b"Name,Phone\nAna Diaz,3055550101\n")
+    assert set(st["missing"]) == {"Date of Birth", "State"} and not st["ok"]
+    assert {c["key"]: c["found"] for c in st["columns"]}["first_name"] == "Name"   # one Name column = first + last
+
+
+def test_archive_only_hides_the_campaign(env):
+    c = _campaign(env)
+    hc.archive(env.db, c)
+    assert c.archived_at is not None and c.status == "RUNNING"
+    ov = hc.overview(env.db, env.tenant, env.stan)
+    assert [x["archived_at"] for x in ov["campaigns"] if x["id"] == str(c.id)][0]   # still listed, flagged
+    _blast_all(env)                                    # keeps texting…
+    assert _row(env, "Ana").convo == "BLAST_SENT"
+    assert _reply(env, "+13055550101", "Yes")["result"] == "hs_followup"   # …and answering
+    hc.unarchive(env.db, c)
+    assert c.archived_at is None
+
+
+def test_follow_up_is_editable_per_campaign(env):
+    c = _campaign(env)
+    assert c.followup_text is None and hc.followup_of(c) == hc.FOLLOWUP_TEXT   # default = approved, verbatim
+    hc.update(env.db, c, {"followup_text": "Thanks [Name]! Which company are you renewing with? Reply STOP to opt out"})
+    _blast_all(env)
+    n = len(env.sent)
+    _reply(env, "+13055550101", "Yes")
+    assert env.sent[n]["text"] == "Thanks Ana! Which company are you renewing with? Reply STOP to opt out"
+    hc.update(env.db, c, {"followup_text": hc.FOLLOWUP_TEXT})    # back to the approved text
+    assert c.followup_text is None
+    with pytest.raises((hc.CampaignError, vc.CampaignError), match="under 480"):
+        hc.update(env.db, c, {"followup_text": "x" * 2000})
+
+
+def test_add_one_client_by_hand(env, monkeypatch):
+    from app.sms_queue.services import queue_service as qs
+
+    base = dict(first_name="Zoe", last_name="Hand", dob="02/03/1990", state="TX", phone="(214) 555-0199")
+    out = hc.add_client(env.db, env.tenant, env.stan, {**base, "message": "Hi [Name], quick 2027 check? Reply YES. STOP to opt out"})
+    assert out["campaign_name"] == hc.MANUAL_CAMPAIGN and out["convo"] == "BLAST_SENT"
+    assert env.sent[-1] == {"from": env.sent[-1]["from"], "to": "+12145550199",
+                            "text": "Hi Zoe, quick 2027 check? Reply YES. STOP to opt out"}
+    n = len(env.sent)
+    _blast_all(env)
+    assert len(env.sent) == n                                         # sent once, not again by the bulk blast
+    assert _reply(env, "+12145550199", "Yes")["result"] == "hs_followup"   # same flow as a campaign client
+
+    # Into an existing (finished) campaign: it reopens to send, then the same checks apply.
+    c = _campaign(env)
+    _blast_all(env)
+    monkeypatch.setattr(vc, "in_hours", lambda *a, **k: False)
+    out = hc.add_client(env.db, env.tenant, env.stan, {**base, "phone": "2145550188", "campaign_id": str(c.id)})
+    assert out["convo"] == "QUEUED" and "outside 8 am" in out["note"]   # waits for their hours like a blast
+    monkeypatch.setattr(vc, "in_hours", lambda *a, **k: True)
+    _blast_all(env)
+    from app.models.hs_auth import HsAuthRequest
+    env.db.expire_all()
+    assert env.db.get(HsAuthRequest, uuid.UUID(out["id"])).convo == "BLAST_SENT"      # went once hours opened
+    with pytest.raises(hc.CampaignError, match="already in"):
+        hc.add_client(env.db, env.tenant, env.stan, {**base, "phone": "2145550188", "campaign_id": str(c.id)})
+    with pytest.raises(hc.CampaignError, match="Date of birth"):
+        hc.add_client(env.db, env.tenant, env.stan, {**base, "phone": "2145550177", "dob": "13/45/1990"})
+    qs.add_to_dnc(env.db, env.tenant, "+12145550166", "OPTED_OUT")
+    with pytest.raises(hc.CampaignError, match="Do-Not-Call"):
+        hc.add_client(env.db, env.tenant, env.stan, {**base, "phone": "2145550166"})

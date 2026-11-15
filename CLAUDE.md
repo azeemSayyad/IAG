@@ -128,8 +128,10 @@ the page's DEFAULT tab; the other one is "Manual start (no texting)".
 No Google Sheet: every client's details, texts and status are on the page, with
 **Export to Excel (CSV)** for the closer.
 - Flow per client (`hs_auth_requests.convo`): blast → any non-negative reply →
-  Stan's approved follow-up, sent **verbatim** (`FOLLOWUP_TEXT` — an approved
-  exception to "one text per person", HealthSherpa campaigns only) → wait 10 min
+  the follow-up — Stan's approved `FOLLOWUP_TEXT` by default, **editable per campaign**
+  (`hs_text_campaigns.followup_text`, migration 073, New campaign + Settings, "Reset to
+  approved text"; NULL = default) — an approved exception to "one text per person",
+  HealthSherpa campaigns only → wait 10 min
   (`NO_ANSWER` after; a late answer still counts) → any non-negative answer =
   "Company they're renewing" → queued (status `PENDING`) → **auto mode** runs it
   → link sent → ONE reminder at 7 min (OFF by default; the text is a placeholder
@@ -179,14 +181,47 @@ No Google Sheet: every client's details, texts and status are on the page, with
   it resets; only opting out ends it), same number as before, honours
   Pause/Stop and their texting hours like the blast.
 - **Automation status panel** (`components/hs/HsAutomation.tsx`, `GET /hs-auth/campaigns/status`
-  → `automation_status`): top of the tab, polled every 5 s — headline (Working / needs
-  attention / Blocked), issues (HealthSherpa LOGIN wait, AUTO_OFF with clients waiting,
-  STUCK extension, outside texting HOURS per state, PAUSED, CAP, LIMIT, NEEDS_REPLY,
-  ERRORS), live stage counts, today's totals, auto-mode card, recent problems (24 h).
+  → `automation_status`): a SLIM bar at the top of the tab, polled every 5 s (owner
+  rejected a big tile dashboard as "messing the screen"): one health line (Working /
+  Needs attention / Blocked · auto mode · texting hours); alerts ONLY for things a person
+  must act on (LOGIN, AUTO_OFF with clients waiting, STUCK, carrier PAUSED, CAP, LIMIT,
+  NEEDS_REPLY) each with one button; clickable CHIPS (No reply, Replied YES — stage
+  `YES` = `yes_at` set, any stage — HealthSherpa queue, Working now, Link sent, Opted
+  out…) that open a drawer list (`StageListDrawer`, export per list; Working now opens the
+  lead itself); today as a funnel; Details ▾ for hours per state / extension / problems.
   Login wait = a popup with sound + desktop notification on any tab of the page.
   Auto mode is "seen" via `hs_auto_heartbeats` (migration 070): every `/auto/next`
   poll beats (extension version, tab hidden); `/auto/off` on turning it off; not seen
   for 150 s = off (closed tab / asleep PC).
+- **Text one client** (`POST /hs-auth/campaigns/add-client` → `add_client`): type in ONE
+  client (name, DOB, state, mobile; same cleaning as a sheet) → a queued `BLAST` text with
+  its own (editable) message, then the normal flow. Goes into a chosen campaign or the shared
+  "Manual entries" campaign (one per HealthSherpa agent, created on first use). The first
+  text still honours their 8 am–8 pm hours, Pause and DNC; the bulk blast skips rows that
+  already have their own queued BLAST, so nobody gets it twice.
+- **Archive** (its own button, NO dialog, ⓘ explains it; migration 072 `archived_at`): ONLY
+  hides the campaign card from the list (owner: "just to make the UI clean") — it keeps
+  texting, replying, running HealthSherpa, counting; its clients stay in the table.
+  "Show archived (N)" (top right of the campaigns box) shows them; Unarchive brings one back.
+- **Remove** (campaign row, managers): a draft is deleted; a campaign that texted is
+  soft-removed (`hs_text_campaigns.deleted_at`, migration 071) — stopped, queued texts and
+  HealthSherpa jobs cancelled, campaign + clients hidden. Its texts are KEPT on purpose so
+  a late reply is still HealthSherpa's (`hs_saved_removed`: saved, nothing sent, never
+  dialed; STOP still = DNC). Never hard-delete a sent campaign's texts.
+- **File check** (`POST /hs-auth/campaigns/check` → `check_file`, nothing saved): runs as
+  soon as a file is chosen — mandatory columns First/Last Name, DOB, State, **Phone**
+  (a file without Phone is refused, also in `create`), ready / fix-data / no-phone /
+  duplicate / DNC counts and the problem rows. Run + Save as draft stay disabled until OK.
+- **Message library** (`components/hs/hsTemplates.ts` + `HsTemplatePicker.tsx`): the
+  approved "Final Texts — Double Filter Checked" texts (no picture/MMS), styled like the
+  PDF; picking one fills the editable message box (New campaign + Re-text).
+- **Spam pause:** ONE carrier spam refusal (40002/40003) doesn't pause a HealthSherpa
+  campaign (owner: "if messages are going, no need to show carriers blocking") — only
+  `SPAM_PAUSE_MIN` (5) of the last `SPAM_WINDOW` (20) texts. The reason shows only while
+  PAUSED; Stop clears it. (The Auto Dialer's own campaigns still pause on the first.)
+- Extension 1.1.3: HealthSherpa's **State** field is a type-to-search combobox — the
+  extension types the name, keeps the list open, clicks the option (keyboard fallback,
+  then the 2-letter code). The fake has all three kinds: `FAKE_STATE=combo|datalist|select`.
 - Who: view = managers + the campaign's HealthSherpa agent; create / start /
   pause / stop / settings / manual texts = super_admin, admin, head (`CAMPAIGN_ROLES`;
   the campaign's HealthSherpa agent may also text).
