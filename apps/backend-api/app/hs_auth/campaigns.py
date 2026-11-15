@@ -33,10 +33,13 @@ The flow, per client (`convo`):
   BLAST_FAILED   the carrier refused the blast
   CANCELLED      campaign stopped before their blast went out
 
-After the HealthSherpa link is sent (status LINK_SENT): at reminder_minutes (7)
-ONE reminder text (only when reminder_enabled); at
-expire_minutes (15) EXPIRED and the agent moves on (no resend unless
-resend_on_expiry). Timers run in tick() — Celery beat `hs-campaign-tick`, and
+After the HealthSherpa link is sent (status LINK_SENT): at reminder_minutes (5)
+ONE reminder text (only when reminder_enabled); at expire_minutes (10, owner
+2026-11-15: "one at a time with a maximum 10 min wait") the extension stops
+waiting, reports UNCONFIRMED ("Not confirmed — check in HealthSherpa": the link
+still works until HealthSherpa's 15 min, a person checks / marks it authorized)
+and the next client starts. The tick below is only the backstop if the
+extension went quiet (no resend unless resend_on_expiry). Timers run in tick() — Celery beat `hs-campaign-tick`, and
 locally the page's own poll. All of this is synchronous DB code: routes run it
 in the threadpool (never on the event loop).
 
@@ -88,6 +91,8 @@ REPLY_WINDOW = vc.REPLY_WINDOW
 STALE_SENDING = vc.STALE_SENDING
 CANDIDATES = 400
 RESEND_GRACE = timedelta(minutes=3)   # resend_on_expiry: let the extension resend first
+WAIT_GRACE = timedelta(minutes=2)     # the extension ends the wait itself; the tick is the backstop
+MARK_AUTH_FROM = ("UNCONFIRMED", "EXPIRED", "NEEDS_REVIEW")  # "Mark authorized" (checked in HealthSherpa)
 EDITABLE = ("DRAFT", "PAUSED")
 # create / start / pause / stop / settings / manual texts. Owner's call
 # (2026-11-13): admins and head managers (Alan is "head") run campaigns too.
@@ -310,7 +315,7 @@ def update(db: Session, c: HsTextCampaign, data: dict) -> None:
     if "answer_wait_minutes" in data:
         c.answer_wait_minutes = _int(data["answer_wait_minutes"], 1, 120, "Wait for their answer")
     if "expire_minutes" in data:
-        c.expire_minutes = _int(data["expire_minutes"], 5, 60, "Link wait")
+        c.expire_minutes = _int(data["expire_minutes"], 3, 15, "Link wait")  # HealthSherpa links die at 15
     if "resend_on_expiry" in data:
         c.resend_on_expiry = bool(data["resend_on_expiry"])
     if c.reminder_minutes >= c.expire_minutes:
@@ -613,11 +618,11 @@ def _timers(db: Session, tenant_id, now: datetime) -> None:
         c = camps.get(r.campaign_id)
         if not c or not r.link_sent_at:
             continue
-        deadline = r.link_sent_at + timedelta(minutes=c.expire_minutes)
+        deadline = r.link_sent_at + timedelta(minutes=c.expire_minutes) + WAIT_GRACE
         if c.resend_on_expiry and (r.link_sends or 0) < 2:
             deadline += RESEND_GRACE  # the extension resends when HealthSherpa's link expires
         if now >= deadline:
-            service._set_status(r, "EXPIRED", f"Not authorized within {c.expire_minutes} minutes — moved on.", "expired")
+            service._set_status(r, "UNCONFIRMED", unconfirmed_note(c.expire_minutes), "unconfirmed")
             _cancel_queued(db, r, ("REMINDER",))
             continue
         due = r.link_sent_at + timedelta(minutes=c.reminder_minutes)
@@ -1102,7 +1107,8 @@ def _next_job(db: Session, tenant_id, user: User) -> dict:
     # speed is what gets the link authorized (it only lives 15 minutes).
     r, c = waiting[0]
     out = service.start(db, tenant_id, user, str(r.id), auto=True,
-                        resends=1 if c.resend_on_expiry else 0, consent=consent_note(r))
+                        resends=1 if c.resend_on_expiry else 0, consent=consent_note(r),
+                        link_wait=c.expire_minutes)
     out["waiting"] = len(waiting) - 1
     return out
 
@@ -1142,6 +1148,7 @@ def _stage_conditions():
         "HS_RUNNING": ("Running in HealthSherpa", and_(R.convo == "ANSWERED", R.status == "IN_PROGRESS")),
         "LINK_SENT": ("Link sent", and_(R.convo == "ANSWERED", R.status == "LINK_SENT")),
         "AUTHORIZED": ("Authorized", R.status == "AUTHORIZED"),
+        "UNCONFIRMED": ("Check in HealthSherpa", and_(R.convo == "ANSWERED", R.status == "UNCONFIRMED")),
         "EXPIRED": ("Expired", and_(R.convo == "ANSWERED", R.status == "EXPIRED")),
         "HS_REVIEW": ("Needs a look", and_(R.convo == "ANSWERED",
                                            R.status.in_(("NOT_FOUND", "NEEDS_REVIEW", "FAILED", "CANCELLED", "INVALID")))),
@@ -1166,7 +1173,7 @@ def stage_of(r: HsAuthRequest) -> str:
     cv = r.convo
     if cv == "ANSWERED":
         return {"PENDING": "HS_QUEUED", "IN_PROGRESS": "HS_RUNNING", "LINK_SENT": "LINK_SENT",
-                "EXPIRED": "EXPIRED"}.get(r.status, "HS_REVIEW")
+                "EXPIRED": "EXPIRED", "UNCONFIRMED": "UNCONFIRMED"}.get(r.status, "HS_REVIEW")
     return {"QUEUED": "QUEUED", "BLAST_SENT": "TEXTED", "REPLIED": "ASKED", "FOLLOWUP_SENT": "ASKED",
             "NO_ANSWER": "NO_ANSWER", "DNC": "DNC", "INVALID": "INVALID"}.get(cv or "", "NOT_SENT")
 
@@ -1186,6 +1193,7 @@ def _counts(db: Session, ids: list) -> dict:
         func.count(R.id).filter(R.link_sent_at.isnot(None)).label("link_sent"),
         func.count(R.id).filter(R.status == "AUTHORIZED").label("authorized"),
         func.count(R.id).filter(and_(R.convo == "ANSWERED", R.status == "EXPIRED")).label("expired"),
+        func.count(R.id).filter(and_(R.convo == "ANSWERED", R.status == "UNCONFIRMED")).label("unconfirmed"),
         func.count(R.id).filter(R.convo == "DNC").label("dnc"),
         func.count(R.id).filter(R.convo == "INVALID").label("invalid"),
         func.count(R.id).filter(R.convo.in_(("SKIPPED", "BLAST_FAILED"))).label("failed"),
@@ -1617,6 +1625,29 @@ def send_manual(db: Session, tenant_id, user: User, request_id: str, body: str) 
     return client_detail(db, tenant_id, request_id)
 
 
+def unconfirmed_note(minutes: int) -> str:
+    return (f"Link sent — not authorized within {minutes} min, so auto mode moved on. "
+            "The link still works until HealthSherpa's 15 minutes: check this client in HealthSherpa "
+            "and press “Mark authorized” if they finished.")
+
+
+def mark_authorized(db: Session, tenant_id, user: User, request_id: str) -> dict:
+    """A person checked HealthSherpa and the client DID authorize (late, after
+    auto mode moved on). Only from Not confirmed / Expired / Needs a look."""
+    detail = client_detail(db, tenant_id, request_id)
+    r = db.query(HsAuthRequest).filter(HsAuthRequest.id == detail["id"]).first()
+    c = db.query(HsTextCampaign).filter(HsTextCampaign.id == r.campaign_id).first()
+    if not can_text(user, c):
+        raise CampaignError("Only admins, head managers or this campaign's HealthSherpa agent can do that.", 403)
+    if r.status not in MARK_AUTH_FROM:
+        raise CampaignError("Only a client that's Not confirmed, Expired or Needs a look can be marked authorized.", 409)
+    who = f"{user.first_name or ''} {user.last_name or ''}".strip() or user.email
+    service._set_status(r, "AUTHORIZED", f"Marked authorized by {who} (checked in HealthSherpa).", "marked_authorized")
+    _cancel_queued(db, r, ("REMINDER",))
+    db.commit()
+    return client_detail(db, tenant_id, request_id)
+
+
 def mark_handled(db: Session, tenant_id, user: User, request_id: str) -> dict:
     detail = client_detail(db, tenant_id, request_id)
     r = db.query(HsAuthRequest).filter(HsAuthRequest.id == detail["id"]).first()
@@ -1679,7 +1710,7 @@ def export_csv(db: Session, tenant_id, *, campaign: Optional[str], stage: Option
 
 def sim_age(db: Session, tenant_id, request_id: str, minutes: float) -> dict:
     """Move this client's conversation clocks back by `minutes`, so the 10-min
-    answer wait / 7-min reminder / 15-min expiry can be tested in seconds.
+    answer wait / 5-min reminder / 10-min link wait can be tested in seconds.
     Only while the Telnyx simulator is on — never in production."""
     if not telnyx.simulating():
         raise CampaignError("simulator is off", 404)

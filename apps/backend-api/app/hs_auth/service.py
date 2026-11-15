@@ -10,6 +10,10 @@ Statuses
   NEEDS_REVIEW  the extension stopped on purpose (several people, phone on file
                 differs from the sheet, already in the agent's clients, …)
   EXPIRED       the client didn't authorize in time (after the allowed resends)
+  UNCONFIRMED   text campaigns: the link was sent but the client hadn't authorized
+                within the campaign's wait (10 min) — the extension moved on. The
+                link still works until HealthSherpa's 15 min, so a person checks
+                it in HealthSherpa (and can mark it authorized).
   FAILED        something unexpected (page changed, logged out, tab closed…)
   CANCELLED     the agent pressed Stop
 
@@ -42,14 +46,14 @@ from app.models.user import User
 ET = ZoneInfo("America/New_York")
 
 ACTIVE = ("IN_PROGRESS", "LINK_SENT")
-FINAL = ("AUTHORIZED", "NOT_FOUND", "NEEDS_REVIEW", "EXPIRED", "FAILED", "CANCELLED", "INVALID")
-STARTABLE = ("PENDING", "NOT_FOUND", "NEEDS_REVIEW", "EXPIRED", "FAILED", "CANCELLED")
+FINAL = ("AUTHORIZED", "NOT_FOUND", "NEEDS_REVIEW", "EXPIRED", "UNCONFIRMED", "FAILED", "CANCELLED", "INVALID")
+STARTABLE = ("PENDING", "NOT_FOUND", "NEEDS_REVIEW", "EXPIRED", "UNCONFIRMED", "FAILED", "CANCELLED")
 REPORTABLE = ACTIVE + FINAL
 ALL_STATUSES = ("PENDING",) + ACTIVE + FINAL
 
 STATUS_LABELS = {
     "PENDING": "Ready", "IN_PROGRESS": "Running", "LINK_SENT": "Link sent", "AUTHORIZED": "Authorized",
-    "NOT_FOUND": "Not found", "NEEDS_REVIEW": "Needs review", "EXPIRED": "Expired", "FAILED": "Failed",
+    "NOT_FOUND": "Not found", "NEEDS_REVIEW": "Needs review", "EXPIRED": "Expired", "UNCONFIRMED": "Not confirmed", "FAILED": "Failed",
     "CANCELLED": "Stopped", "INVALID": "Fix data", "TEXTING": "Texting",
 }
 
@@ -322,7 +326,8 @@ def detail(db: Session, tenant_id, user: User, request_id: str) -> dict:
 # ---------------------------------------------------------------- actions
 
 def start(db: Session, tenant_id, user: User, request_id: str, *, auto: bool = False,
-          resends: Optional[int] = None, consent: Optional[str] = None) -> dict:
+          resends: Optional[int] = None, consent: Optional[str] = None,
+          link_wait: Optional[int] = None) -> dict:
     """auto=True: a HealthSherpa text-campaign client started by the agent's
     auto-mode tab (campaigns.next_job). Nobody ticks the consent confirmation,
     so `consent` (their YES + answer, with times) goes in the job history."""
@@ -385,6 +390,10 @@ def start(db: Session, tenant_id, user: User, request_id: str, *, auto: bool = F
             "max_resends": max_resends() if resends is None else resends,
             "plan_year": 2027,
             "auto": auto,
+            # Minutes to wait for the client after the link is sent; then the
+            # extension reports UNCONFIRMED and moves on. None = until
+            # HealthSherpa's own link expiry (manual starts).
+            "link_wait_minutes": link_wait,
         },
         "usage": usage(db, tenant_id, user.id),
     }

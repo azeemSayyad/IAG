@@ -58,7 +58,7 @@ class HsAuthRequest(Base):
     assigned_to = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True, index=True)
 
     # PENDING | INVALID | IN_PROGRESS | LINK_SENT | AUTHORIZED | NOT_FOUND |
-    # NEEDS_REVIEW | EXPIRED | FAILED | CANCELLED   (see app/hs_auth/service.py)
+    # NEEDS_REVIEW | EXPIRED | UNCONFIRMED | FAILED | CANCELLED   (see app/hs_auth/service.py)
     status = Column(String(16), nullable=False, default="PENDING", server_default="PENDING")
     status_detail = Column(Text, nullable=True)
     step = Column(String(40), nullable=True)  # last step the extension reported
@@ -160,8 +160,8 @@ class HsTextCampaign(Base):
     answer_wait_minutes = Column(Integer, nullable=False, default=10, server_default="10")
     reminder_enabled = Column(Boolean, nullable=False, default=False, server_default="false")
     reminder_text = Column(Text, nullable=True)
-    reminder_minutes = Column(Integer, nullable=False, default=7, server_default="7")
-    expire_minutes = Column(Integer, nullable=False, default=15, server_default="15")
+    reminder_minutes = Column(Integer, nullable=False, default=5, server_default="5")
+    expire_minutes = Column(Integer, nullable=False, default=10, server_default="10")  # link wait, then UNCONFIRMED
     resend_on_expiry = Column(Boolean, nullable=False, default=False, server_default="false")
 
     created_by = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)

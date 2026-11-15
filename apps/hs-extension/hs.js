@@ -413,7 +413,7 @@
     var body = Object.assign({ step: "done", status: status, detail: detail }, extra || {});
     if (S.appId && !body.hs_app_id) body.hs_app_id = S.appId;
     await send({ kind: "report", id: job.id, body: body });
-    overlay.final(detail, status === "AUTHORIZED" ? "ok" : (status === "NEEDS_REVIEW" || status === "LINK_SENT") ? "warn" : "bad", status);
+    overlay.final(detail, status === "AUTHORIZED" ? "ok" : (status === "NEEDS_REVIEW" || status === "LINK_SENT" || status === "UNCONFIRMED") ? "warn" : "bad", status);
     throw DONE;
   }
 
@@ -446,7 +446,7 @@
         ensure();
         box.classList.add("iag-tone-" + (tone || "ok"));
         var label = { AUTHORIZED: "Authorized ✓", NOT_FOUND: "Not found", NEEDS_REVIEW: "Needs your review",
-          EXPIRED: "Link expired", FAILED: "Stopped — problem", INVALID: "Check the client's details" }[status] || "";
+          EXPIRED: "Link expired", UNCONFIRMED: "Not confirmed — moved on", FAILED: "Stopped — problem", INVALID: "Check the client's details" }[status] || "";
         msgEl.textContent = (label ? label + " — " : "") + (m || "");
         timerEl.textContent = "";
         var stopBtn = box.querySelector(".iag-ov-stop");
@@ -764,7 +764,7 @@
     if (pageHas(/authorization complete/i, modal)) { await doFinish(); return; }
     if (findButton(/^refresh status$/i, modal)) {
       // A link was already sent for this client (e.g. a retry) — just wait.
-      await save({ phase: "link_sent", linkSends: Math.max(1, S.linkSends || 0) });
+      await save({ phase: "link_sent", linkSends: Math.max(1, S.linkSends || 0), linkSentAt: S.linkSentAt || Date.now() });
       await step("link", "A link was already sent — waiting for the client", { status: "LINK_SENT" });
       await waitForClient();
       return;
@@ -787,7 +787,7 @@
       if (!(await ensureChecked(consent))) await final("FAILED", "Couldn't tick “Include and save Consumer Consent”.");
     }
 
-    await save({ phase: "link_sent", linkSends: 1 });
+    await save({ phase: "link_sent", linkSends: 1, linkSentAt: Date.now() });
     await click(textBtn);
     var waiting = await waitFor(function () {
       var m = authModal();
@@ -803,8 +803,28 @@
     var lastRefresh = Date.now();
     var missingSince = 0;
     var maxSends = (job.max_resends || 0) + 1;
+    // Text campaigns (owner, 2026-11-15): wait at most link_wait_minutes (10),
+    // then report UNCONFIRMED and free the agent for the next client. The link
+    // keeps working until HealthSherpa's 15 min; a person checks it by hand.
+    var waitMs = job.link_wait_minutes ? job.link_wait_minutes * 60000 : 0;
+    var sentAt = S.linkSentAt || Date.now();
+    var lastCheck = false;
     while (true) {
       checkStop();
+      if (waitMs && Date.now() - sentAt >= waitMs) {
+        var mm0 = authModal();
+        if (mm0 && !lastCheck) {
+          // One last Refresh status before moving on — they may have just finished.
+          lastCheck = true;
+          var rb0 = findButton(/^refresh status$/i, mm0);
+          if (rb0) { overlay.update("Last status check…"); rb0.click(); await sleep(4000); continue; }
+        }
+        if (!(mm0 && (pageHas(/authorization complete/i, mm0) || findButton(/^finish$/i, mm0)))) {
+          await final("UNCONFIRMED", "Link sent — not authorized within " + job.link_wait_minutes +
+            " min, so auto mode moved on. The link still works until HealthSherpa's 15 minutes: check this client in HealthSherpa " +
+            "and press “Mark authorized” if they finished.");
+        }
+      }
       var m = authModal();
       if (!m) {
         if (isProfilePage() && !pageHas(/pending authorization/i)) { await final("AUTHORIZED", "Authorized for " + job.plan_year + "."); }
@@ -822,7 +842,10 @@
       var t = text(m);
       var mm = t.match(/expire[sd]? in\s*(\d+):(\d{2})/i);
       var left = mm ? (+mm[1]) * 60 + (+mm[2]) : null;
-      if (left !== null) overlay.timer(mm[1] + ":" + mm[2]);
+      if (waitMs) {
+        var rest = Math.max(0, Math.round((waitMs - (Date.now() - sentAt)) / 1000));
+        overlay.timer("next in " + Math.floor(rest / 60) + ":" + String(rest % 60).padStart(2, "0"));
+      } else if (left !== null) overlay.timer(mm[1] + ":" + mm[2]);
       var expired = left === 0 || /\bexpired\b/i.test(t);
 
       if (expired) {

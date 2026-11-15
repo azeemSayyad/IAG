@@ -134,9 +134,16 @@ No Google Sheet: every client's details, texts and status are on the page, with
   HealthSherpa campaigns only → wait 10 min
   (`NO_ANSWER` after; a late answer still counts) → any non-negative answer =
   "Company they're renewing" → queued (status `PENDING`) → **auto mode** runs it
-  → link sent → ONE reminder at 7 min (OFF by default; the text is a placeholder
-  until approved 10DLC wording is pasted in Settings) → `EXPIRED` at 15 min, no
-  resend unless the campaign setting says so. STOP / no / abuse / wrong number at
+  → link sent → ONE reminder at 5 min (OFF by default; the text is a placeholder
+  until approved 10DLC wording is pasted in Settings) → **at 10 min the extension
+  stops waiting** (owner, 2026-11-15: one client at a time, max 10 min) and reports
+  `UNCONFIRMED` ("Check in HealthSherpa" — the link still works until HealthSherpa's
+  15 min; a person checks and presses **Mark authorized**, `POST
+  /campaigns/clients/{id}/authorized`) → the next client starts. The job carries
+  `link_wait_minutes` (= campaign `expire_minutes`, 3–15, migration 074 sets 10/5);
+  the tick only backstops it (+2 min) if the extension went quiet. No resend unless
+  the campaign setting says so. More throughput = more HealthSherpa agent accounts,
+  never parallel clients. STOP / no / abuse / wrong number at
   ANY point → Do-Not-Call (same reasons as the dialer), texts cancelled, any
   queued or running HealthSherpa job cancelled. "Fix data" rows aren't texted.
 - **Reply routing:** `voice_dialer/service.on_inbound_sms` calls
@@ -219,6 +226,10 @@ No Google Sheet: every client's details, texts and status are on the page, with
   campaign (owner: "if messages are going, no need to show carriers blocking") — only
   `SPAM_PAUSE_MIN` (5) of the last `SPAM_WINDOW` (20) texts. The reason shows only while
   PAUSED; Stop clears it. (The Auto Dialer's own campaigns still pause on the first.)
+- Extension 1.1.4: **ONE HealthSherpa tab** for every client — reuses the last job's tab,
+  else any open HealthSherpa tab (the agent's logged-in one), else opens one; extra
+  HealthSherpa tabs the extension itself opened (`iagOpenedTabs`, session) are closed, the
+  agent's own never; the working tab stays open between clients.
 - Extension 1.1.3: HealthSherpa's **State** field is a type-to-search combobox — the
   extension types the name, keeps the list open, clicks the option (keyboard fallback,
   then the 2-letter code). The fake has all three kinds: `FAKE_STATE=combo|datalist|select`.

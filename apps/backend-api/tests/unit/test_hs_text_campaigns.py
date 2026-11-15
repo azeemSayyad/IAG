@@ -237,13 +237,16 @@ def _to_link_sent(e, phone, first):
     return job
 
 
-def test_reminder_once_at_7_and_expiry_at_15(env):
+def test_reminder_once_at_5_and_unconfirmed_after_10(env):
+    """Owner, 2026-11-15: reminder at 5 min, wait at most 10 min, then move on."""
     c = _campaign(env)
+    assert (c.reminder_minutes, c.expire_minutes) == (5, 10)
     hc.update(env.db, c, {"reminder_enabled": True})
     _blast_all(env)
-    _to_link_sent(env, "+13055550103", "Cy")
+    job = _to_link_sent(env, "+13055550103", "Cy")
+    assert job["link_wait_minutes"] == 10  # the extension stops waiting itself
     n = len(env.sent)
-    env.clock.add(6)
+    env.clock.add(4)
     hc.tick(env.db, env.tenant)
     assert len(env.sent) == n
     env.clock.add(1.5)
@@ -254,10 +257,37 @@ def test_reminder_once_at_7_and_expiry_at_15(env):
     hc.tick(env.db, env.tenant)
     assert len(env.sent) == n + 1  # only ONE reminder
     assert _row(env, "Cy").status == "LINK_SENT"
-    env.clock.add(5)
+    # Backstop: the extension went quiet -> Not confirmed shortly after 10 min.
+    env.clock.add(4)
     hc.tick(env.db, env.tenant)
     cy = _row(env, "Cy")
-    assert cy.status == "EXPIRED" and cy.job_token_hash is None
+    assert cy.status == "UNCONFIRMED" and cy.job_token_hash is None and hc.stage_of(cy) == "UNCONFIRMED"
+
+
+def test_unconfirmed_moves_on_and_can_be_marked_authorized(env):
+    _campaign(env)
+    _blast_all(env)
+    job = _to_link_sent(env, "+13055550103", "Cy")
+    _reply(env, "+13055550104", "yes")
+    _reply(env, "+13055550104", "Ambetter")
+    assert hc.next_job(env.db, env.tenant, env.stan)["reason"] == "running"
+    # The extension's 10 minutes are up: it reports UNCONFIRMED and the next client starts.
+    out = service.report(env.db, job["id"], job["token"],
+                         {"step": "unconfirmed", "status": "UNCONFIRMED", "detail": hc.unconfirmed_note(10)})
+    assert out["stop"] is True
+    nxt = hc.next_job(env.db, env.tenant, env.stan)["job"]
+    assert nxt and nxt["first_name"] == "Di"
+    cy = _row(env, "Cy")
+    assert hc.stage_of(cy) == "UNCONFIRMED"
+    assert hc.overview(env.db, env.tenant, env.stan)["campaigns"][0]["counts"]["unconfirmed"] == 1
+    # Checked in HealthSherpa: they finished at minute 12.
+    d = hc.mark_authorized(env.db, env.tenant, env.stan, str(cy.id))
+    assert d["stage"] == "AUTHORIZED"
+    cy = _row(env, "Cy")
+    assert cy.status == "AUTHORIZED" and cy.authorized_at is not None
+    assert any(e["step"] == "marked_authorized" for e in cy.events)
+    with pytest.raises(hc.CampaignError):
+        hc.mark_authorized(env.db, env.tenant, env.stan, str(cy.id))  # only from Not confirmed / Expired / Needs a look
 
 
 def test_reminder_off_by_default(env):

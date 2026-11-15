@@ -77,7 +77,7 @@ function broadcast(update) {
   });
 }
 
-var FINAL = ["AUTHORIZED", "NOT_FOUND", "NEEDS_REVIEW", "EXPIRED", "FAILED", "CANCELLED", "INVALID"];
+var FINAL = ["AUTHORIZED", "NOT_FOUND", "NEEDS_REVIEW", "EXPIRED", "UNCONFIRMED", "FAILED", "CANCELLED", "INVALID"];
 
 function finish(state, status) {
   badge(status === "AUTHORIZED" ? "✓" : "", status === "AUTHORIZED" ? "#2f855a" : null);
@@ -85,10 +85,68 @@ function finish(state, status) {
   return setState(null);
 }
 
-/* Open (or reuse) the job's HealthSherpa tab. The job is SAVED with its tab id
-   BEFORE the tab navigates: hs.js asks for its job as soon as the page loads,
-   and a fast load used to ask before the save landed, get nothing, and leave
-   the client stuck on "Opening HealthSherpa". */
+/* ONE HealthSherpa tab for every client (owner, 2026-11-15: "use only one
+   Sherpa tab for all"). Order: the tab the last job used → any open
+   HealthSherpa tab (e.g. the one the agent logged in with) → a new tab only if
+   there is none. Extra HealthSherpa tabs that THIS extension opened earlier are
+   closed; the agent's own tabs are never touched. The working tab stays open
+   after a client finishes, so the next one starts logged in.
+   The job is SAVED with its tab id BEFORE the tab navigates: hs.js asks for its
+   job as soon as the page loads, and a fast load used to ask before the save
+   landed, get nothing, and leave the client stuck on "Opening HealthSherpa". */
+var HS_TAB_URLS = ["https://www.healthsherpa.com/*", "https://healthsherpa.com/*"];
+var OPENED_KEY = "iagOpenedTabs"; // tab ids this extension created (this browser session)
+
+function isHsUrl(u) {
+  try { return /(^|\.)healthsherpa\.com$/i.test(new URL(u).hostname); } catch (e) { return false; }
+}
+function tabGet(id) {
+  return new Promise(function (res) {
+    if (!id) return res(null);
+    chrome.tabs.get(id, function (t) { res(chrome.runtime.lastError ? null : (t || null)); });
+  });
+}
+function opened() {
+  return chrome.storage.session.get(OPENED_KEY).then(function (r) { return r[OPENED_KEY] || []; });
+}
+function setOpened(ids) {
+  var o = {}; o[OPENED_KEY] = ids; return chrome.storage.session.set(o);
+}
+
+/* The tab to use, or null = open one. Our last tab (still HealthSherpa, or the
+   blank tab we just made) wins, then a HealthSherpa tab we opened, then the
+   agent's most recently used HealthSherpa tab. */
+function pickHsTab(lastId, mine) {
+  return tabGet(lastId).then(function (last) {
+    if (last && (isHsUrl(last.url || last.pendingUrl) || /^about:blank/.test(last.url || ""))) return last;
+    return new Promise(function (res) {
+      chrome.tabs.query({ url: HS_TAB_URLS }, function (tabs) {
+        tabs = (tabs || []).filter(function (t) { return !t.incognito; });
+        if (!tabs.length) return res(null);
+        tabs.sort(function (a, b) {
+          var am = mine.indexOf(a.id) >= 0 ? 1 : 0, bm = mine.indexOf(b.id) >= 0 ? 1 : 0;
+          if (am !== bm) return bm - am;
+          return (b.lastAccessed || 0) - (a.lastAccessed || 0);
+        });
+        res(tabs[0]);
+      });
+    });
+  });
+}
+
+/* Close the HealthSherpa tabs this extension opened, except `keepId`. */
+function closeExtraTabs(keepId) {
+  return opened().then(function (ids) {
+    return Promise.all(ids.filter(function (id) { return id !== keepId; }).map(function (id) {
+      return tabGet(id).then(function (t) {
+        if (t && (isHsUrl(t.url || t.pendingUrl) || /^about:blank/.test(t.url || ""))) {
+          return new Promise(function (r) { chrome.tabs.remove(id, function () { void chrome.runtime.lastError; r(); }); });
+        }
+      });
+    })).then(function () { return setOpened(keepId && ids.indexOf(keepId) >= 0 ? [keepId] : []); });
+  });
+}
+
 function openHsTab(state) {
   return new Promise(function (resolve) {
     var go = function (tabId, windowId) {
@@ -99,17 +157,17 @@ function openHsTab(state) {
           // the person is doing. (The tab stays the active one in its window, so
           // Chrome doesn't throttle its timers.)
           if (windowId && !state.job.auto) chrome.windows.update(windowId, { focused: true });
-          resolve(tabId);
+          closeExtraTabs(tabId).then(function () { resolve(tabId); });
         });
       });
     };
-    var create = function () {
-      chrome.tabs.create({ url: "about:blank", active: true }, function (tab) { go(tab.id, tab.windowId); });
-    };
-    if (!state.tabId) return create();
-    chrome.tabs.get(state.tabId, function (tab) {
-      if (chrome.runtime.lastError || !tab) return create();
-      go(tab.id, tab.windowId);
+    opened().then(function (mine) {
+      pickHsTab(state.tabId, mine).then(function (tab) {
+        if (tab) return go(tab.id, tab.windowId);
+        chrome.tabs.create({ url: "about:blank", active: true }, function (t) {
+          setOpened(mine.concat([t.id])).then(function () { go(t.id, t.windowId); });
+        });
+      });
     });
   });
 }

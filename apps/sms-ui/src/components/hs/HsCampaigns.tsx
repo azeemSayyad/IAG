@@ -64,12 +64,12 @@ const STAGE_CLS: Record<string, string> = {
   NEEDS_REPLY: "bg-danger text-white",
   QUEUED: "bg-black/5 text-ink-muted", TEXTED: "bg-accent/10 text-accent", ASKED: "bg-pending/15 text-pending",
   NO_ANSWER: "bg-black/5 text-ink-soft", HS_QUEUED: "bg-accent/10 text-accent", HS_RUNNING: "bg-accent text-white",
-  LINK_SENT: "bg-pending/15 text-pending", AUTHORIZED: "bg-success/15 text-success", EXPIRED: "bg-danger/10 text-danger",
+  LINK_SENT: "bg-pending/15 text-pending", AUTHORIZED: "bg-success/15 text-success", UNCONFIRMED: "bg-pending/15 text-pending", EXPIRED: "bg-danger/10 text-danger",
   HS_REVIEW: "bg-pending/15 text-pending", DNC: "bg-danger/10 text-danger", NOT_SENT: "bg-black/5 text-ink-muted",
   INVALID: "bg-danger/10 text-danger",
 };
 const STAGE_ORDER = ["ALL", "NEEDS_REPLY", "QUEUED", "TEXTED", "ASKED", "NO_ANSWER", "HS_QUEUED", "HS_RUNNING", "LINK_SENT",
-  "AUTHORIZED", "EXPIRED", "HS_REVIEW", "DNC", "NOT_SENT", "INVALID"];
+  "AUTHORIZED", "UNCONFIRMED", "EXPIRED", "HS_REVIEW", "DNC", "NOT_SENT", "INVALID"];
 // Each campaign state has its own colour so the list reads at a glance.
 const CAMP_PILL: Record<string, string> = {
   DRAFT: "bg-black/5 text-ink-muted", RUNNING: "bg-success text-white", PAUSED: "bg-pending text-white",
@@ -410,7 +410,7 @@ function StageDetail({ c }: { c: Client }) {
   const line = (() => {
     switch (c.stage) {
       case "AUTHORIZED": return c.authorized_at ? `Authorized ${new Date(c.authorized_at).toLocaleString()}` : null;
-      case "HS_QUEUED": case "HS_RUNNING": case "LINK_SENT": case "EXPIRED": case "HS_REVIEW": return c.status_detail;
+      case "HS_QUEUED": case "HS_RUNNING": case "LINK_SENT": case "UNCONFIRMED": case "EXPIRED": case "HS_REVIEW": return c.status_detail;
       case "ASKED": return c.followup_sent_at ? `Asked ${ago(c.followup_sent_at)}` : "Sending the follow-up…";
       default: return c.convo_detail;
     }
@@ -623,7 +623,8 @@ function NewCampaignDrawer({ overview, agents, onClose, onCreated }: {
                 body={previewText(followup)} />
         <p className="text-xs text-ink-muted">
           Their answer (company name, “ok”, …) queues them for HealthSherpa. No answer in 10 minutes = “No answer yet”;
-          a later answer still queues them. The 7-minute reminder is OFF until the wording is approved (Settings).
+          a later answer still queues them. After the link: wait up to 10 minutes, then the next client (“Check in HealthSherpa”).
+          The 5-minute reminder is OFF until the wording is approved (Settings).
         </p>
       </DrawerSection>
     </Drawer>
@@ -1002,7 +1003,7 @@ function SettingsDrawer({ c, approvedFollowup, onClose, onSaved }: {
         {num("answer_wait_minutes")}
       </Field>
       <DrawerSection icon="🔗" title="After the HealthSherpa link is sent">
-        <Field label="Link wait (minutes)" hint="Not authorized by then = Expired, and auto mode moves on.">{num("expire_minutes")}</Field>
+        <Field label="Link wait (minutes)" hint="Not authorized by then = “Check in HealthSherpa”, and auto mode moves to the next client. The link itself works 15 minutes.">{num("expire_minutes")}</Field>
         <label className="flex items-center gap-2 text-xs text-ink">
           <input type="checkbox" checked={f.resend_on_expiry} onChange={(e) => setF({ ...f, resend_on_expiry: e.target.checked })} />
           Resend the link once when it expires (HealthSherpa's “Resend by text”)
@@ -1039,7 +1040,7 @@ function Bubble({ who, body, inbound, at, note }: { who: string; body: string | 
    list stays under "All steps"). */
 const EVENT_LINE: Record<string, string> = {
   PENDING: "Queued for HealthSherpa", IN_PROGRESS: "HealthSherpa lookup started", LINK_SENT: "HealthSherpa texted them the link",
-  AUTHORIZED: "Authorized ✓", EXPIRED: "Link expired — not authorized", NOT_FOUND: "Not found in HealthSherpa",
+  AUTHORIZED: "Authorized ✓", UNCONFIRMED: "Not confirmed in time", EXPIRED: "Link expired — not authorized", NOT_FOUND: "Not found in HealthSherpa",
   NEEDS_REVIEW: "HealthSherpa needs a look", FAILED: "HealthSherpa stopped — problem", CANCELLED: "HealthSherpa stopped",
   INVALID: "HealthSherpa didn't accept the search",
 };
@@ -1108,6 +1109,12 @@ function ClientDrawer({ c, stages, onClose, onChanged, onEdit, onRequeue, onStop
     } catch (e) { setErr(errText(e)); }
     finally { setSending(false); }
   };
+  // Checked in HealthSherpa: they finished after auto mode moved on.
+  const canMarkAuth = ["UNCONFIRMED", "EXPIRED"].includes(c.stage) || (c.stage === "HS_REVIEW" && c.status === "NEEDS_REVIEW");
+  const markAuthorized = async () => {
+    try { onChanged(await api<Client>(`/hs-auth/campaigns/clients/${c.id}/authorized`, { method: "POST" })); }
+    catch (e) { setErr(errText(e)); }
+  };
   const handled = async () => {
     try { onChanged(await api<Client>(`/hs-auth/campaigns/clients/${c.id}/handled`, { method: "POST" })); }
     catch (e) { setErr(errText(e)); }
@@ -1117,7 +1124,7 @@ function ClientDrawer({ c, stages, onClose, onChanged, onEdit, onRequeue, onStop
     fmtPhone(c.phone), c.dob ? fmtDob(c.dob) : null, c.state, c.campaign_name,
   ].filter(Boolean).join(" · ");
   const action = c.stage === "INVALID" ? { label: "Fix data", run: onEdit }
-    : (c.stage === "HS_REVIEW" || c.stage === "EXPIRED") ? { label: "Queue for HealthSherpa again", run: onRequeue }
+    : (c.stage === "HS_REVIEW" || c.stage === "EXPIRED" || c.stage === "UNCONFIRMED") ? { label: "Queue for HealthSherpa again", run: onRequeue }
     : (c.stage === "HS_RUNNING" || c.stage === "LINK_SENT") ? { label: "Stop HealthSherpa", run: onStop } : null;
 
   return (
@@ -1128,6 +1135,13 @@ function ClientDrawer({ c, stages, onClose, onChanged, onEdit, onRequeue, onStop
             </>}
             footer={
               <div className="w-full space-y-1.5" data-testid="hs-composer">
+                {canMarkAuth && (
+                  <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-pending/30 bg-pending/5 px-3 py-2 text-xs"
+                       data-testid="hs-mark-auth">
+                    <span className="text-ink-soft"><b className="text-pending">{c.stage === "UNCONFIRMED" ? "Not confirmed." : "Not authorized here."}</b> Check {c.first_name} in HealthSherpa — did they authorize?</span>
+                    <button className={`${btn} px-3 py-1 text-[0.7rem]`} onClick={markAuthorized}>✓ Mark authorized</button>
+                  </div>
+                )}
                 {err && <div className="rounded-lg bg-danger/10 px-3 py-1.5 text-xs font-semibold text-danger">{err}</div>}
                 {c.can_text ? (
                   <>

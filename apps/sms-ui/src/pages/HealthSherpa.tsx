@@ -70,6 +70,7 @@ const STATUS: Record<string, { label: string; cls: string; hint: string }> = {
   NOT_FOUND: { label: "Not found", cls: "bg-black/5 text-ink-muted", hint: "No 2027 application found." },
   NEEDS_REVIEW: { label: "Needs review", cls: "bg-pending/15 text-pending", hint: "Stopped on purpose — check it yourself in HealthSherpa." },
   EXPIRED: { label: "Expired", cls: "bg-danger/10 text-danger", hint: "The client didn't authorize in time." },
+  UNCONFIRMED: { label: "Not confirmed", cls: "bg-pending/15 text-pending", hint: "Link sent, not authorized within the wait — auto mode moved on. Check in HealthSherpa." },
   FAILED: { label: "Failed", cls: "bg-danger/10 text-danger", hint: "Something unexpected happened." },
   CANCELLED: { label: "Stopped", cls: "bg-black/5 text-ink-muted", hint: "Stopped by you." },
   INVALID: { label: "Fix data", cls: "bg-danger/10 text-danger", hint: "This row can't be searched — Edit it." },
@@ -77,10 +78,10 @@ const STATUS: Record<string, { label: string; cls: string; hint: string }> = {
 const FILTERS: [string, string][] = [
   ["ALL", "All"], ["PENDING", "Ready"], ["IN_PROGRESS", "Running"], ["LINK_SENT", "Link sent"],
   ["AUTHORIZED", "Authorized"], ["NEEDS_REVIEW", "Needs review"], ["NOT_FOUND", "Not found"],
-  ["EXPIRED", "Expired"], ["FAILED", "Failed"], ["INVALID", "Fix data"], ["CANCELLED", "Stopped"],
+  ["EXPIRED", "Expired"], ["UNCONFIRMED", "Not confirmed"], ["FAILED", "Failed"], ["INVALID", "Fix data"], ["CANCELLED", "Stopped"],
 ];
 const ACTIVE = new Set(["IN_PROGRESS", "LINK_SENT"]);
-const STARTABLE = new Set(["PENDING", "NOT_FOUND", "NEEDS_REVIEW", "EXPIRED", "FAILED", "CANCELLED"]);
+const STARTABLE = new Set(["PENDING", "NOT_FOUND", "NEEDS_REVIEW", "EXPIRED", "UNCONFIRMED", "FAILED", "CANCELLED"]);
 const LINK_MINUTES = 15;
 
 const STEP_LABEL: Record<string, string> = {

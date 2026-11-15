@@ -272,6 +272,14 @@ def campaigns_client_handled(request_id: str, db: Session = Depends(get_db),
     return _call(campaigns.mark_handled, db, tenant_id, user, request_id)
 
 
+@router.post("/campaigns/clients/{request_id}/authorized")
+def campaigns_client_authorized(request_id: str, db: Session = Depends(get_db),
+                                tenant_id: str = Depends(get_tenant_id), user: User = Depends(get_current_active_user)):
+    """Checked in HealthSherpa: the client authorized after auto mode moved on."""
+    _viewer(db, tenant_id, user)
+    return _call(campaigns.mark_authorized, db, tenant_id, user, request_id)
+
+
 @router.get("/campaigns/export")
 def campaigns_export(
     campaign: Optional[str] = Query(None),
