@@ -253,6 +253,9 @@ No Google Sheet: every client's details, texts and status are on the page, with
   counts. Email only — the phone is never changed. The second run counts toward the daily
   limit. Real HealthSherpa's profile button for the email run is UNVERIFIED (the fake has
   "Resend authorization"); if it differs the run stops with a `diag`. Fake: last name `Mailer`.
+- Extension 1.1.6 (seen live 2026-11-16): HealthSherpa's waiting window says **"Refresh"** (not
+  "Refresh status") and hides "Resend by email / text" behind **"Show resend options"** — the
+  extension accepts both labels and opens the options first. The fake copies this.
 - Extension 1.1.4: **ONE HealthSherpa tab** for every client — reuses the last job's tab,
   else any open HealthSherpa tab (the agent's logged-in one), else opens one; extra
   HealthSherpa tabs the extension itself opened (`iagOpenedTabs`, session) are closed, the

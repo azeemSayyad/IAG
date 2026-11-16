@@ -495,7 +495,7 @@
         // holds the popup's own buttons. (A bare [class*=modal] match is NOT
         // enough — the header bar is often "modal-header" and holds only ×.)
         return heads[i].closest("[role=dialog], [aria-modal=true]")
-          || climbTo(heads[i], function (el) { return !!findButton(/^(refresh status|text link to.*|email link to.*|finish|resend by text)$/i, el); })
+          || climbTo(heads[i], function (el) { return !!findButton(/^(refresh|refresh status|text link to.*|email link to.*|finish|resend by text|resend by email|show resend options)$/i, el); })
           || heads[i].parentElement;
       }
     }
@@ -787,7 +787,7 @@
 
     var modal = authModal();
     if (pageHas(/authorization complete/i, modal)) { await doFinish(); return; }
-    if (findButton(/^refresh status$/i, modal)) {
+    if (findButton(RE_REFRESH, modal)) {
       // A link was already sent for this client (e.g. a retry) — just wait.
       await save({ phase: "link_sent", linkSends: Math.max(1, S.linkSends || 0), linkSentAt: S.linkSentAt || Date.now() });
       await step("link", "A link was already sent — waiting for the client", { status: "LINK_SENT" });
@@ -817,7 +817,7 @@
     await click(textBtn);
     var waiting = await waitFor(function () {
       var m = authModal();
-      return m && (findButton(/^refresh status$/i, m) || pageHas(/waiting for|text sent to/i, m) || pageHas(/authorization complete/i, m));
+      return m && (findButton(RE_REFRESH, m) || pageHas(/waiting for|text sent to/i, m) || pageHas(/authorization complete/i, m));
     }, 20000, 500);
     if (!waiting) await final("FAILED", "Clicked “Text link” but HealthSherpa didn't confirm the text was sent.");
     await step("link", "Text sent to " + fmtPhone(hsPhone) + " — waiting for the client to authorize",
@@ -829,6 +829,9 @@
      HealthSherpa shows under the phone ("Email link to …") and stop — the portal
      texts the client to confirm it, then queues them again to send by email.
      No email = skipped with an error. */
+  // HealthSherpa's waiting window (seen live 2026-11-16): "Refresh" (was
+  // "Refresh status"), and the resend buttons sit behind "Show resend options".
+  var RE_REFRESH = /^refresh( status)?$/i;
   var EMAIL_IN = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i;
   async function emailCheck(reason) {
     var eb = findButton(/^email link to/i, authModal() || document);
@@ -859,7 +862,7 @@
     await click(eb);
     var ok = await waitFor(function () {
       var m = authModal();
-      return m && (findButton(/^refresh status$/i, m) || pageHas(/waiting for|email sent to|sent to/i, m) || pageHas(/authorization complete/i, m));
+      return m && (findButton(RE_REFRESH, m) || pageHas(/waiting for|email sent to|sent to/i, m) || pageHas(/authorization complete/i, m));
     }, 20000, 500);
     if (!ok) await final("FAILED", "Clicked “Email link” but HealthSherpa didn't confirm the email was sent.");
     await step("link", "Email sent to " + em + " — waiting for the client to authorize", { status: "LINK_SENT", link_sent: true });
@@ -883,7 +886,7 @@
         if (mm0 && !lastCheck) {
           // One last Refresh status before moving on — they may have just finished.
           lastCheck = true;
-          var rb0 = findButton(/^refresh status$/i, mm0);
+          var rb0 = findButton(RE_REFRESH, mm0);
           if (rb0) { overlay.update("Last status check…"); rb0.click(); await sleep(4000); continue; }
         }
         if (!(mm0 && (pageHas(/authorization complete/i, mm0) || findButton(/^finish$/i, mm0)))) {
@@ -917,7 +920,12 @@
 
       if (expired) {
         if ((S.linkSends || 1) < maxSends) {
-          var resend = findButton(job.send_by === "email" ? /^resend by email$/i : /^resend by text$/i, m);
+          var reRe = job.send_by === "email" ? /^resend by email$/i : /^resend by text$/i;
+          var resend = findButton(reRe, m);
+          if (!resend) {
+            var more = findButton(/^show resend options/i, m);
+            if (more) { await click(more); await sleep(800); resend = findButton(reRe, authModal() || m); }
+          }
           if (!resend) await final("EXPIRED", "The link expired and there's no “Resend by text” button.");
           await save({ linkSends: (S.linkSends || 1) + 1 });
           await click(resend);
@@ -933,7 +941,7 @@
 
       // HealthSherpa updates by itself; Refresh status is a safety net if it timed out.
       if (Date.now() - lastRefresh > 60000) {
-        var rb = findButton(/^refresh status$/i, m);
+        var rb = findButton(RE_REFRESH, m);
         if (rb) { overlay.update("Checking status…"); rb.click(); }
         lastRefresh = Date.now();
         await sleep(1500);
