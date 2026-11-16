@@ -77,7 +77,7 @@ function broadcast(update) {
   });
 }
 
-var FINAL = ["AUTHORIZED", "NOT_FOUND", "NEEDS_REVIEW", "EXPIRED", "UNCONFIRMED", "FAILED", "CANCELLED", "INVALID"];
+var FINAL = ["AUTHORIZED", "NOT_FOUND", "NEEDS_REVIEW", "EXPIRED", "UNCONFIRMED", "EMAIL_CHECK", "FAILED", "CANCELLED", "INVALID"];
 
 function finish(state, status) {
   badge(status === "AUTHORIZED" ? "✓" : "", status === "AUTHORIZED" ? "#2f855a" : null);
@@ -320,7 +320,7 @@ chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
       var body = msg.body || {};
       if (body.detail || body.step) log((body.status ? "[" + body.status + "] " : "") + (body.step || "") + " — " + (body.detail || ""));
       broadcast({ id: s.job.id, step: body.step, status: body.status, detail: body.detail, waiting_login: !!body.waiting_login });
-      var serverBody = { step: body.step, status: body.status, detail: body.detail, hs_app_id: body.hs_app_id, link_sent: body.link_sent, diag: body.diag };
+      var serverBody = { step: body.step, status: body.status, detail: body.detail, hs_app_id: body.hs_app_id, link_sent: body.link_sent, diag: body.diag, hs_email: body.hs_email };
       report(s, serverBody).then(function (res) {
         var stop = !!(res && res.stop);
         if (body.status && FINAL.indexOf(body.status) !== -1) {

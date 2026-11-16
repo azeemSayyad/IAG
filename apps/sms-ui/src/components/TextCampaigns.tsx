@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { api, apiUpload } from "../lib/api";
 import { formatPhone } from "../lib/phone";
 import { Drawer, DrawerSection, Field, drawerCtl } from "./Drawer";
+import { TemplatePicker } from "./hs/HsTemplatePicker";
 
 /* Text campaigns — Auto Dialer page (super admin).
    Upload a CSV, write ONE message ({name} = first name), Start: the portal
@@ -237,8 +238,10 @@ function MessageBox({ value, onChange, ov, disabled }: {
   };
   return (
     <div className="space-y-2">
+      {/* The approved library (same as the HealthSherpa page) — pick, then edit below. */}
+      {!disabled && <TemplatePicker value={value} onPick={onChange} hsOnlyWarnings={false} />}
       <div className="relative">
-        <textarea ref={ref} value={value} disabled={disabled} rows={5} maxLength={ov.limits.max_template}
+        <textarea ref={ref} value={value} disabled={disabled} rows={5} maxLength={ov.limits.max_template} data-testid="dialer-campaign-message"
           onChange={(e) => onChange(e.target.value)} className={`${drawerCtl} resize-y leading-relaxed`}
           placeholder={SAMPLE} />
         {!disabled && (

@@ -67,7 +67,14 @@ pages, `prefs-extras.js` / `services/error-boundary.js` (injected links), and
 - **Text campaigns** (`campaigns.py`, `components/TextCampaigns.tsx`): upload CSV,
   one message, Start. Paced to protect our 10DLC numbers (one text per number every
   few seconds, daily cap, client-timezone hours, DNC checked, STOP footer,
-  auto-pause on carrier blocks). One text per person per campaign.
+  auto-pause on carrier blocks). One text per person per campaign. The message box has the
+  same approved library as HealthSherpa (`TemplatePicker hsOnlyWarnings={false}` — its
+  warnings are HealthSherpa-only; the dialer does call).
+- **Inbound call routing** tests: `tests/unit/test_inbound_calls.py` (real DB, rolled back:
+  closed hours, owner free/busy/away, nobody taking calls, DNC, held caller served, press 1).
+  `.localpreview/verify-inbound-routing.mjs` / `verify-client-owners.mjs` need helper files
+  from an old scratchpad and no longer run. Dialer e2e scripts assume an EMPTY dial list —
+  leftover local READY_TO_CALL test leads make them check the wrong lead.
 - **Replies** (`service.on_inbound_sms`, `replies.classify`): YES / positive →
   dial list (`READY_TO_CALL`) if the dialer is on, else the regular pool as HOT.
   STOP / not interested / abusive / wrong number → Do-Not-Call. A reply to a
@@ -226,6 +233,26 @@ No Google Sheet: every client's details, texts and status are on the page, with
   campaign (owner: "if messages are going, no need to show carriers blocking") — only
   `SPAM_PAUSE_MIN` (5) of the last `SPAM_WINDOW` (20) texts. The reason shows only while
   PAUSED; Stop clears it. (The Auto Dialer's own campaigns still pause on the first.)
+  The pause banner has **✏️ Change message** → Settings (approved-text library + length,
+  "Goes to the N not texted yet") → **Save & resume** (disabled until the message changes).
+  Unsent blasts use the campaign's CURRENT template at send time.
+- **Insults = abuse** (owner, 2026-11-16): `replies.ABUSE_PATTERNS` (shared by the dialer and
+  these campaigns) also catches insults/slurs ("ur gay", stfu, dumbass, piss off, kys…) as
+  whole words → Do-Not-Call. Tests list ordinary words that must NOT match.
+- **Wrong phone → email** (owner, 2026-11-16; migration 075, extension 1.1.5): in a campaign job
+  (`email_fallback`), when HealthSherpa's mobile differs from the sheet (or is missing) the
+  extension copies the email from HealthSherpa's "Email link to …" button and reports
+  `EMAIL_CHECK` (+`hs_email`; no email = NEEDS_REVIEW, skipped) and auto mode moves on. The tick
+  texts `EMAIL_ASK` ("is <email> still your current email?" — conversational, owner: rare, no
+  10DLC template); YES within `EMAIL_WAIT` (10 min) → `EMAIL_NOTE` ("check <email> … from
+  HealthSherpa, sent for <campaign's HealthSherpa agent>") + status PENDING with
+  `send_by="email"` → the next run opens the client via **View in Dash → profile "Resend
+  authorization" → Email link** (verifies the same email). A plain "no" = skipped (NOT DNC);
+  STOP / abuse still DNC; a DIFFERENT email = skipped + needs_reply (changing contact info is a
+  ~30-min human job — owner); no answer = NEEDS_REVIEW `email_unconfirmed`, a later YES still
+  counts. Email only — the phone is never changed. The second run counts toward the daily
+  limit. Real HealthSherpa's profile button for the email run is UNVERIFIED (the fake has
+  "Resend authorization"); if it differs the run stops with a `diag`. Fake: last name `Mailer`.
 - Extension 1.1.4: **ONE HealthSherpa tab** for every client — reuses the last job's tab,
   else any open HealthSherpa tab (the agent's logged-in one), else opens one; extra
   HealthSherpa tabs the extension itself opened (`iagOpenedTabs`, session) are closed, the

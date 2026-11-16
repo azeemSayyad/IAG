@@ -880,3 +880,103 @@ def test_add_one_client_by_hand(env, monkeypatch):
     qs.add_to_dnc(env.db, env.tenant, "+12145550166", "OPTED_OUT")
     with pytest.raises(hc.CampaignError, match="Do-Not-Call"):
         hc.add_client(env.db, env.tenant, env.stan, {**base, "phone": "2145550166"})
+
+
+def test_insult_reply_goes_to_dnc_not_follow_up(env):
+    """Owner, 2026-11-16: "Ur gay" got the follow-up and was queued for HealthSherpa."""
+    _campaign(env)
+    _blast_all(env)
+    n = len(env.sent)
+    assert _reply(env, "+13055550101", "Ur gay")["result"] == "hs_dnc"
+    ana = _row(env, "Ana")
+    assert ana.convo == "DNC" and ana.status != "PENDING"
+    assert len(env.sent) == n  # no follow-up
+
+
+# ---- Wrong phone -> confirm email -> link by email (owner, 2026-11-16) ---------------
+
+def _to_email_check(e, phone, first, email="ana.diaz@example.com"):
+    _reply(e, phone, "yes")
+    _reply(e, phone, "Ambetter")
+    job = hc.next_job(e.db, e.tenant, e.stan)["job"]
+    assert job and job["first_name"] == first and job["email_fallback"] is True and job["send_by"] == "text"
+    # The extension saw a different mobile in HealthSherpa and copied the email under it.
+    service.report(e.db, job["id"], job["token"], {"step": "email_check", "status": "EMAIL_CHECK", "hs_email": email,
+                                                    "detail": "HealthSherpa has a different mobile"})
+    hc.tick(e.db, e.tenant)
+    hc.tick(e.db, e.tenant)
+    return job
+
+
+def test_wrong_phone_asks_to_confirm_email_then_sends_by_email(env):
+    _campaign(env)
+    _blast_all(env)
+    _to_email_check(env, "+13055550101", "Ana")
+    ana = _row(env, "Ana")
+    assert ana.status == "EMAIL_CHECK" and hc.stage_of(ana) == "EMAIL_CHECK" and ana.email_asked_at is not None
+    ask = [s for s in env.sent if s["to"] == "+13055550101"][-1]["text"]
+    assert "ana.diaz@example.com" in ask and "current email" in ask
+    # Free for the next client while we wait.
+    assert hc.next_job(env.db, env.tenant, env.stan)["reason"] == "idle"
+
+    n = len(env.sent)
+    assert _reply(env, "+13055550101", "Yes that's my email")["result"] == "hs_email_confirmed"
+    note = env.sent[n]["text"]
+    assert "check ana.diaz@example.com" in note and "HealthSherpa" in note and "Stan L" in note
+    ana = _row(env, "Ana")
+    assert ana.status == "PENDING" and ana.send_by == "email" and ana.email_confirmed_at is not None
+    job = hc.next_job(env.db, env.tenant, env.stan)["job"]
+    assert job["send_by"] == "email" and job["hs_email"] == "ana.diaz@example.com"
+
+
+def test_email_no_is_skipped_not_opted_out(env):
+    _campaign(env)
+    _blast_all(env)
+    _to_email_check(env, "+13055550101", "Ana")
+    assert _reply(env, "+13055550101", "no")["result"] == "hs_email_no"
+    ana = _row(env, "Ana")
+    assert ana.status == "NEEDS_REVIEW" and ana.convo != "DNC" and ana.send_by is None
+
+
+def test_stop_while_confirming_email_is_still_dnc(env):
+    _campaign(env)
+    _blast_all(env)
+    _to_email_check(env, "+13055550101", "Ana")
+    assert _reply(env, "+13055550101", "STOP")["result"] == "hs_dnc"
+    assert _row(env, "Ana").convo == "DNC"
+
+
+def test_a_different_email_is_skipped_for_a_person(env):
+    _campaign(env)
+    _blast_all(env)
+    _to_email_check(env, "+13055550101", "Ana")
+    assert _reply(env, "+13055550101", "use ana2@gmail.com instead")["result"] == "hs_email_different"
+    ana = _row(env, "Ana")
+    assert ana.status == "NEEDS_REVIEW" and ana.needs_reply and "ana2@gmail.com" in ana.status_detail
+
+
+def test_no_answer_in_10_min_skips_but_a_late_yes_counts(env):
+    _campaign(env)
+    _blast_all(env)
+    _to_email_check(env, "+13055550101", "Ana")
+    env.clock.add(9)
+    hc.tick(env.db, env.tenant)
+    assert _row(env, "Ana").status == "EMAIL_CHECK"
+    env.clock.add(2)
+    hc.tick(env.db, env.tenant)
+    ana = _row(env, "Ana")
+    assert ana.status == "NEEDS_REVIEW" and ana.step == "email_unconfirmed"
+    assert _reply(env, "+13055550101", "yes")["result"] == "hs_email_confirmed"
+    assert _row(env, "Ana").status == "PENDING"
+
+
+def test_wrong_phone_and_no_email_is_skipped(env):
+    _campaign(env)
+    _blast_all(env)
+    _reply(env, "+13055550101", "yes")
+    _reply(env, "+13055550101", "Ambetter")
+    job = hc.next_job(env.db, env.tenant, env.stan)["job"]
+    service.report(env.db, job["id"], job["token"], {"step": "email_check", "status": "EMAIL_CHECK"})
+    hc.tick(env.db, env.tenant)
+    ana = _row(env, "Ana")
+    assert ana.status == "NEEDS_REVIEW" and "no email" in ana.status_detail

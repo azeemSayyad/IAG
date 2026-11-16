@@ -22,7 +22,7 @@ import { errText } from "./ui";
 
 const KEY = "hsAutoMode";
 const POLL_MS = 5000;
-const FINAL = new Set(["AUTHORIZED", "NOT_FOUND", "NEEDS_REVIEW", "EXPIRED", "UNCONFIRMED", "FAILED", "CANCELLED", "INVALID"]);
+const FINAL = new Set(["AUTHORIZED", "NOT_FOUND", "NEEDS_REVIEW", "EXPIRED", "UNCONFIRMED", "EMAIL_CHECK", "FAILED", "CANCELLED", "INVALID"]);
 
 export type AutoInfo = { reason: string; waiting: number; name?: string } | null;
 type NextResp = { job: HsJob | null; reason?: string; waiting?: number; running_id?: string };

@@ -1,4 +1,7 @@
 /* The approved message library (hsTemplates.ts) as cards in the style of the
+ * PDF — used on the HealthSherpa campaigns AND the Auto Dialer's text campaigns
+ * (`hsOnlyWarnings={false}` there: the warnings are about HealthSherpa — "promises a
+ * call", "Medicare isn't in HealthSherpa" — and the dialer does call). Originally for
  * "Final Texts — Double Filter Checked" PDF: coloured bar per group, CARRIER /
  * CONSUMER badges, the text in a mono box, the reader's reaction and the tip.
  * "Use this text" puts it in the message box, where it can still be edited. */
@@ -22,7 +25,9 @@ function Badge({ k, v }: { k: string; v: string }) {
   );
 }
 
-export function TemplatePicker({ value, onPick }: { value: string; onPick: (text: string) => void }) {
+export function TemplatePicker({ value, onPick, hsOnlyWarnings = true }: {
+  value: string; onPick: (text: string) => void; hsOnlyWarnings?: boolean;
+}) {
   const [open, setOpen] = useState(false);
   const [group, setGroup] = useState<"All" | HsTemplate["group"]>("All");
   const inUse = HS_TEMPLATES.find((t) => t.text === value.trim());
@@ -78,7 +83,7 @@ export function TemplatePicker({ value, onPick }: { value: string; onPick: (text
                     <b style={{ color: READER }}>{t.reader}:</b> {t.quote}
                   </div>
                   <div className="text-[0.66rem] text-ink-muted">→ {t.note}</div>
-                  {t.warn && (
+                  {t.warn && hsOnlyWarnings && (
                     <div className="rounded-md px-2 py-1 text-[0.66rem] font-semibold"
                          style={{ background: "#e9a23b22", color: "#b7791f" }}>⚠ {t.warn}</div>
                   )}

@@ -10,6 +10,9 @@ Statuses
   NEEDS_REVIEW  the extension stopped on purpose (several people, phone on file
                 differs from the sheet, already in the agent's clients, …)
   EXPIRED       the client didn't authorize in time (after the allowed resends)
+  EMAIL_CHECK   text campaigns: HealthSherpa's mobile differs from our sheet, so the
+                run stopped before sending; we're texting the client to confirm the
+                email HealthSherpa has (campaigns.py) — then it runs again by email.
   UNCONFIRMED   text campaigns: the link was sent but the client hadn't authorized
                 within the campaign's wait (10 min) — the extension moved on. The
                 link still works until HealthSherpa's 15 min, so a person checks
@@ -46,14 +49,14 @@ from app.models.user import User
 ET = ZoneInfo("America/New_York")
 
 ACTIVE = ("IN_PROGRESS", "LINK_SENT")
-FINAL = ("AUTHORIZED", "NOT_FOUND", "NEEDS_REVIEW", "EXPIRED", "UNCONFIRMED", "FAILED", "CANCELLED", "INVALID")
+FINAL = ("AUTHORIZED", "NOT_FOUND", "NEEDS_REVIEW", "EXPIRED", "UNCONFIRMED", "EMAIL_CHECK", "FAILED", "CANCELLED", "INVALID")
 STARTABLE = ("PENDING", "NOT_FOUND", "NEEDS_REVIEW", "EXPIRED", "UNCONFIRMED", "FAILED", "CANCELLED")
 REPORTABLE = ACTIVE + FINAL
 ALL_STATUSES = ("PENDING",) + ACTIVE + FINAL
 
 STATUS_LABELS = {
     "PENDING": "Ready", "IN_PROGRESS": "Running", "LINK_SENT": "Link sent", "AUTHORIZED": "Authorized",
-    "NOT_FOUND": "Not found", "NEEDS_REVIEW": "Needs review", "EXPIRED": "Expired", "UNCONFIRMED": "Not confirmed", "FAILED": "Failed",
+    "NOT_FOUND": "Not found", "NEEDS_REVIEW": "Needs review", "EXPIRED": "Expired", "UNCONFIRMED": "Not confirmed", "EMAIL_CHECK": "Confirming email", "FAILED": "Failed",
     "CANCELLED": "Stopped", "INVALID": "Fix data", "TEXTING": "Texting",
 }
 
@@ -394,6 +397,11 @@ def start(db: Session, tenant_id, user: User, request_id: str, *, auto: bool = F
             # extension reports UNCONFIRMED and moves on. None = until
             # HealthSherpa's own link expiry (manual starts).
             "link_wait_minutes": link_wait,
+            # Text campaigns: on a phone mismatch, check the email instead of
+            # stopping (EMAIL_CHECK); once confirmed, send the link by email.
+            "email_fallback": auto,
+            "send_by": (row.send_by or "text") if auto else "text",
+            "hs_email": row.hs_email if auto else None,
         },
         "usage": usage(db, tenant_id, user.id),
     }
@@ -546,6 +554,8 @@ def report(db: Session, request_id: str, token: str, data: dict) -> dict:
     row.last_report_at = now
     if data.get("hs_app_id"):
         row.hs_app_id = str(data["hs_app_id"])[:40]
+    if data.get("hs_email"):
+        row.hs_email = str(data["hs_email"]).strip()[:200]
     if data.get("diag"):
         # The extension's value-free description of HealthSherpa's form fields,
         # sent when a page didn't look as expected — shown in History.

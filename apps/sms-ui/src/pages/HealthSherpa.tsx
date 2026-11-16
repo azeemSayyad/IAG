@@ -70,6 +70,7 @@ const STATUS: Record<string, { label: string; cls: string; hint: string }> = {
   NOT_FOUND: { label: "Not found", cls: "bg-black/5 text-ink-muted", hint: "No 2027 application found." },
   NEEDS_REVIEW: { label: "Needs review", cls: "bg-pending/15 text-pending", hint: "Stopped on purpose — check it yourself in HealthSherpa." },
   EXPIRED: { label: "Expired", cls: "bg-danger/10 text-danger", hint: "The client didn't authorize in time." },
+  EMAIL_CHECK: { label: "Confirming email", cls: "bg-accent/10 text-accent", hint: "HealthSherpa has another mobile — texting them to confirm their email." },
   UNCONFIRMED: { label: "Not confirmed", cls: "bg-pending/15 text-pending", hint: "Link sent, not authorized within the wait — auto mode moved on. Check in HealthSherpa." },
   FAILED: { label: "Failed", cls: "bg-danger/10 text-danger", hint: "Something unexpected happened." },
   CANCELLED: { label: "Stopped", cls: "bg-black/5 text-ink-muted", hint: "Stopped by you." },

@@ -84,6 +84,14 @@ ABUSE_PATTERNS = re.compile(
     r"|motherf|mother f|go to hell|go suck|suck my|idiot|stupid|moron"
     r"|nigg|fagg|retard"
     r"|scam|spam|fraud|fake|report you|reported you|sue you|lawsuit|harass|police"
+    # Insults / slurs (owner, 2026-11-16: "Ur gay" was answered with the follow-up).
+    # Whole words only, so "shoe", "diet", "therapist", "scrape" etc. never match.
+    r"|\b(?:u|ur|you|youre|you'?re|u r|you are|your|ya|yo|ure)\s+(?:so\s+|such\s+a\s+|a\s+|an\s+|r\s+)?(?:gay|homo|queer|lesbian|fag)\b"
+    r"|\bso\s+gay\b|\bgay\s*ass|\bfag\b|\bfags\b|\bhomo\b|\bdyke|\btrann(?:y|ie)|\bspic\b|\bchink|\bwetback|\bkike\b|\bcoon\b|\bbeaner"
+    r"|\bwhore|\bslut|\bhoe\b|\bhoes\b|\bthot\b|puss(?:y|ies)|\bprick\b|\bcock\b|\bdouche|\btwat|\bwanker"
+    r"|dumbass|dumb\s*ass|jackass|\bdumb\b|\bloser\b|\bclown\b|\btrash\b|\bugly\b|\bpig\b|\bcreep\b|\bpervert|\bweirdo"
+    r"|\bstfu\b|\bgtfo\b|\bwtf\b|shut\s*up|screw\s*(?:you|u|off)|piss\s*off|pissed|get\s+lost|\bfu\b"
+    r"|kill\s*(?:your\s*self|urself|yourself)|\bkys\b|\bgo\s+die\b|\bdie\b|eat\s+(?:shit|dirt)|\bdamn\s+you|\bhell\s+no"
 )
 
 

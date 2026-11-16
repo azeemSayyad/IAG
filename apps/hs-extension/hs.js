@@ -413,7 +413,7 @@
     var body = Object.assign({ step: "done", status: status, detail: detail }, extra || {});
     if (S.appId && !body.hs_app_id) body.hs_app_id = S.appId;
     await send({ kind: "report", id: job.id, body: body });
-    overlay.final(detail, status === "AUTHORIZED" ? "ok" : (status === "NEEDS_REVIEW" || status === "LINK_SENT" || status === "UNCONFIRMED") ? "warn" : "bad", status);
+    overlay.final(detail, status === "AUTHORIZED" ? "ok" : (status === "NEEDS_REVIEW" || status === "LINK_SENT" || status === "UNCONFIRMED" || status === "EMAIL_CHECK") ? "warn" : "bad", status);
     throw DONE;
   }
 
@@ -446,7 +446,7 @@
         ensure();
         box.classList.add("iag-tone-" + (tone || "ok"));
         var label = { AUTHORIZED: "Authorized ✓", NOT_FOUND: "Not found", NEEDS_REVIEW: "Needs your review",
-          EXPIRED: "Link expired", UNCONFIRMED: "Not confirmed — moved on", FAILED: "Stopped — problem", INVALID: "Check the client's details" }[status] || "";
+          EXPIRED: "Link expired", UNCONFIRMED: "Not confirmed — moved on", EMAIL_CHECK: "Confirming email — moved on", FAILED: "Stopped — problem", INVALID: "Check the client's details" }[status] || "";
         msgEl.textContent = (label ? label + " — " : "") + (m || "");
         timerEl.textContent = "";
         var stopBtn = box.querySelector(".iag-ov-stop");
@@ -733,6 +733,15 @@
     }
     var r = sameDob[0];
     if (r.appId) await save({ appId: r.appId });
+    if (r.action === "view" && job.send_by === "email") {
+      // Second run after the client confirmed their email: the first run already
+      // added them (that's where the phone mismatch showed) — open them instead.
+      await step("open", "Opening the client (“View in Dash”) to send the link by email", { hs_app_id: r.appId });
+      await save({ phase: "adding" });
+      await click(r.button);
+      await handleAdd();
+      return;
+    }
     if (r.action === "view") {
       await final("NEEDS_REVIEW", "Already in your HealthSherpa clients (“View in Dash”). Open it there to check the authorization or resend it.", { hs_app_id: r.appId });
     }
@@ -753,7 +762,23 @@
     if (seen === "profile" && !authModal()) {
       await sleep(1500);
       if (!authModal()) {
-        if (pageHas(/pending authorization|authorization required|get authorization/i)) {
+        var pending = pageHas(/pending authorization|authorization required|get authorization|resend authorization/i);
+        if (pending && job.send_by === "email") {
+          // Email run: open the authorization window from the client's page.
+          var ab = findButton(/^(resend|get|request|send|start)?\s*(the\s*)?authori[sz]ation(\s*link)?$/i) || findButton(/authori[sz]ation/i);
+          if (ab) {
+            await step("auth_open", "Opening the authorization window");
+            await click(ab);
+            await waitFor(function () { return authModal(); }, 15000, 500);
+          }
+          if (!authModal()) {
+            await final("NEEDS_REVIEW", "Opened the client but couldn't find how to send the authorization — send it by EMAIL (" +
+              (job.hs_email || "their email") + ") yourself in HealthSherpa.", { diag: formSnapshot() });
+          }
+        }
+      }
+      if (!authModal()) {
+        if (pending) {
           await final("NEEDS_REVIEW", "The client's profile opened but still needs authorization — use “Resend authorization” there.");
         }
         await final("AUTHORIZED", "HealthSherpa opened the client without asking — already authorized for " + job.plan_year + ".");
@@ -771,21 +796,22 @@
     }
 
     await step("popup", "Authorization window open");
+    if (job.send_by === "email") { await sendByEmail(); return; }
     var textBtn = await waitFor(function () { return findButton(/^text link to/i, authModal() || document); }, 8000);
     if (!textBtn) {
+      if (job.email_fallback) await emailCheck("HealthSherpa has no mobile number for this client");
       await final("NEEDS_REVIEW", "HealthSherpa has no mobile number for this client. Use “Change contact info” or “Email link” yourself.");
     }
     var hsPhone = last10(text(textBtn));
     if (job.phone && hsPhone && hsPhone.length === 10 && hsPhone !== job.phone) {
+      if (job.email_fallback) {
+        await emailCheck("HealthSherpa has " + fmtPhone(hsPhone) + " but our sheet has " + fmtPhone(job.phone));
+      }
       await final("NEEDS_REVIEW", "HealthSherpa would text " + fmtPhone(hsPhone) + " but your sheet has " + fmtPhone(job.phone) +
         ". Confirm the number with the client — use “Change contact info” if it's wrong.");
     }
 
-    var consent = checkboxByText(/include and save consumer consent/i, authModal() || document);
-    if (consent) {
-      await step("consent", "Ticking “Include and save Consumer Consent”");
-      if (!(await ensureChecked(consent))) await final("FAILED", "Couldn't tick “Include and save Consumer Consent”.");
-    }
+    await tickConsent();
 
     await save({ phase: "link_sent", linkSends: 1, linkSentAt: Date.now() });
     await click(textBtn);
@@ -796,6 +822,47 @@
     if (!waiting) await final("FAILED", "Clicked “Text link” but HealthSherpa didn't confirm the text was sent.");
     await step("link", "Text sent to " + fmtPhone(hsPhone) + " — waiting for the client to authorize",
       { status: "LINK_SENT", link_sent: true });
+    await waitForClient();
+  }
+
+  /* Text campaigns, wrong / missing mobile (owner, 2026-11-16): copy the email
+     HealthSherpa shows under the phone ("Email link to …") and stop — the portal
+     texts the client to confirm it, then queues them again to send by email.
+     No email = skipped with an error. */
+  var EMAIL_IN = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i;
+  async function emailCheck(reason) {
+    var eb = findButton(/^email link to/i, authModal() || document);
+    var em = eb ? ((text(eb).match(EMAIL_IN) || [])[0] || "") : "";
+    if (!em) await final("NEEDS_REVIEW", reason + " — and no email in HealthSherpa, so it was skipped.");
+    await final("EMAIL_CHECK", reason + ". Texting the client to confirm " + em + " — then the link goes by email.",
+      { hs_email: em });
+  }
+
+  async function tickConsent() {
+    var consent = checkboxByText(/include and save consumer consent/i, authModal() || document);
+    if (consent) {
+      await step("consent", "Ticking “Include and save Consumer Consent”");
+      if (!(await ensureChecked(consent))) await final("FAILED", "Couldn't tick “Include and save Consumer Consent”.");
+    }
+  }
+
+  /* The client confirmed the email HealthSherpa has: send the link by EMAIL. */
+  async function sendByEmail() {
+    var eb = await waitFor(function () { return findButton(/^email link to/i, authModal() || document); }, 8000);
+    if (!eb) await final("NEEDS_REVIEW", "No “Email link” button in HealthSherpa's authorization window — send it yourself.", { diag: formSnapshot() });
+    var em = (text(eb).match(EMAIL_IN) || [])[0] || "";
+    if (job.hs_email && em.toLowerCase() !== String(job.hs_email).toLowerCase()) {
+      await final("NEEDS_REVIEW", "HealthSherpa's email is now " + (em || "missing") + " but the client confirmed " + job.hs_email + " — check it yourself.");
+    }
+    await tickConsent();
+    await save({ phase: "link_sent", linkSends: 1, linkSentAt: Date.now() });
+    await click(eb);
+    var ok = await waitFor(function () {
+      var m = authModal();
+      return m && (findButton(/^refresh status$/i, m) || pageHas(/waiting for|email sent to|sent to/i, m) || pageHas(/authorization complete/i, m));
+    }, 20000, 500);
+    if (!ok) await final("FAILED", "Clicked “Email link” but HealthSherpa didn't confirm the email was sent.");
+    await step("link", "Email sent to " + em + " — waiting for the client to authorize", { status: "LINK_SENT", link_sent: true });
     await waitForClient();
   }
 
@@ -850,7 +917,7 @@
 
       if (expired) {
         if ((S.linkSends || 1) < maxSends) {
-          var resend = findButton(/^resend by text$/i, m);
+          var resend = findButton(job.send_by === "email" ? /^resend by email$/i : /^resend by text$/i, m);
           if (!resend) await final("EXPIRED", "The link expired and there's no “Resend by text” button.");
           await save({ linkSends: (S.linkSends || 1) + 1 });
           await click(resend);

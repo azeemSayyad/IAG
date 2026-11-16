@@ -64,12 +64,12 @@ const STAGE_CLS: Record<string, string> = {
   NEEDS_REPLY: "bg-danger text-white",
   QUEUED: "bg-black/5 text-ink-muted", TEXTED: "bg-accent/10 text-accent", ASKED: "bg-pending/15 text-pending",
   NO_ANSWER: "bg-black/5 text-ink-soft", HS_QUEUED: "bg-accent/10 text-accent", HS_RUNNING: "bg-accent text-white",
-  LINK_SENT: "bg-pending/15 text-pending", AUTHORIZED: "bg-success/15 text-success", UNCONFIRMED: "bg-pending/15 text-pending", EXPIRED: "bg-danger/10 text-danger",
+  LINK_SENT: "bg-pending/15 text-pending", AUTHORIZED: "bg-success/15 text-success", UNCONFIRMED: "bg-pending/15 text-pending", EMAIL_CHECK: "bg-accent/10 text-accent", EXPIRED: "bg-danger/10 text-danger",
   HS_REVIEW: "bg-pending/15 text-pending", DNC: "bg-danger/10 text-danger", NOT_SENT: "bg-black/5 text-ink-muted",
   INVALID: "bg-danger/10 text-danger",
 };
 const STAGE_ORDER = ["ALL", "NEEDS_REPLY", "QUEUED", "TEXTED", "ASKED", "NO_ANSWER", "HS_QUEUED", "HS_RUNNING", "LINK_SENT",
-  "AUTHORIZED", "UNCONFIRMED", "EXPIRED", "HS_REVIEW", "DNC", "NOT_SENT", "INVALID"];
+  "AUTHORIZED", "EMAIL_CHECK", "UNCONFIRMED", "EXPIRED", "HS_REVIEW", "DNC", "NOT_SENT", "INVALID"];
 // Each campaign state has its own colour so the list reads at a glance.
 const CAMP_PILL: Record<string, string> = {
   DRAFT: "bg-black/5 text-ink-muted", RUNNING: "bg-success text-white", PAUSED: "bg-pending text-white",
@@ -87,6 +87,7 @@ const CAMP_LABEL: Record<string, string> = {
 };
 const KIND_LABEL: Record<string, string> = {
   BLAST: "Campaign text", FOLLOWUP: "Follow-up", REMINDER: "Reminder", MANUAL: "You", REPLY: "Client", RETEXT: "Re-text",
+  EMAIL_ASK: "Email check", EMAIL_NOTE: "Check your email",
 };
 
 const btn = "rounded-lg bg-accent px-3 py-1.5 text-xs font-bold text-white hover:bg-accent-hover disabled:opacity-50";
@@ -410,7 +411,7 @@ function StageDetail({ c }: { c: Client }) {
   const line = (() => {
     switch (c.stage) {
       case "AUTHORIZED": return c.authorized_at ? `Authorized ${new Date(c.authorized_at).toLocaleString()}` : null;
-      case "HS_QUEUED": case "HS_RUNNING": case "LINK_SENT": case "UNCONFIRMED": case "EXPIRED": case "HS_REVIEW": return c.status_detail;
+      case "HS_QUEUED": case "HS_RUNNING": case "LINK_SENT": case "EMAIL_CHECK": case "UNCONFIRMED": case "EXPIRED": case "HS_REVIEW": return c.status_detail;
       case "ASKED": return c.followup_sent_at ? `Asked ${ago(c.followup_sent_at)}` : "Sending the follow-up…";
       default: return c.convo_detail;
     }
@@ -494,7 +495,17 @@ function CampaignRow({ c, canManage, busy, onAction, onSettings, onShow, onRetex
           </div>
         )}
       </div>
-      {c.status === "PAUSED" && c.pause_reason && <div className="mt-2 rounded-lg bg-pending/10 px-3 py-1.5 text-xs font-semibold text-pending">{c.pause_reason}</div>}
+      {c.status === "PAUSED" && c.pause_reason && (
+        <div className="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-pending/10 px-3 py-1.5 text-xs font-semibold text-pending"
+             data-testid="hs-pause-reason">
+          <span>{c.pause_reason}</span>
+          {canManage && (
+            <button className={`${btn} px-3 py-1 text-[0.7rem]`} onClick={onSettings} data-testid="hs-change-message">
+              ✏️ Change message
+            </button>
+          )}
+        </div>
+      )}
       <div className="mt-2 grid grid-cols-3 gap-1.5 sm:grid-cols-6">
         {stats.map(([label, v]) => (
           <div key={label} className={`rounded-lg px-2 py-1.5 text-center ${label === "Authorized" ? "bg-success/10" : "bg-black/5"}`}>
@@ -973,11 +984,16 @@ function SettingsDrawer({ c, approvedFollowup, onClose, onSaved }: {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const editable = c.status === "DRAFT" || c.status === "PAUSED";
-  const save = async () => {
+  const notYet = c.counts?.queued ?? 0;
+  const save = async (resume = false) => {
     setBusy(true); setErr(null);
     const body: Record<string, unknown> = { ...f };
     if (!editable) delete body.template;
-    try { await api(`/hs-auth/campaigns/${c.id}`, { method: "PUT", body: JSON.stringify(body) }); onSaved(); }
+    try {
+      await api(`/hs-auth/campaigns/${c.id}`, { method: "PUT", body: JSON.stringify(body) });
+      if (resume) await api(`/hs-auth/campaigns/${c.id}/resume`, { method: "POST" });
+      onSaved();
+    }
     catch (e) { setErr(errText(e)); }
     finally { setBusy(false); }
   };
@@ -989,13 +1005,30 @@ function SettingsDrawer({ c, approvedFollowup, onClose, onSaved }: {
     <Drawer open title="Campaign settings" sub={c.name} icon="⚙️" onClose={onClose}
             footer={<>
               <button className={btnGhost} onClick={onClose}>Cancel</button>
-              <button className={btn} disabled={busy} onClick={save}>{busy ? "Saving…" : "Save"}</button>
+              <button className={c.status === "PAUSED" ? btnGhost : btn} disabled={busy} onClick={() => save()}>{busy ? "Saving…" : "Save"}</button>
+              {c.status === "PAUSED" && (
+                <button className={btn} disabled={busy || f.template.trim() === c.template.trim() && !!c.pause_reason}
+                        onClick={() => save(true)} data-testid="hs-save-resume"
+                        title={c.pause_reason && f.template.trim() === c.template.trim() ? "Change the message first" : undefined}>
+                  {busy ? "Saving…" : "Save & resume"}
+                </button>
+              )}
             </>}>
       {err && <div className="rounded-lg bg-danger/10 px-3 py-2 text-xs font-semibold text-danger">{err}</div>}
+      {c.status === "PAUSED" && c.pause_reason && (
+        <div className="rounded-lg bg-pending/10 px-3 py-2 text-xs font-semibold text-pending">
+          {/* The reason only — the old and new wording both end with an instruction. */}
+          {c.pause_reason.split(/\s*(?:Press “Change message”|Change the message)/)[0]} Pick another approved text below, then <b>Save &amp; resume</b>.
+        </div>
+      )}
       <Field label="Name"><input className={drawerCtl} value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></Field>
-      <Field label="First text (the blast)" hint={editable ? `${f.template.length}/480` : "Pause the campaign to change it."}>
-        <textarea className={`${drawerCtl} min-h-20`} disabled={!editable} value={f.template} maxLength={480}
+      <Field label="First text (the blast)"
+             hint={editable ? `Goes to the ${notYet} client${notYet === 1 ? "" : "s"} not texted yet — anyone already texted keeps their conversation.`
+                            : "Pause the campaign to change it."}>
+        {editable && <div className="mb-1.5"><TemplatePicker value={f.template} onPick={(t) => setF({ ...f, template: t })} /></div>}
+        <textarea className={`${drawerCtl} min-h-20`} disabled={!editable} value={f.template} maxLength={480} data-testid="hs-settings-template"
                   onChange={(e) => setF({ ...f, template: e.target.value })} />
+        {editable && <div className="mt-1"><TextLength text={f.template} /></div>}
       </Field>
       <FollowupField value={f.followup_text} approved={approvedFollowup} onChange={(v) => setF({ ...f, followup_text: v })} />
       <p className="-mt-2 text-[0.7rem] text-ink-faint">Changes apply to follow-ups sent from now on — any time, no need to pause.</p>
@@ -1039,8 +1072,8 @@ function Bubble({ who, body, inbound, at, note }: { who: string; body: string | 
 /* Key HealthSherpa moments shown inline in the conversation (the full step
    list stays under "All steps"). */
 const EVENT_LINE: Record<string, string> = {
-  PENDING: "Queued for HealthSherpa", IN_PROGRESS: "HealthSherpa lookup started", LINK_SENT: "HealthSherpa texted them the link",
-  AUTHORIZED: "Authorized ✓", UNCONFIRMED: "Not confirmed in time", EXPIRED: "Link expired — not authorized", NOT_FOUND: "Not found in HealthSherpa",
+  PENDING: "Queued for HealthSherpa", IN_PROGRESS: "HealthSherpa lookup started", LINK_SENT: "HealthSherpa sent them the link",
+  AUTHORIZED: "Authorized ✓", UNCONFIRMED: "Not confirmed in time", EMAIL_CHECK: "HealthSherpa has another mobile — confirming their email", EXPIRED: "Link expired — not authorized", NOT_FOUND: "Not found in HealthSherpa",
   NEEDS_REVIEW: "HealthSherpa needs a look", FAILED: "HealthSherpa stopped — problem", CANCELLED: "HealthSherpa stopped",
   INVALID: "HealthSherpa didn't accept the search",
 };

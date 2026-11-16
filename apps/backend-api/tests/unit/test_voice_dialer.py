@@ -270,3 +270,23 @@ def test_back_to_listening_mutes(monkeypatch):
     m.mode = "whisper"
     monitor.set_mode(db, m, "listen")
     assert calls == [{"Muted": "true", "Coaching": "false"}]
+
+
+# Owner, 2026-11-16: insults / slurs ("Ur gay") are abuse -> Do-Not-Call, in the
+# Auto Dialer AND HealthSherpa campaigns (both use replies.classify).
+@pytest.mark.parametrize("text", [
+    "Ur gay", "ur gay", "You're gay", "u gay", "you are so gay", "your a fag", "stfu", "shut up", "screw you",
+    "dumbass", "you're dumb", "loser", "kys", "go die", "piss off", "get lost", "wtf is this", "hell no",
+    "whore", "ur ugly", "you pig", "clown", "ur trash", "FU",
+])
+def test_insults_are_abuse(text):
+    assert replies.classify(text) == replies.ABUSE
+
+
+@pytest.mark.parametrize("text", [
+    "Oscar", "Blue Cross", "Ambetter", "Florida Blue", "Molina", "Cigna", "Aetna", "Humana", "UnitedHealthcare",
+    "shoe", "I'm on a diet", "my therapist", "dumbbell", "Gaynor", "pigeon", "cockpit", "clownfish", "trashcan",
+    "diehard", "Is this free?", "what company?",
+])
+def test_ordinary_words_are_not_abuse(text):
+    assert replies.classify(text) not in replies.NEGATIVE_KINDS

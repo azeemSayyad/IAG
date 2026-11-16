@@ -58,7 +58,7 @@ class HsAuthRequest(Base):
     assigned_to = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True, index=True)
 
     # PENDING | INVALID | IN_PROGRESS | LINK_SENT | AUTHORIZED | NOT_FOUND |
-    # NEEDS_REVIEW | EXPIRED | UNCONFIRMED | FAILED | CANCELLED   (see app/hs_auth/service.py)
+    # NEEDS_REVIEW | EXPIRED | UNCONFIRMED | EMAIL_CHECK | FAILED | CANCELLED   (see app/hs_auth/service.py)
     status = Column(String(16), nullable=False, default="PENDING", server_default="PENDING")
     status_detail = Column(Text, nullable=True)
     step = Column(String(40), nullable=True)  # last step the extension reported
@@ -99,6 +99,15 @@ class HsAuthRequest(Base):
     # text after they were queued) — a person should answer. Cleared by sending
     # a manual text or "Mark as handled".
     needs_reply = Column(Boolean, nullable=False, default=False, server_default="false")
+    # Wrong phone -> email (owner, 2026-11-16, migration 075): HealthSherpa has a
+    # different mobile than our sheet, so the extension copies the email under it
+    # ("Email link to …") and stops (status EMAIL_CHECK). We text the client "is
+    # <email> still current?"; a YES within 10 min queues them again with
+    # send_by="email" and the link goes by HealthSherpa's EMAIL button.
+    hs_email = Column(String(200), nullable=True)
+    email_asked_at = Column(DateTime(timezone=True), nullable=True)
+    email_confirmed_at = Column(DateTime(timezone=True), nullable=True)
+    send_by = Column(String(10), nullable=True)   # NULL/"text" | "email"
 
     created_at = Column(DateTime(timezone=True), nullable=False, default=_now)
     updated_at = Column(DateTime(timezone=True), nullable=False, default=_now, onupdate=_now)

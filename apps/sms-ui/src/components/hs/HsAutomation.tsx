@@ -108,6 +108,7 @@ export const CHIPS: { key: string; label: string; hint: string; tone?: "danger" 
   { key: "HS_RUNNING", label: "Working now", hint: "The extension is on this client in HealthSherpa" },
   { key: "LINK_SENT", label: "Link sent", hint: "HealthSherpa link sent — waiting for the client (up to 10 min, then the next client)" },
   { key: "AUTHORIZED", label: "Authorized", hint: "Done ✔", tone: "success" },
+  { key: "EMAIL_CHECK", label: "Confirming email", hint: "HealthSherpa has a different mobile — we texted them to confirm the email it has (10 min); YES = the link goes by email" },
   { key: "UNCONFIRMED", label: "Check in HealthSherpa", hint: "Not authorized within 10 min — auto mode moved on. The link works until 15 min: check them in HealthSherpa and press Mark authorized", tone: "warn" },
   { key: "EXPIRED", label: "Expired", hint: "The 15-minute link ran out" },
   { key: "HS_REVIEW", label: "Needs a look", hint: "The HealthSherpa run stopped — open a client for the reason", tone: "warn" },

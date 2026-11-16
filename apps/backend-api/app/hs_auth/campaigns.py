@@ -93,6 +93,20 @@ CANDIDATES = 400
 RESEND_GRACE = timedelta(minutes=3)   # resend_on_expiry: let the extension resend first
 WAIT_GRACE = timedelta(minutes=2)     # the extension ends the wait itself; the tick is the backstop
 MARK_AUTH_FROM = ("UNCONFIRMED", "EXPIRED", "NEEDS_REVIEW")  # "Mark authorized" (checked in HealthSherpa)
+
+# Wrong phone -> email (owner, 2026-11-16). HealthSherpa's mobile differs from our
+# sheet: the extension stops with EMAIL_CHECK + the email HealthSherpa has. We ask
+# the client by text (conversational — owner: rare, no 10DLC template needed); a YES
+# within EMAIL_WAIT queues them again with send_by="email"; no answer / "no" / a
+# DIFFERENT email = skipped for a person (changing contact info in HealthSherpa is a
+# ~30-minute human process — owner). STOP / abuse still = Do-Not-Call.
+EMAIL_WAIT = timedelta(minutes=10)
+EMAIL_ASK_TEXT = "Insurance Alliance Group: Hi {first}, is {email} still your current email? Reply YES or NO."
+EMAIL_NOTE_TEXT = ("Insurance Alliance Group: Thanks {first}! Please check {email} for an authorization link "
+                   "from HealthSherpa, sent for {agent}.")
+EMAIL_RE = re.compile(r"[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}", re.I)
+EMAIL_YES = re.compile(r"\b(yes|yeah|yep|yup|ya|yea|si|sí|correct|right|it is|still|current|active|that'?s (?:it|me|right|correct)|ok|okay|sure)\b", re.I)
+EMAIL_NO = re.compile(r"\b(no|nope|nah|not|wrong|old|don'?t|dont|never)\b", re.I)
 EDITABLE = ("DRAFT", "PAUSED")
 # create / start / pause / stop / settings / manual texts. Owner's call
 # (2026-11-13): admins and head managers (Alan is "head") run campaigns too.
@@ -637,6 +651,33 @@ def _timers(db: Session, tenant_id, now: datetime) -> None:
                     direction="OUT", kind="REMINDER", body=vc.render(c.reminder_text, r.first_name),
                     status="QUEUED", from_number=_last_from(db, r.id)))
 
+    # 2b) Wrong phone -> ask the client to confirm the email HealthSherpa has; no
+    #     answer within EMAIL_WAIT = skipped (a later YES still counts — on_inbound).
+    for r in db.query(HsAuthRequest).filter(HsAuthRequest.tenant_id == tenant_id,
+                                            HsAuthRequest.campaign_id.isnot(None),
+                                            HsAuthRequest.status == "EMAIL_CHECK",
+                                            HsAuthRequest.deleted_at.is_(None)).all():
+        c = camps.get(r.campaign_id)
+        if c is None:
+            continue
+        if r.convo == "DNC":
+            continue
+        if r.email_asked_at is None:
+            if not r.hs_email:
+                service._set_status(r, "NEEDS_REVIEW", "Phone in HealthSherpa differs from the sheet and there's no email — skipped.",
+                                    "email_missing")
+                continue
+            db.add(HsCampaignText(
+                tenant_id=tenant_id, campaign_id=c.id, request_id=r.id, phone_number=e164(r.phone),
+                direction="OUT", kind="EMAIL_ASK", status="QUEUED", from_number=_last_from(db, r.id),
+                body=vc.render(EMAIL_ASK_TEXT.format(first=_first(r.first_name), email=r.hs_email), r.first_name)))
+            r.email_asked_at = now
+            r.updated_at = now
+        elif r.email_asked_at <= now - EMAIL_WAIT:
+            service._set_status(r, "NEEDS_REVIEW",
+                                f"Didn't confirm {r.hs_email} within {int(EMAIL_WAIT.total_seconds() // 60)} min — skipped. "
+                                "A later YES still sends the link by email.", "email_unconfirmed")
+
     # 3) Blast (and any re-text) done -> COMPLETED (conversations carry on).
     for c in camps.values():
         if c.status == "RUNNING" and db.query(HsAuthRequest.id).filter(
@@ -714,6 +755,9 @@ def _send(db: Session, tenant_id, now: datetime) -> int:
             continue
         if vc.digits(t.phone_number) in dnc:
             t.status, t.error = "SKIPPED", "On Do-Not-Call by send time"
+            continue
+        if t.kind == "EMAIL_ASK" and row.status != "EMAIL_CHECK":
+            t.status = "CANCELLED"  # answered / skipped before it could go
             continue
         if t.kind == "REMINDER":
             if row.status != "LINK_SENT":
@@ -810,6 +854,10 @@ def _after_sent(row: Optional[HsAuthRequest], t: HsCampaignText) -> None:
     elif t.kind == "REMINDER":
         row.reminder_sent_at = now
         service._event(row, "reminder", None, "Reminder text sent")
+    elif t.kind == "EMAIL_ASK":
+        service._event(row, "email_ask", None, f"Asked them to confirm {row.hs_email} (HealthSherpa has a different mobile)")
+    elif t.kind == "EMAIL_NOTE":
+        service._event(row, "email_note", None, f"Told them to check {row.hs_email} for the HealthSherpa link")
 
 
 SPAM_WINDOW = 20      # look at the last 20 texts sent…
@@ -847,7 +895,7 @@ def _failed(db: Session, t: HsCampaignText, row: Optional[HsAuthRequest], code: 
         if flagged >= SPAM_PAUSE_MIN:
             c.status, c.pause_reason = "PAUSED", (
                 f"Carriers flagged {flagged} of the last {len(recent)} texts as spam — paused to protect our numbers. "
-                "Change the message (pick another approved text) before resuming.")
+                "Press “Change message”, pick another approved text, then Save & resume.")
         return
     if action == "pause":
         c.status, c.pause_reason = "PAUSED", why   # number not approved for texting (10DLC)
@@ -986,7 +1034,12 @@ def on_inbound(db: Session, tenant_id, phone: str, to_raw: Optional[str], text: 
 
     send_now = False
     question = looks_like_question(body)
-    if kind in replies.NEGATIVE_KINDS:
+    # Waiting for "is <email> still current?" (or skipped for no answer — a late YES counts).
+    awaiting_email = bool(row.hs_email) and row.email_confirmed_at is None and (
+        row.status == "EMAIL_CHECK" or (row.status == "NEEDS_REVIEW" and row.step == "email_unconfirmed"))
+    # A plain "no" here means "that email isn't current", not "stop texting me".
+    email_no = awaiting_email and kind == replies.NEGATIVE and not replies.NEGATIVE_PHRASES.search(body.lower())
+    if kind in replies.NEGATIVE_KINDS and not email_no:
         # Exactly the dialer's rule: every negative goes on Do-Not-Call forever.
         qs.add_to_dnc(db, tenant_id, phone, replies.DNC_REASON[kind])
         _to_dnc(db, row, f"Opted out by text: “{body[:120]}”")
@@ -999,6 +1052,9 @@ def on_inbound(db: Session, tenant_id, phone: str, to_raw: Optional[str], text: 
         # Campaign removed: keep the text (and keep it away from the dialer), send nothing.
         service._event(row, "reply", None, f"Text saved (campaign removed — nothing sent): “{body[:200]}”")
         result = "hs_saved_removed"
+    elif awaiting_email:
+        result = _email_answer(db, row, c, body, kind, email_no, question, to_raw, last)
+        send_now = result == "hs_email_confirmed"
     elif row.convo in ("BLAST_SENT", "BLAST_FAILED") and looks_hesitant(body):
         # "How did you get my number?" — not a yes yet: no follow-up, a person answers.
         row.needs_reply = True
@@ -1044,6 +1100,51 @@ def on_inbound(db: Session, tenant_id, phone: str, to_raw: Optional[str], text: 
     if send_now:
         tick(db, tenant_id)  # the follow-up goes now, not on the next beat
     return {"ok": True, "result": result, "kind": kind, "hs_request_id": str(row.id)}
+
+
+def _first(name: Optional[str]) -> str:
+    return (str(name or "").strip().split(" ")[0] or "there").capitalize()
+
+
+def _email_answer(db: Session, row: HsAuthRequest, c: HsTextCampaign, body: str, kind: str, email_no: bool,
+                  question: bool, to_raw: Optional[str], last) -> str:
+    """Their answer to "is <email> still your current email?"."""
+    now = _now()
+    given = [e.lower() for e in EMAIL_RE.findall(body)]
+    ours = (row.hs_email or "").lower()
+    if given and ours not in given:
+        # A different email: changing it in HealthSherpa is a long manual process.
+        row.needs_reply = True
+        service._set_status(row, "NEEDS_REVIEW",
+                            f"Gave a different email ({given[0]}) than HealthSherpa has ({row.hs_email}) — "
+                            "skipped; a person must update the contact info in HealthSherpa.", "email_different")
+        return "hs_email_different"
+    if email_no or (EMAIL_NO.search(body) and not given):
+        service._set_status(row, "NEEDS_REVIEW", f"Said {row.hs_email} isn't their current email — skipped.", "email_no")
+        return "hs_email_no"
+    if kind == replies.YES or given or EMAIL_YES.search(body):
+        agent = db.query(User).filter(User.id == c.hs_agent_id).first()
+        agent_name = (f"{agent.first_name or ''} {agent.last_name or ''}".strip() if agent else "") or "your agent"
+        row.email_confirmed_at = now
+        row.send_by = "email"
+        row.needs_reply = question
+        db.add(HsCampaignText(
+            tenant_id=row.tenant_id, campaign_id=c.id, request_id=row.id, phone_number=row_phone(row),
+            direction="OUT", kind="EMAIL_NOTE", status="QUEUED",
+            from_number=replies.normalize_phone(to_raw) or last.from_number,
+            body=vc.render(EMAIL_NOTE_TEXT.format(first=_first(row.first_name), email=row.hs_email, agent=agent_name),
+                           row.first_name)))
+        service._set_status(row, "PENDING", f"Confirmed {row.hs_email} — queued to send the HealthSherpa link by EMAIL.",
+                            "email_confirmed")
+        return "hs_email_confirmed"
+    # Something else ("who is this?") — keep waiting; a person may want to answer.
+    row.needs_reply = True
+    service._event(row, "reply", None, f"Text while confirming their email: “{body[:200]}”")
+    return "hs_saved"
+
+
+def row_phone(row: HsAuthRequest) -> str:
+    return e164(row.phone)
 
 
 # ---- Auto mode (the agent's portal tab asks for the next job) ---------------------------
@@ -1149,6 +1250,7 @@ def _stage_conditions():
         "LINK_SENT": ("Link sent", and_(R.convo == "ANSWERED", R.status == "LINK_SENT")),
         "AUTHORIZED": ("Authorized", R.status == "AUTHORIZED"),
         "UNCONFIRMED": ("Check in HealthSherpa", and_(R.convo == "ANSWERED", R.status == "UNCONFIRMED")),
+        "EMAIL_CHECK": ("Confirming email", and_(R.convo == "ANSWERED", R.status == "EMAIL_CHECK")),
         "EXPIRED": ("Expired", and_(R.convo == "ANSWERED", R.status == "EXPIRED")),
         "HS_REVIEW": ("Needs a look", and_(R.convo == "ANSWERED",
                                            R.status.in_(("NOT_FOUND", "NEEDS_REVIEW", "FAILED", "CANCELLED", "INVALID")))),
@@ -1173,7 +1275,7 @@ def stage_of(r: HsAuthRequest) -> str:
     cv = r.convo
     if cv == "ANSWERED":
         return {"PENDING": "HS_QUEUED", "IN_PROGRESS": "HS_RUNNING", "LINK_SENT": "LINK_SENT",
-                "EXPIRED": "EXPIRED", "UNCONFIRMED": "UNCONFIRMED"}.get(r.status, "HS_REVIEW")
+                "EXPIRED": "EXPIRED", "UNCONFIRMED": "UNCONFIRMED", "EMAIL_CHECK": "EMAIL_CHECK"}.get(r.status, "HS_REVIEW")
     return {"QUEUED": "QUEUED", "BLAST_SENT": "TEXTED", "REPLIED": "ASKED", "FOLLOWUP_SENT": "ASKED",
             "NO_ANSWER": "NO_ANSWER", "DNC": "DNC", "INVALID": "INVALID"}.get(cv or "", "NOT_SENT")
 
@@ -1518,6 +1620,9 @@ def client_dict(r: HsAuthRequest, camps: dict, names: dict, *, last_texts: dict 
         "reminder_sent_at": r.reminder_sent_at.isoformat() if r.reminder_sent_at else None,
         "last_text_at": r.last_text_at.isoformat() if r.last_text_at else None,
         "needs_reply": bool(r.needs_reply),
+        "hs_email": r.hs_email, "send_by": r.send_by or "text",
+        "email_asked_at": r.email_asked_at.isoformat() if r.email_asked_at else None,
+        "email_confirmed_at": r.email_confirmed_at.isoformat() if r.email_confirmed_at else None,
     })
     if last_texts is not None:
         t = last_texts.get(r.id)
@@ -1684,7 +1789,7 @@ def export_csv(db: Session, tenant_id, *, campaign: Optional[str], stage: Option
                                                   HsCampaignText.status.notin_(("QUEUED", "CANCELLED")))
                   .order_by(func.coalesce(HsCampaignText.sent_at, HsCampaignText.created_at))):
             who = "Client" if t.direction == "IN" else {"BLAST": "Campaign", "FOLLOWUP": "Follow-up",
-                                                         "REMINDER": "Reminder", "RETEXT": "Re-text",
+                                                         "REMINDER": "Reminder", "RETEXT": "Re-text", "EMAIL_ASK": "Email check", "EMAIL_NOTE": "Check your email",
                                                          "MANUAL": "Us (typed)"}.get(t.kind, "Us")
             texts.setdefault(t.request_id, []).append(f"[{_et(t.sent_at or t.created_at)}] {who}: {t.body or ''}")
     buf = io.StringIO()
