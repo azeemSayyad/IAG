@@ -286,13 +286,11 @@ def _try_assign(db: Session, tenant_id: str, exclude_user_id: str | None = None)
     call — callers loop when they want to fill multiple agents.
     """
     events: list[dict] = []
-    from app.voice_dialer.service import dialer_reserves_agents
-
-    reserved = dialer_reserves_agents(db, tenant_id)
     for agent in _available_agents(db, tenant_id, exclude_user_id):
-        # "Taking calls" = phones only: while the dialer is on (or a caller is
-        # on hold) these agents are never offered a pool lead.
-        if reserved and agent.voice_ready:
+        # "Auto dialer" mode (voice_ready) = phones only: never offered a pool
+        # lead, even while the dialer is idle — the agent picks ONE system
+        # (owner, 2026-11-17: the pool popup blocked the dialer switch).
+        if agent.voice_ready:
             continue
         lead = _next_queued_lead(
             db, tenant_id, exclude_lead_ids=_passed_lead_ids(db, tenant_id, agent.user_id)
@@ -314,6 +312,7 @@ def _try_assign(db: Session, tenant_id: str, exclude_user_id: str | None = None)
 def join(db: Session, tenant_id: str, user_id: str) -> tuple[dict, list[dict]]:
     agent = _get_or_create_agent(db, tenant_id, user_id)
     agent.status = "AVAILABLE"
+    agent.voice_ready = False  # "SMS leads" mode: pool only, no dialer calls
     agent.last_active_at = _now()
     agent.consecutive_misses = 0
     db.flush()

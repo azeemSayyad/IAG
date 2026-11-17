@@ -576,7 +576,13 @@ def report(db: Session, request_id: str, token: str, data: dict) -> dict:
         row.updated_at = now
         _event(row, step, None, msg)
     db.commit()
-    return {"ok": True, "stop": row.status in FINAL, "status": row.status}
+    out = {"ok": True, "stop": row.status in FINAL, "status": row.status}
+    if data.get("pre_link") and row.status in ACTIVE:
+        # About to press "Text link": our MAIN text goes first (campaigns only).
+        from app.hs_auth import campaigns as hs_campaigns
+
+        out.update(hs_campaigns.pre_link(db, row))
+    return out
 
 
 def job_state(db: Session, request_id: str, token: str) -> dict:

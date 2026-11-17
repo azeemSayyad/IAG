@@ -69,6 +69,15 @@ async def join(
         return {"status": "OFFLINE", "blocked": "admin"}
     data, events = queue_service.join(db, tenant_id, str(user.id))
     await _flush(events)
+    # Joining = "SMS leads" mode, so an open auto-dialer headset line closes.
+    try:
+        from starlette.concurrency import run_in_threadpool
+
+        from app.voice_dialer import service as voice
+
+        await _flush(await run_in_threadpool(voice.drop_line, db, tenant_id, str(user.id)))
+    except Exception:
+        pass
     await _dialer(tenant_id)
     return data
 

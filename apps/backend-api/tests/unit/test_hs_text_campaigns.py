@@ -4,7 +4,7 @@ The first tests need nothing. The flow tests run the REAL code against the
 local Postgres (skipped when it isn't up), each inside one outer transaction
 that is rolled back, with the Telnyx sender faked and the clock movable:
 blast -> YES -> approved follow-up -> answer -> auto job; no answer in 10 min
-then a late answer; 7-min reminder; 15-min expiry; STOP at every stage; the
+then a late answer; 10-min reminder; 10-min wait; STOP at every stage; the
 dialer never sees these replies; a dialer text sent later takes the number back.
 """
 import uuid
@@ -237,31 +237,78 @@ def _to_link_sent(e, phone, first):
     return job
 
 
-def test_reminder_once_at_5_and_unconfirmed_after_10(env):
-    """Owner, 2026-11-15: reminder at 5 min, wait at most 10 min, then move on."""
+def _reminder_text():
+    from app.hs_auth import auth_texts
+
+    return auth_texts.build(auth_texts.AUTH_REMINDER_TEXT, "Stan L")
+
+
+def test_reminder_once_at_10_and_unconfirmed_after_10(env):
+    """Owner's Authorization Texts spec (2026-11-17): the approved reminder, ON by
+    default, ONE at minute 10 (no STOP line); auto mode moves on at 10 too."""
     c = _campaign(env)
-    assert (c.reminder_minutes, c.expire_minutes) == (5, 10)
-    hc.update(env.db, c, {"reminder_enabled": True})
+    assert (c.reminder_minutes, c.expire_minutes, c.reminder_enabled) == (10, 10, True)
     _blast_all(env)
     job = _to_link_sent(env, "+13055550103", "Cy")
     assert job["link_wait_minutes"] == 10  # the extension stops waiting itself
     n = len(env.sent)
-    env.clock.add(4)
+    env.clock.add(9)
     hc.tick(env.db, env.tenant)
     assert len(env.sent) == n
+    # The extension's 10 minutes are up: it reports UNCONFIRMED and moves on…
+    service.report(env.db, job["id"], job["token"], {"step": "unconfirmed", "status": "UNCONFIRMED",
+                                                      "detail": hc.unconfirmed_note(10)})
     env.clock.add(1.5)
     hc.tick(env.db, env.tenant)
     hc.tick(env.db, env.tenant)
-    assert len(env.sent) == n + 1 and env.sent[n]["text"] == hc.REMINDER_DRAFT
+    # …and the reminder still goes (HealthSherpa's link lives 15 minutes).
+    assert len(env.sent) == n + 1 and env.sent[n]["text"] == _reminder_text()
+    assert "Stan L" in env.sent[n]["text"] and "STOP" not in env.sent[n]["text"]
     env.clock.add(3)
     hc.tick(env.db, env.tenant)
     assert len(env.sent) == n + 1  # only ONE reminder
-    assert _row(env, "Cy").status == "LINK_SENT"
-    # Backstop: the extension went quiet -> Not confirmed shortly after 10 min.
-    env.clock.add(4)
+
+
+def test_backstop_marks_unconfirmed_if_the_extension_went_quiet(env):
+    _campaign(env)
+    _blast_all(env)
+    _to_link_sent(env, "+13055550103", "Cy")
+    env.clock.add(12.5)
     hc.tick(env.db, env.tenant)
     cy = _row(env, "Cy")
     assert cy.status == "UNCONFIRMED" and cy.job_token_hash is None and hc.stage_of(cy) == "UNCONFIRMED"
+
+
+def test_main_text_goes_before_the_link(env, monkeypatch):
+    """Spec step 1+2: our MAIN text first, then HealthSherpa's link 30-60 s later."""
+    from app.hs_auth import auth_texts
+
+    monkeypatch.delenv("HS_PRE_LINK_WAIT_SECONDS", raising=False)
+    _campaign(env)
+    _blast_all(env)
+    _reply(env, "+13055550103", "yes")
+    _reply(env, "+13055550103", "Oscar")
+    job = hc.next_job(env.db, env.tenant, env.stan)["job"]
+    n = len(env.sent)
+    out = service.report(env.db, job["id"], job["token"], {"step": "pre_link", "pre_link": True})
+    assert out["main_sent"] is True and out["wait_s"] == 45 and out["stop"] is False
+    main = env.sent[n]["text"]
+    assert main == auth_texts.build(auth_texts.AUTH_MAIN_TEXT, "Stan L")
+    assert '"Your agent Stan L with Insurance Alliance Group..."' in main and "\n\n1. Open that text" in main
+    # Once per run.
+    service.report(env.db, job["id"], job["token"], {"step": "pre_link", "pre_link": True})
+    assert len(env.sent) == n + 1
+
+
+def test_reminder_can_be_turned_off_and_never_goes_to_email_clients(env):
+    c = _campaign(env)
+    hc.update(env.db, c, {"reminder_enabled": False})
+    _blast_all(env)
+    _to_link_sent(env, "+13055550103", "Cy")
+    n = len(env.sent)
+    env.clock.add(11)
+    hc.tick(env.db, env.tenant)
+    assert len(env.sent) == n
 
 
 def test_unconfirmed_moves_on_and_can_be_marked_authorized(env):
@@ -288,16 +335,6 @@ def test_unconfirmed_moves_on_and_can_be_marked_authorized(env):
     assert any(e["step"] == "marked_authorized" for e in cy.events)
     with pytest.raises(hc.CampaignError):
         hc.mark_authorized(env.db, env.tenant, env.stan, str(cy.id))  # only from Not confirmed / Expired / Needs a look
-
-
-def test_reminder_off_by_default(env):
-    _campaign(env)
-    _blast_all(env)
-    _to_link_sent(env, "+13055550103", "Cy")
-    n = len(env.sent)
-    env.clock.add(8)
-    hc.tick(env.db, env.tenant)
-    assert len(env.sent) == n
 
 
 @pytest.mark.parametrize("stage", ["blast", "followup", "no_answer", "queued", "link_sent"])
@@ -583,10 +620,10 @@ def test_after_a_reply_nothing_waits_for_texting_hours(env, monkeypatch):
     assert job and job["first_name"] == "Ana"   # not held until morning
     service.report(env.db, job["id"], job["token"], {"step": "link", "status": "LINK_SENT", "link_sent": True})
     n = len(env.sent)
-    env.clock.add(7.5)
+    env.clock.add(10.5)
     hc.tick(env.db, env.tenant)
     hc.tick(env.db, env.tenant)
-    assert len(env.sent) == n + 1 and env.sent[n]["text"] == hc.REMINDER_DRAFT
+    assert len(env.sent) == n + 1 and env.sent[n]["text"] == _reminder_text()
     # ...but the BLAST (us reaching out first) still waits for texting hours.
     before = len(env.sent)
     _campaign(env)                       # a second list, started at "10 pm"

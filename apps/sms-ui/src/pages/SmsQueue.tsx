@@ -4,6 +4,7 @@ import { api } from "../lib/api";
 import { isAdmin } from "../lib/auth";
 import { formatPhone } from "../lib/phone";
 import { getSocket } from "../lib/socket";
+import { freshStart, getWorkMode, setWorkMode, type WorkMode } from "../lib/workMode";
 import { DialButton } from "../components/DialDrawer";
 import { DetailGrid, SourceBadge, isPoolLead, type DetailField } from "../components/LeadDetails";
 import {
@@ -200,6 +201,7 @@ export default function SmsQueue() {
   const breakOverrideRef = useRef<{ reason: string; at: string } | null>(null);
   const refresh = useCallback(async () => {
     try {
+      if (!isAdmin()) await freshStart(); // fresh login → offline, so the mode chooser shows first
       const [s, c, m, st] = await Promise.all([
         api<Status>("/sms/queue/status"),
         api<{ lead: Lead | null }>("/sms/queue/current"),
@@ -314,7 +316,10 @@ export default function SmsQueue() {
     if (searchParams.get("autoJoin") !== "1") return;
     autoJoinedRef.current = true;
     setSearchParams({}, { replace: true });           // clear the flag from the router's location
-    if ((status.status ?? "OFFLINE") === "OFFLINE") join();
+    if ((status.status ?? "OFFLINE") !== "OFFLINE") return;
+    const m = getWorkMode(); // back in the system they chose; none chosen yet → the chooser asks
+    if (m === "sms") join();
+    else if (m === "dialer") setReady(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status, searchParams]);
   const toggleMute = () => {
@@ -423,14 +428,20 @@ export default function SmsQueue() {
     };
   }, [admin, st]);
   const callsReady = !!dialer?.agent.ready;
-  const showReady = !!dialer && dialer.enabled && dialer.available;
-  async function toggleReady() {
+  // Auto dialer can be picked only while it is set up AND switched on by a manager.
+  const dialerUsable = !!dialer && dialer.enabled && dialer.available;
+  const dialerOffReason = !dialer
+    ? "Checking the auto dialer…"
+    : !dialer.available
+      ? "The auto dialer isn't set up yet."
+      : "The auto dialer is turned off right now — your manager turns it on.";
+  async function setReady(on: boolean) {
     setReadyBusy(true);
     unlockSound();
     try {
       const d = await api<{ enabled: boolean; available: boolean; agent: { ready: boolean } }>(
         "/voice/dialer/ready",
-        { method: "POST", body: JSON.stringify({ on: !callsReady }) },
+        { method: "POST", body: JSON.stringify({ on }) },
       );
       setDialer(d);
       window.dispatchEvent(new Event("voice:ready"));
@@ -441,31 +452,56 @@ export default function SmsQueue() {
       setReadyBusy(false);
     }
   }
-  const readySwitch = showReady && (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={callsReady}
-      onClick={toggleReady}
-      disabled={readyBusy}
-      title={callsReady
-        ? "Taking live calls only — no pool leads. Click to stop and go back to pool leads."
-        : "Click to take live calls only. You won't be offered pool leads while this is on."}
-      className={`flex h-9 items-center gap-2.5 rounded-lg border pl-3 pr-2 text-sm font-semibold shadow-sm transition-all hover:-translate-y-px hover:shadow-md disabled:translate-y-0 disabled:opacity-50 ${
-        callsReady
-          ? "ready-on border-transparent text-white"
-          : "border-hairline bg-black/5 text-ink-muted hover:text-ink"
-      }`}
+  // Pick (from Offline) or switch (while online) the ONE system this agent works.
+  async function chooseMode(m: WorkMode) {
+    setWorkMode(m);
+    if (m === "dialer") return setReady(true);
+    if (st === "OFFLINE") return join();
+    return setReady(false); // dialer → SMS leads: line closes, the pool offers a lead now
+  }
+  const mode: WorkMode = callsReady ? "dialer" : "sms";
+  const switchLocked = (current && current.status === "IN_PROGRESS") || st === "ON_CALL";
+  const modeSwitch = (
+    <div
+      role="radiogroup"
+      aria-label="Work mode"
+      className="flex h-9 items-center rounded-lg border border-hairline bg-black/5 p-0.5 text-sm font-semibold"
     >
-      <span className="relative flex h-2 w-2">
-        {callsReady && <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#fff] opacity-70" />}
-        <span className={`relative inline-flex h-2 w-2 rounded-full ${callsReady ? "bg-[#fff]" : "bg-ink-faint"}`} />
-      </span>
-      <span>{callsReady ? "Taking calls" : "Calls off"}</span>
-      <span className={`relative h-5 w-9 flex-shrink-0 rounded-full transition-colors ${callsReady ? "bg-[#fff]/35" : "bg-black/20"}`}>
-        <span className={`absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-[#fff] shadow-sm transition-transform ${callsReady ? "translate-x-4" : ""}`} />
-      </span>
-    </button>
+      {(["sms", "dialer"] as WorkMode[]).map((m) => {
+        const on = mode === m;
+        const blocked = !on && (switchLocked || (m === "dialer" && !dialerUsable));
+        return (
+          <button
+            key={m}
+            type="button"
+            role="radio"
+            aria-checked={on}
+            onClick={() => !on && chooseMode(m)}
+            disabled={blocked || readyBusy || busy}
+            title={
+              on
+                ? m === "dialer" ? "Auto dialer: live calls only — no SMS lead popups." : "SMS leads: leads come in the popup — no dialer calls."
+                : switchLocked
+                  ? "Finish your current lead or call first."
+                  : m === "dialer" && !dialerUsable
+                    ? dialerOffReason
+                    : m === "dialer" ? "Switch to Auto dialer (live calls only)" : "Switch to SMS leads (the lead popup)"
+            }
+            className={`flex h-full items-center gap-1.5 rounded-md px-3 transition-all disabled:cursor-not-allowed disabled:opacity-50 ${
+              on ? (m === "dialer" ? "ready-on text-white shadow-sm" : "join-btn text-white shadow-sm") : "text-ink-muted hover:text-ink"
+            }`}
+          >
+            {m === "dialer" && on && (
+              <span className="relative flex h-2 w-2">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#fff] opacity-70" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-[#fff]" />
+              </span>
+            )}
+            {m === "dialer" ? "Auto dialer" : "SMS leads"}
+          </button>
+        );
+      })}
+    </div>
   );
   const inChat = current && current.status === "IN_PROGRESS";
 
@@ -491,7 +527,11 @@ export default function SmsQueue() {
             <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-accent opacity-75" />
             <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-accent" />
           </span>
-          {callsReady && dialer?.enabled ? "Waiting for a live call…" : "Waiting for the next lead…"}
+          {!callsReady
+            ? "Waiting for the next lead…"
+            : dialer?.enabled
+              ? "Waiting for a live call…"
+              : "Auto dialer is off right now — no calls until a manager turns it on. Switch to SMS leads to work the pool."}
         </div>
       )}
       {/* Control bar — turns amber while on break (matches the reference design) */}
@@ -538,21 +578,8 @@ export default function SmsQueue() {
               <span className="h-2 w-2 rounded-full bg-ink-faint" /> Offline
             </span>
             <div className="ml-auto flex items-center gap-2">
-              {readySwitch}
               <DialButton />
               {muteBtn}
-              <button
-                onClick={join}
-                disabled={busy}
-                className="join-btn group flex h-10 items-center gap-2.5 rounded-xl pl-4 pr-5 text-base font-semibold text-white disabled:opacity-50"
-              >
-                <span className="relative flex h-2.5 w-2.5">
-                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#fff] opacity-60" />
-                  <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-[#fff]" />
-                </span>
-                Join queue
-                <span aria-hidden className="transition-transform group-hover:translate-x-0.5">→</span>
-              </button>
             </div>
           </>
         ) : (
@@ -562,12 +589,14 @@ export default function SmsQueue() {
               <span className="h-2 w-2 rounded-full bg-success" />
               {st === "ON_CALL" ? "On call" : "Available"}
             </span>
-            <span
-              className="flex items-center gap-1.5 rounded-full bg-success/12 px-3 py-1 text-xs font-semibold text-success"
-              title="Positive leads waiting in the shared pool"
-            >
-              <IconChecks /> {status?.yes_waiting ?? 0} in queue
-            </span>
+            {mode === "sms" && (
+              <span
+                className="flex items-center gap-1.5 rounded-full bg-success/12 px-3 py-1 text-xs font-semibold text-success"
+                title="Positive leads waiting in the shared pool"
+              >
+                <IconChecks /> {status?.yes_waiting ?? 0} in queue
+              </span>
+            )}
             <span className="text-xs text-ink-muted">
               Handled <strong className="text-sm text-ink">{status?.total_leads_handled ?? 0}</strong>
             </span>
@@ -575,7 +604,7 @@ export default function SmsQueue() {
               Appts <strong className="text-sm text-ink">{status?.total_appointments_set ?? 0}</strong>
             </span>
             <div className="ml-auto flex flex-wrap items-center gap-2">
-              {readySwitch}
+              {modeSwitch}
               <DialButton />
               {muteBtn}
               <div className="relative">
@@ -627,6 +656,42 @@ export default function SmsQueue() {
           </>
         )}
       </div>
+
+      {!admin && st === "OFFLINE" && (
+        <div className="glass rounded-2xl p-6 sm:p-8">
+          <div className="text-center">
+            <h3 className="text-lg font-semibold text-ink">How are you working today?</h3>
+            <p className="mt-1 text-sm text-ink-muted">Pick one. You can switch any time from the top bar.</p>
+          </div>
+          <div className="mx-auto mt-5 grid max-w-2xl gap-3 sm:grid-cols-2">
+            <button
+              onClick={() => chooseMode("sms")}
+              disabled={busy || readyBusy}
+              className="group flex flex-col items-start gap-2 rounded-xl border border-hairline bg-white/60 p-5 text-left transition-all hover:-translate-y-0.5 hover:border-accent/40 hover:shadow-md disabled:opacity-50"
+            >
+              <span className="flex h-10 w-10 items-center justify-center rounded-full bg-accent/10 text-accent">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg>
+              </span>
+              <span className="text-base font-semibold text-ink">SMS leads</span>
+              <span className="text-sm text-ink-muted">Leads pop up for you to accept and work. No auto-dialer calls.</span>
+            </button>
+            <button
+              onClick={() => chooseMode("dialer")}
+              disabled={busy || readyBusy || !dialerUsable}
+              title={dialerUsable ? undefined : dialerOffReason}
+              className="group flex flex-col items-start gap-2 rounded-xl border border-hairline bg-white/60 p-5 text-left transition-all hover:-translate-y-0.5 hover:border-accent/40 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 disabled:hover:shadow-none"
+            >
+              <span className="flex h-10 w-10 items-center justify-center rounded-full bg-success/12 text-success">
+                <IconPhone />
+              </span>
+              <span className="text-base font-semibold text-ink">Auto dialer</span>
+              <span className="text-sm text-ink-muted">
+                {dialerUsable ? "Live callers are put through to your headset. No lead popups." : dialerOffReason}
+              </span>
+            </button>
+          </div>
+        </div>
+      )}
 
       {st === "AWAY" && (
         <div className="glass rounded-2xl p-10 text-center text-sm text-ink-muted">

@@ -167,9 +167,9 @@ class HsTextCampaign(Base):
 
     # Timers / settings (edited from the campaign drawer).
     answer_wait_minutes = Column(Integer, nullable=False, default=10, server_default="10")
-    reminder_enabled = Column(Boolean, nullable=False, default=False, server_default="false")
+    reminder_enabled = Column(Boolean, nullable=False, default=True, server_default="true")
     reminder_text = Column(Text, nullable=True)
-    reminder_minutes = Column(Integer, nullable=False, default=5, server_default="5")
+    reminder_minutes = Column(Integer, nullable=False, default=10, server_default="10")
     expire_minutes = Column(Integer, nullable=False, default=10, server_default="10")  # link wait, then UNCONFIRMED
     resend_on_expiry = Column(Boolean, nullable=False, default=False, server_default="false")
 

@@ -47,8 +47,14 @@ pages, `prefs-extras.js` / `services/error-boundary.js` (injected links), and
 - The lead pool is `sms_leads` with status `QUEUED`. An agent presses **Join
   queue**; a lead is offered in a popup (Accept / Pass), then the agent works it
   and marks a disposition (sale, appointment, not interested, voicemail…).
-- **Ready for calls** (second switch) opens the agent's browser phone line so the
-  Auto Dialer can connect live callers to them. Join queue alone = pool only.
+- **One system at a time** (owner, 2026-11-17): the agent picks **SMS leads** (pool
+  popups, `POST /sms/queue/join`, sets `voice_ready` off) or **Auto dialer** (browser
+  phone line, `POST /voice/dialer/ready`) — a chooser while Offline, a two-way switch in
+  the top bar after (locked mid-lead / mid-call). `voice_ready` agents are NEVER offered
+  a pool lead, dialer on or off (`queue_service._try_assign`). Asked again on every
+  fresh login: `lib/workMode.ts` `freshStart()` takes an agent still online from an
+  earlier session offline before any popup can show (not if mid-lead / on a call);
+  the choice is kept in `sessionStorage` for that tab.
 - **Dial** button opens the manual dial drawer (call any number from the browser).
 
 ## SMS Manager (super_admin)
@@ -141,8 +147,13 @@ No Google Sheet: every client's details, texts and status are on the page, with
   HealthSherpa campaigns only → wait 10 min
   (`NO_ANSWER` after; a late answer still counts) → any non-negative answer =
   "Company they're renewing" → queued (status `PENDING`) → **auto mode** runs it
-  → link sent → ONE reminder at 5 min (OFF by default; the text is a placeholder
-  until approved 10DLC wording is pasted in Settings) → **at 10 min the extension
+  → **MAIN text first** (owner's Authorization Texts spec 2026-11-17, `auth_texts.py`: "You will
+  get another text that starts with: "Your agent {agent_name} with Insurance Alliance
+  Group..." 1. Open… STOP to opt out", line breaks kept) — the extension reports `pre_link`, the
+  server sends it (`campaigns.pre_link`) and answers `wait_s` (`HS_PRE_LINK_WAIT_SECONDS`,
+  default 45; spec 30-60) — then the extension presses "Text link" → ONE reminder at 10 min
+  (approved spec wording, ON by default, NO STOP line, also after auto mode moved on while the
+  15-min link lives, never for email clients; migration 076) → **at 10 min the extension
   stops waiting** (owner, 2026-11-15: one client at a time, max 10 min) and reports
   `UNCONFIRMED` ("Check in HealthSherpa" — the link still works until HealthSherpa's
   15 min; a person checks and presses **Mark authorized**, `POST
@@ -227,8 +238,13 @@ No Google Sheet: every client's details, texts and status are on the page, with
   (a file without Phone is refused, also in `create`), ready / fix-data / no-phone /
   duplicate / DNC counts and the problem rows. Run + Save as draft stay disabled until OK.
 - **Message library** (`components/hs/hsTemplates.ts` + `HsTemplatePicker.tsx`): the
-  approved "Final Texts — Double Filter Checked" texts (no picture/MMS), styled like the
-  PDF; picking one fills the editable message box (New campaign + Re-text).
+  approved "Final Texts — Double Filter Checked" **v3** texts (ACA/Tax open "[Name],", Medicare
+  "Hi [Name],", brand + STOP at the END; no picture/MMS) + two texts Stan added 2026-11-17
+  marked NOT FILTER-CHECKED; styled like the PDF; picking one fills the editable message box
+  (New campaign + Re-text, and the Auto Dialer). Plain characters only — no curly quotes.
+- **{agent_name} rule** (`auth_texts.agent_name_for_sms`): <= 20 chars, else whole words in 17
+  + "..." (three dots, never "…"), accents stripped; a non-GSM or > 306-char text falls back to
+  "Your agent... with Insurance Alliance Group...". Name = the campaign's HealthSherpa agent.
 - **Spam pause:** ONE carrier spam refusal (40002/40003) doesn't pause a HealthSherpa
   campaign (owner: "if messages are going, no need to show carriers blocking") — only
   `SPAM_PAUSE_MIN` (5) of the last `SPAM_WINDOW` (20) texts. The reason shows only while
@@ -253,6 +269,8 @@ No Google Sheet: every client's details, texts and status are on the page, with
   counts. Email only — the phone is never changed. The second run counts toward the daily
   limit. Real HealthSherpa's profile button for the email run is UNVERIFIED (the fake has
   "Resend authorization"); if it differs the run stops with a `diag`. Fake: last name `Mailer`.
+- Extension 1.1.7: in a campaign job, `textFirst()` before "Text link" (asks the portal for the
+  MAIN text, counts down `wait_s`). Local e2e: run the API with `HS_PRE_LINK_WAIT_SECONDS=3`.
 - Extension 1.1.6 (seen live 2026-11-16): HealthSherpa's waiting window says **"Refresh"** (not
   "Refresh status") and hides "Resend by email / text" behind **"Show resend options"** — the
   extension accepts both labels and opens the options first. The fake copies this.

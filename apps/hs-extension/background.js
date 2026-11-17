@@ -320,7 +320,7 @@ chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
       var body = msg.body || {};
       if (body.detail || body.step) log((body.status ? "[" + body.status + "] " : "") + (body.step || "") + " — " + (body.detail || ""));
       broadcast({ id: s.job.id, step: body.step, status: body.status, detail: body.detail, waiting_login: !!body.waiting_login });
-      var serverBody = { step: body.step, status: body.status, detail: body.detail, hs_app_id: body.hs_app_id, link_sent: body.link_sent, diag: body.diag, hs_email: body.hs_email };
+      var serverBody = { step: body.step, status: body.status, detail: body.detail, hs_app_id: body.hs_app_id, link_sent: body.link_sent, diag: body.diag, hs_email: body.hs_email, pre_link: body.pre_link };
       report(s, serverBody).then(function (res) {
         var stop = !!(res && res.stop);
         if (body.status && FINAL.indexOf(body.status) !== -1) {
@@ -333,7 +333,7 @@ chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
           setState(s);
           finish(s, "CANCELLED");
         }
-        sendResponse({ stop: stop });
+        sendResponse({ stop: stop, main_sent: !!(res && res.main_sent), wait_s: (res && res.wait_s) || 0 });
       });
     });
     return true;

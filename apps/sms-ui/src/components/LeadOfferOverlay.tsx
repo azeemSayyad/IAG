@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../lib/api";
 import { isAdmin } from "../lib/auth";
 import { getSocket } from "../lib/socket";
+import { freshStart } from "../lib/workMode";
 import { leadOfferedSound, unlockSound } from "../lib/sound";
 import { DetailGrid, SourceBadge, isPoolLead, type DetailField } from "./LeadDetails";
 
@@ -51,6 +52,7 @@ export default function LeadOfferOverlay() {
   const check = useCallback(async () => {
     if (admin) return;
     try {
+      await freshStart(); // a fresh login picks SMS leads / Auto dialer first — no popup before that
       const r = await api<{ lead: Lead | null }>("/sms/queue/current");
       const l = r.lead;
       if (l && l.status === "ASSIGNED") {

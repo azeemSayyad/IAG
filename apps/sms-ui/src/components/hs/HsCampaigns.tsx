@@ -87,7 +87,7 @@ const CAMP_LABEL: Record<string, string> = {
 };
 const KIND_LABEL: Record<string, string> = {
   BLAST: "Campaign text", FOLLOWUP: "Follow-up", REMINDER: "Reminder", MANUAL: "You", REPLY: "Client", RETEXT: "Re-text",
-  EMAIL_ASK: "Email check", EMAIL_NOTE: "Check your email",
+  EMAIL_ASK: "Email check", EMAIL_NOTE: "Check your email", AUTH_MAIN: "Before the link",
 };
 
 const btn = "rounded-lg bg-accent px-3 py-1.5 text-xs font-bold text-white hover:bg-accent-hover disabled:opacity-50";
@@ -393,7 +393,7 @@ export default function HsCampaigns({ overview, reloadOverview, agents, status, 
                                       }} />}
       {retextFor && <RetextDrawer c={retextFor} max={overview.retext_max} onClose={() => setRetextFor(null)}
                                   onSent={(msg) => { setRetextFor(null); onNote(msg); reloadOverview(); load(); }} />}
-      {settingsFor && <SettingsDrawer c={settingsFor} approvedFollowup={overview.followup_text} onClose={() => setSettingsFor(null)}
+      {settingsFor && <SettingsDrawer c={settingsFor} approvedFollowup={overview.followup_text} approvedReminder={overview.reminder_draft} onClose={() => setSettingsFor(null)}
                                       onSaved={() => { setSettingsFor(null); reloadOverview(); }} />}
       {confirmEl}
       {addingOne && <AddClientDrawer overview={overview} agents={agents} onClose={() => setAddingOne(false)}
@@ -635,7 +635,8 @@ function NewCampaignDrawer({ overview, agents, onClose, onCreated }: {
         <p className="text-xs text-ink-muted">
           Their answer (company name, “ok”, …) queues them for HealthSherpa. No answer in 10 minutes = “No answer yet”;
           a later answer still queues them. After the link: wait up to 10 minutes, then the next client (“Check in HealthSherpa”).
-          The 5-minute reminder is OFF until the wording is approved (Settings).
+          Right before HealthSherpa's link we text them what to expect (“Your agent … with Insurance Alliance Group…”),
+          then ONE reminder at 10 minutes if they haven't authorized (Settings).
         </p>
       </DrawerSection>
     </Drawer>
@@ -973,8 +974,8 @@ function RetextDrawer({ c, max, onClose, onSent }: {
   );
 }
 
-function SettingsDrawer({ c, approvedFollowup, onClose, onSaved }: {
-  c: HsCampaign; approvedFollowup: string; onClose: () => void; onSaved: () => void;
+function SettingsDrawer({ c, approvedFollowup, approvedReminder, onClose, onSaved }: {
+  c: HsCampaign; approvedFollowup: string; approvedReminder: string; onClose: () => void; onSaved: () => void;
 }) {
   const [f, setF] = useState({
     name: c.name, template: c.template, reminder_enabled: c.reminder_enabled, reminder_text: c.reminder_text || "",
@@ -1046,10 +1047,15 @@ function SettingsDrawer({ c, approvedFollowup, onClose, onSaved }: {
           Send ONE reminder text if they haven't authorized yet
         </label>
         <Field label="Reminder at minute" plain>{num("reminder_minutes")}</Field>
-        <Field label="Reminder text" hint="Use only approved 10DLC wording. The draft below is a placeholder.">
-          <textarea className={`${drawerCtl} min-h-20`} value={f.reminder_text} maxLength={480}
+        <Field label="Reminder text"
+               hint="Approved wording (Authorization Texts spec). {agent_name} = the HealthSherpa agent's name. No STOP line on purpose — they're already talking to us.">
+          <textarea className={`${drawerCtl} min-h-24`} value={f.reminder_text} maxLength={480}
                     onChange={(e) => setF({ ...f, reminder_text: e.target.value })} />
         </Field>
+        {f.reminder_text.trim() !== approvedReminder.trim() && (
+          <button type="button" className="-mt-2 text-[0.7rem] font-semibold text-accent underline"
+                  onClick={() => setF({ ...f, reminder_text: approvedReminder })}>Reset to approved text</button>
+        )}
       </DrawerSection>
     </Drawer>
   );

@@ -73,15 +73,22 @@ export function TemplatePicker({ value, onPick, hsOnlyWarnings = true }: {
                       {t.group} · {t.label}{t.top && <span className="ml-1">★ TOP PICK</span>}
                     </div>
                     <div className="flex flex-wrap items-center gap-1">
-                      <Badge k="CARRIER" v={t.carrier} />
-                      <Badge k="CONSUMER" v={t.consumer} />
+                      {t.carrier === "NEW" ? (
+                        <span className="whitespace-nowrap rounded-full px-2 py-0.5 text-[0.6rem] font-extrabold tracking-wide text-white"
+                              style={{ background: "#7a869a" }}>NOT FILTER-CHECKED</span>
+                      ) : (<>
+                        <Badge k="CARRIER" v={t.carrier} />
+                        <Badge k="CONSUMER" v={t.consumer} />
+                      </>)}
                       <span className="text-[0.62rem] tabular-nums text-ink-faint">{charCount(t.text)} chars</span>
                     </div>
                   </div>
                   <div className="rounded-lg bg-black/5 px-2.5 py-1.5 font-mono text-[0.7rem] leading-snug text-ink">{t.text}</div>
-                  <div className="text-[0.68rem] text-ink-soft">
-                    <b style={{ color: READER }}>{t.reader}:</b> {t.quote}
-                  </div>
+                  {t.reader && (
+                    <div className="text-[0.68rem] text-ink-soft">
+                      <b style={{ color: READER }}>{t.reader}:</b> {t.quote}
+                    </div>
+                  )}
                   <div className="text-[0.66rem] text-ink-muted">→ {t.note}</div>
                   {t.warn && hsOnlyWarnings && (
                     <div className="rounded-md px-2 py-1 text-[0.66rem] font-semibold"

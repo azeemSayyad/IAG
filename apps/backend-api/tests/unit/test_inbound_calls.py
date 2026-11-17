@@ -169,3 +169,24 @@ def test_press_1_on_hold_means_call_me_back(env):
     script, _ = inbound.on_hold_input(env.db, att, "1")
     env.db.refresh(att)
     assert att.status != "HOLDING" and script
+
+
+def test_auto_dialer_mode_never_offered_a_pool_lead(env):
+    """One system at a time (owner, 2026-11-17): an agent in "Auto dialer" mode
+    (voice_ready) is never offered a pool lead — even with the dialer OFF — and
+    joining "SMS leads" switches them back to the pool."""
+    from app.models.sms import SmsLead
+    from app.sms_queue.services import queue_service as qs
+
+    env.settings.enabled = False
+    u, a = env.agent("Dina", ready=True, line=False)
+    lead = SmsLead(tenant_id=env.tenant, phone_number="+13055550901", status="QUEUED", priority="HOT")
+    env.db.add(lead)
+    env.db.flush()
+
+    qs._try_assign(env.db, env.tenant)
+    assert lead.status == "QUEUED" and lead.assigned_agent_id is None
+
+    qs.join(env.db, env.tenant, str(u.id))  # picks "SMS leads"
+    assert a.voice_ready is False
+    assert lead.status == "ASSIGNED" and str(lead.assigned_agent_id) == str(u.id)

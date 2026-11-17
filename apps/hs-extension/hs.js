@@ -812,7 +812,7 @@
     }
 
     await tickConsent();
-
+    await textFirst();
     await save({ phase: "link_sent", linkSends: 1, linkSentAt: Date.now() });
     await click(textBtn);
     var waiting = await waitFor(function () {
@@ -847,6 +847,29 @@
       await step("consent", "Ticking “Include and save Consumer Consent”");
       if (!(await ensureChecked(consent))) await final("FAILED", "Couldn't tick “Include and save Consumer Consent”.");
     }
+  }
+
+  /* Owner's Authorization Texts spec (2026-11-17): in a text campaign OUR text
+     ("You will get another text that starts with: Your agent … with Insurance
+     Alliance Group...") goes first, and HealthSherpa's link 30-60 s later (the
+     portal says how long), so ours arrives first. */
+  async function textFirst() {
+    if (!job.auto) return;
+    lastStep = "pre_link";
+    var res = await send({ kind: "report", id: job.id, body: { step: "pre_link", pre_link: true,
+      detail: "Texting the client first, so our text arrives before HealthSherpa's" } });
+    if (res && res.stop) { stopFlag = true; overlay.final("Stopped from the portal", "stop"); throw STOPPED; }
+    var wait = (res && res.main_sent) ? Math.max(0, +res.wait_s || 0) : 0;
+    var until = Date.now() + wait * 1000;
+    while (Date.now() < until) {
+      checkStop();
+      var left = Math.ceil((until - Date.now()) / 1000);
+      overlay.update("Our text went first — sending HealthSherpa's link in " + left + " s");
+      overlay.timer(Math.floor(left / 60) + ":" + String(left % 60).padStart(2, "0"));
+      await sleep(1000);
+    }
+    overlay.timer("");
+    if (!authModal()) await final("NEEDS_REVIEW", "HealthSherpa's authorization window closed before the link was sent — send it yourself.");
   }
 
   /* The client confirmed the email HealthSherpa has: send the link by EMAIL. */

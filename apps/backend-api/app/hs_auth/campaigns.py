@@ -33,8 +33,12 @@ The flow, per client (`convo`):
   BLAST_FAILED   the carrier refused the blast
   CANCELLED      campaign stopped before their blast went out
 
-After the HealthSherpa link is sent (status LINK_SENT): at reminder_minutes (5)
-ONE reminder text (only when reminder_enabled); at expire_minutes (10, owner
+Right before HealthSherpa's link (owner's Authorization Texts spec, 2026-11-17,
+auth_texts.py): the extension asks for the MAIN text ("You will get another text
+that starts with: Your agent <name> with Insurance Alliance Group...") and presses
+"Text link" PRE_LINK_WAIT (45 s) later, so ours arrives first. After the link is
+sent: at reminder_minutes (10) ONE reminder (auth_texts REMINDER, ON by default,
+no STOP line, also after auto mode moved on, never for email clients); at expire_minutes (10, owner
 2026-11-15: "one at a time with a maximum 10 min wait") the extension stops
 waiting, reports UNCONFIRMED ("Not confirmed — check in HealthSherpa": the link
 still works until HealthSherpa's 15 min, a person checks / marks it authorized)
@@ -62,7 +66,7 @@ from sqlalchemy import and_, func, or_, select, text as sql_text
 from sqlalchemy.orm import Session
 
 from app.core.active_agents import user_is_active
-from app.hs_auth import service
+from app.hs_auth import auth_texts, service
 from app.hs_auth.sheet import SheetError, clean_rows, find_columns, read_rows
 from app.models.hs_auth import HsAuthBatch, HsAuthRequest, HsAuthRun, HsAutoHeartbeat, HsCampaignText, HsTextCampaign
 from app.models.sms import SmsMessage, TextCampaignRecipient
@@ -82,10 +86,19 @@ BLAST_DEFAULT = (
     "Insurance Alliance Group: Hi {name}, this is Stan following up on your health plan for 2027. "
     "Reply YES to renew. Reply STOP to opt out."
 )
-REMINDER_DRAFT = (
-    "Insurance Alliance Group: Did you receive the HealthSherpa link? Tap it to authorize "
-    "help with your plan. Reply STOP to opt out"
-)
+# The approved reminder (spec, 2026-11-17). {agent_name} is filled at send time.
+REMINDER_DRAFT = auth_texts.AUTH_REMINDER_TEXT
+LINK_LIFE = timedelta(minutes=15)   # HealthSherpa's link — no reminder after it died
+
+
+def pre_link_wait() -> int:
+    """Seconds between our MAIN text and HealthSherpa's link (spec: 30-60)."""
+    import os
+
+    try:
+        return max(0, min(120, int(os.environ.get("HS_PRE_LINK_WAIT_SECONDS", "45"))))
+    except ValueError:
+        return 45
 
 REPLY_WINDOW = vc.REPLY_WINDOW
 STALE_SENDING = vc.STALE_SENDING
@@ -332,8 +345,6 @@ def update(db: Session, c: HsTextCampaign, data: dict) -> None:
         c.expire_minutes = _int(data["expire_minutes"], 3, 15, "Link wait")  # HealthSherpa links die at 15
     if "resend_on_expiry" in data:
         c.resend_on_expiry = bool(data["resend_on_expiry"])
-    if c.reminder_minutes >= c.expire_minutes:
-        raise CampaignError("The reminder must go out before the link wait ends")
     db.commit()
 
 
@@ -624,31 +635,32 @@ def _timers(db: Session, tenant_id, now: datetime) -> None:
             r.updated_at = now
             service._event(r, "no_answer", None, r.convo_detail)
 
-    # 2) Link sent: one reminder, then expiry.
+    # 2) Link sent: one reminder (also once auto mode moved on — the link lives
+    #    15 min), then the backstop for the 10-minute wait.
     for r in db.query(HsAuthRequest).filter(HsAuthRequest.tenant_id == tenant_id,
                                             HsAuthRequest.campaign_id.isnot(None),
-                                            HsAuthRequest.status == "LINK_SENT",
+                                            HsAuthRequest.status.in_(("LINK_SENT", "UNCONFIRMED")),
                                             HsAuthRequest.deleted_at.is_(None)).all():
         c = camps.get(r.campaign_id)
         if not c or not r.link_sent_at:
             continue
-        deadline = r.link_sent_at + timedelta(minutes=c.expire_minutes) + WAIT_GRACE
-        if c.resend_on_expiry and (r.link_sends or 0) < 2:
-            deadline += RESEND_GRACE  # the extension resends when HealthSherpa's link expires
-        if now >= deadline:
-            service._set_status(r, "UNCONFIRMED", unconfirmed_note(c.expire_minutes), "unconfirmed")
-            _cancel_queued(db, r, ("REMINDER",))
-            continue
+        if r.status == "LINK_SENT":
+            deadline = r.link_sent_at + timedelta(minutes=c.expire_minutes) + WAIT_GRACE
+            if c.resend_on_expiry and (r.link_sends or 0) < 2:
+                deadline += RESEND_GRACE  # the extension resends when HealthSherpa's link expires
+            if now >= deadline:
+                service._set_status(r, "UNCONFIRMED", unconfirmed_note(c.expire_minutes), "unconfirmed")
         due = r.link_sent_at + timedelta(minutes=c.reminder_minutes)
         if (c.reminder_enabled and (c.reminder_text or "").strip() and r.reminder_sent_at is None
-                and now >= due and c.status != "PAUSED"):
+                and (r.send_by or "text") != "email"           # it says "look for the TEXT"
+                and due <= now < r.link_sent_at + LINK_LIFE and c.status != "PAUSED"):
             already = db.query(HsCampaignText.id).filter(
                 HsCampaignText.request_id == r.id, HsCampaignText.kind == "REMINDER",
                 HsCampaignText.created_at >= (r.started_at or r.link_sent_at)).first()
             if already is None:
                 db.add(HsCampaignText(
                     tenant_id=tenant_id, campaign_id=c.id, request_id=r.id, phone_number=e164(r.phone),
-                    direction="OUT", kind="REMINDER", body=vc.render(c.reminder_text, r.first_name),
+                    direction="OUT", kind="REMINDER", body=_reminder_body(db, c, r),
                     status="QUEUED", from_number=_last_from(db, r.id)))
 
     # 2b) Wrong phone -> ask the client to confirm the email HealthSherpa has; no
@@ -759,8 +771,11 @@ def _send(db: Session, tenant_id, now: datetime) -> int:
         if t.kind == "EMAIL_ASK" and row.status != "EMAIL_CHECK":
             t.status = "CANCELLED"  # answered / skipped before it could go
             continue
+        if t.kind == "AUTH_MAIN" and row.status not in service.ACTIVE:
+            t.status = "CANCELLED"  # the run ended before it could go
+            continue
         if t.kind == "REMINDER":
-            if row.status != "LINK_SENT":
+            if row.status not in ("LINK_SENT", "UNCONFIRMED"):
                 t.status = "CANCELLED"  # authorized / expired before it could go
                 continue
             if c.status == "PAUSED":
@@ -854,6 +869,8 @@ def _after_sent(row: Optional[HsAuthRequest], t: HsCampaignText) -> None:
     elif t.kind == "REMINDER":
         row.reminder_sent_at = now
         service._event(row, "reminder", None, "Reminder text sent")
+    elif t.kind == "AUTH_MAIN":
+        service._event(row, "auth_main", None, "Told them HealthSherpa's text is coming (sent before the link)")
     elif t.kind == "EMAIL_ASK":
         service._event(row, "email_ask", None, f"Asked them to confirm {row.hs_email} (HealthSherpa has a different mobile)")
     elif t.kind == "EMAIL_NOTE":
@@ -1100,6 +1117,40 @@ def on_inbound(db: Session, tenant_id, phone: str, to_raw: Optional[str], text: 
     if send_now:
         tick(db, tenant_id)  # the follow-up goes now, not on the next beat
     return {"ok": True, "result": result, "kind": kind, "hs_request_id": str(row.id)}
+
+
+def agent_full_name(db: Session, c: HsTextCampaign) -> str:
+    u = db.query(User).filter(User.id == c.hs_agent_id).first() if c and c.hs_agent_id else None
+    return f"{u.first_name or ''} {u.last_name or ''}".strip() if u else ""
+
+
+def _reminder_body(db: Session, c: HsTextCampaign, r: HsAuthRequest) -> str:
+    """The reminder as-is (no STOP line added — spec), {agent_name} filled in."""
+    return auth_texts.build(c.reminder_text or REMINDER_DRAFT, agent_full_name(db, c))
+
+
+def pre_link(db: Session, row: HsAuthRequest) -> dict:
+    """The extension is about to press "Text link": send our MAIN text now, and
+    tell it how long to wait so ours arrives first. Campaign clients only; once
+    per run; never for an email run (the text says "another TEXT")."""
+    if row.campaign_id is None or (row.send_by or "text") == "email" or row.status not in service.ACTIVE:
+        return {"main_sent": False, "wait_s": 0}
+    c = db.query(HsTextCampaign).filter(HsTextCampaign.id == row.campaign_id).first()
+    tid = str(row.tenant_id)
+    already = db.query(HsCampaignText).filter(
+        HsCampaignText.request_id == row.id, HsCampaignText.kind == "AUTH_MAIN",
+        HsCampaignText.created_at >= (row.started_at or _now())).first()
+    if already is None:
+        db.add(HsCampaignText(
+            tenant_id=row.tenant_id, campaign_id=c.id, request_id=row.id, phone_number=e164(row.phone),
+            direction="OUT", kind="AUTH_MAIN", status="QUEUED", from_number=_last_from(db, row.id),
+            body=auth_texts.build(auth_texts.AUTH_MAIN_TEXT, agent_full_name(db, c))))
+        db.commit()
+        tick(db, tid)  # goes now (a reply conversation: any hour)
+    t = (db.query(HsCampaignText).filter(HsCampaignText.request_id == row.id, HsCampaignText.kind == "AUTH_MAIN")
+         .order_by(HsCampaignText.created_at.desc()).first())
+    sent = t is not None and t.status in ("SENDING", "SENT", "DELIVERED")
+    return {"main_sent": sent, "wait_s": pre_link_wait() if sent else 0}
 
 
 def _first(name: Optional[str]) -> str:
@@ -1789,7 +1840,7 @@ def export_csv(db: Session, tenant_id, *, campaign: Optional[str], stage: Option
                                                   HsCampaignText.status.notin_(("QUEUED", "CANCELLED")))
                   .order_by(func.coalesce(HsCampaignText.sent_at, HsCampaignText.created_at))):
             who = "Client" if t.direction == "IN" else {"BLAST": "Campaign", "FOLLOWUP": "Follow-up",
-                                                         "REMINDER": "Reminder", "RETEXT": "Re-text", "EMAIL_ASK": "Email check", "EMAIL_NOTE": "Check your email",
+                                                         "REMINDER": "Reminder", "RETEXT": "Re-text", "AUTH_MAIN": "Before the link", "EMAIL_ASK": "Email check", "EMAIL_NOTE": "Check your email",
                                                          "MANUAL": "Us (typed)"}.get(t.kind, "Us")
             texts.setdefault(t.request_id, []).append(f"[{_et(t.sent_at or t.created_at)}] {who}: {t.body or ''}")
     buf = io.StringIO()

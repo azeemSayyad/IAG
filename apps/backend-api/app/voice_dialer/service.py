@@ -2144,12 +2144,9 @@ def _sim_ignore_hours(tenant_id) -> bool | None:
 
 
 def dialer_reserves_agents(db: Session, tenant_id) -> bool:
-    """True while agents who switched on "Taking calls" belong to the phones
-    alone — the dialer is on, or a caller is on hold. The regular pool then
-    never offers them a lead (queue_service._try_assign): Stan's agents were
-    handed a pool lead the moment they logged in, and its popup sat on top of
-    the very switch they needed. With the dialer off, "Taking calls" means
-    nothing, so those agents work the pool as before instead of sitting idle."""
+    """True while the dialer is on or a caller is on hold. (No longer used by
+    the pool: an agent in "Auto dialer" mode is never offered a pool lead,
+    dialer on or off — see queue_service._try_assign.)"""
     held = (
         db.query(VoiceCallAttempt.id)
         .filter(VoiceCallAttempt.tenant_id == tenant_id, VoiceCallAttempt.status == "HOLDING")
