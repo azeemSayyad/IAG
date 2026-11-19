@@ -473,6 +473,42 @@ def on_hold_input(db: Session, att: VoiceCallAttempt | None, digits: str | None)
     return hold_script(att, first=False), []
 
 
+def _lead_agent_free(db: Session, tenant_id, lead: SmsLead) -> SmsQueueAgent | None:
+    """The agent still holding this lead (call over, result not set yet), if
+    they can talk right now: Ready for calls, line open, not on a call with
+    anyone (dialer or manual). Their status stays ON_CALL with this lead —
+    that IS them working it — so _claim_agent would never pick them."""
+    from app.core.active_agents import user_is_active
+    from app.models.user import User
+    from app.voice_dialer import manual
+
+    if not lead.assigned_agent_id:
+        return None
+    agent = (
+        db.query(SmsQueueAgent)
+        .filter(
+            SmsQueueAgent.tenant_id == tenant_id,
+            SmsQueueAgent.user_id == lead.assigned_agent_id,
+            SmsQueueAgent.current_lead_id == lead.id,
+            SmsQueueAgent.voice_ready.is_(True),
+            SmsQueueAgent.voice_leg_uuid.isnot(None),
+        )
+        .first()
+    )
+    if agent is None:
+        return None
+    if not user_is_active(db.query(User).filter(User.id == agent.user_id).first()):
+        return None
+    on_call = (
+        db.query(VoiceCallAttempt.id)
+        .filter(VoiceCallAttempt.agent_user_id == agent.user_id, VoiceCallAttempt.status == "CONNECTED")
+        .first()
+    )
+    if on_call or manual.live_call(db, agent.user_id):
+        return None
+    return agent
+
+
 def on_call(db: Session, tenant_id, phone: str, to_raw: str | None, leg_uuid: str) -> tuple[list[dict], list[dict]]:
     """A client called one of our numbers (phone is already +1XXXXXXXXXX)."""
     from app.sms_queue.services import queue_service as qs
@@ -505,9 +541,24 @@ def on_call(db: Session, tenant_id, phone: str, to_raw: str | None, leg_uuid: st
         att.ended_at = now
         db.commit()
         return closed_script(s), []
-    if qs.is_dnc(db, tenant_id, phone) or lead.status in ("IN_PROGRESS", "ASSIGNED", "DIALING"):
-        # On Do-Not-Call, or already being worked / dialed right now.
+    if qs.is_dnc(db, tenant_id, phone):
         att.status = "MISSED"
+        att.ended_at = now
+        db.commit()
+        return nobody_script(s), []
+    if lead.status in ("IN_PROGRESS", "ASSIGNED", "DIALING"):
+        # Their lead is still with an agent — usually because the call just
+        # ended and the agent hasn't set the result yet (seen live: the client
+        # dropped after 4 s, called straight back and was told "all agents are
+        # busy" while their agent sat free on the line). Put them through to
+        # that agent; anything else (being dialed right now, agent gone) is missed.
+        agent = _lead_agent_free(db, tenant_id, lead)
+        if agent is not None:
+            script: list[dict] = []
+            events = connect(db, att, lead, agent, script)
+            return script, events
+        att.status = "MISSED"
+        att.error = "their lead was still with an agent who could not take the call"
         att.ended_at = now
         db.commit()
         return nobody_script(s), []

@@ -321,12 +321,23 @@ export default function DialDrawer() {
               </div>
             )}
 
+            {live && talking && muted && (
+              // Seen live: an agent left Mute on, the client heard silence for
+              // 50 s and hung up — "the call cut off". Make it impossible to miss.
+              <div className="mb-3 rounded-lg bg-danger px-3 py-2 text-center text-sm font-semibold text-white">
+                🔇 You're muted — the client can't hear you
+              </div>
+            )}
             {live ? (
               <div className="flex justify-center gap-3">
                 {talking && !m.simulated && (
                   <button
                     onClick={toggleMute}
-                    className="h-12 rounded-full border border-hairline px-5 text-sm font-semibold text-ink-muted hover:bg-black/5"
+                    className={
+                      muted
+                        ? "h-12 animate-pulse rounded-full bg-danger px-5 text-sm font-bold text-white shadow-md"
+                        : "h-12 rounded-full border border-hairline px-5 text-sm font-semibold text-ink-muted hover:bg-black/5"
+                    }
                   >
                     {muted ? "Unmute" : "Mute"}
                   </button>

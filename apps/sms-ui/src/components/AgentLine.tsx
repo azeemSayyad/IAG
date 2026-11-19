@@ -201,6 +201,20 @@ export default function AgentLine() {
 
   const live = ds?.call && ds.call.call?.status === "CONNECTED" ? ds.call : null;
 
+  // The headset line is ONE browser call that stays open across many clients,
+  // so a Mute pressed on one client would silently carry on to the next (seen
+  // live: clients said "hello?" into silence and hung up). Every new client —
+  // and the gap after one — starts unmuted.
+  const liveId = live?.call?.id || null;
+  useEffect(() => {
+    setMuted(false).catch(() => undefined);
+    setMutedState(false);
+  }, [liveId]);
+  // A reopened line is a new browser call, which always starts unmuted.
+  useEffect(() => {
+    if (line !== "ready") setMutedState(false);
+  }, [line]);
+
   // Leaving the SMS app tears down the browser's line and drops the customer.
   // While a customer is on the line: warn on unload, and open any link that
   // would leave the app (e.g. Log Sale) in a new tab instead.
@@ -261,9 +275,14 @@ export default function AgentLine() {
             {!ds.simulate && (
               <button
                 onClick={toggleMute}
-                className="rounded-lg border border-hairline px-2.5 py-1 text-xs font-semibold text-ink-muted hover:bg-black/5"
+                title={muted ? "The client can't hear you — click to unmute" : "Mute your microphone"}
+                className={
+                  muted
+                    ? "animate-pulse rounded-lg bg-danger px-2.5 py-1 text-xs font-semibold text-white"
+                    : "rounded-lg border border-hairline px-2.5 py-1 text-xs font-semibold text-ink-muted hover:bg-black/5"
+                }
               >
-                {muted ? "Unmute" : "Mute"}
+                {muted ? "🔇 Muted — client can't hear you" : "Mute"}
               </button>
             )}
             <button

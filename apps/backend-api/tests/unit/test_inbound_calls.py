@@ -190,3 +190,50 @@ def test_auto_dialer_mode_never_offered_a_pool_lead(env):
     qs.join(env.db, env.tenant, str(u.id))  # picks "SMS leads"
     assert a.voice_ready is False
     assert lead.status == "ASSIGNED" and str(lead.assigned_agent_id) == str(u.id)
+
+
+def _lead_with(e, user, agent_row, phone=PHONE):
+    """A lead the agent still holds: their call ended, the result isn't set yet."""
+    from app.models.sms import SmsLead
+
+    lead = SmsLead(tenant_id=e.tenant, phone_number=phone, customer_name="Callback Client", source="REPLY",
+                   priority="HOT", status="IN_PROGRESS", assigned_agent_id=user.id, message_count=0)
+    e.db.add(lead)
+    e.db.flush()
+    agent_row.status = "ON_CALL"
+    agent_row.current_lead_id = lead.id
+    e.db.commit()
+    return lead
+
+
+def test_calling_back_before_the_result_is_set_reaches_their_agent(env):
+    # Seen live 2026-11-18: client dropped after 4 s, called straight back and
+    # heard "all of our agents are busy" while their agent sat free on the line.
+    amy, amy_row = env.agent("Amy")
+    lead = _lead_with(env, amy, amy_row)
+    script, events, att = _call(env)
+    assert att.status == "CONNECTED" and str(att.agent_user_id) == str(amy.id)
+    assert att.sms_lead_id == lead.id
+    assert "leg-Amy" in env.transfers and "busy" not in _said(script)
+    assert any(e["event"] == "voice:connected" and e["id"] == str(amy.id) for e in events)
+
+
+def test_calling_back_while_their_agent_is_offline_is_missed(env):
+    amy, amy_row = env.agent("Amy", ready=False)
+    env.agent("Bob")  # someone else free must NOT take a lead Amy still holds
+    _lead_with(env, amy, amy_row)
+    script, _, att = _call(env)
+    assert att.status == "MISSED" and "still with an agent" in (att.error or "")
+    assert env.transfers == [] and "busy" in _said(script)
+
+
+def test_calling_back_while_their_agent_talks_to_someone_else_is_missed(env):
+    from app.models.sms import VoiceCallAttempt
+
+    amy, amy_row = env.agent("Amy")
+    _lead_with(env, amy, amy_row)
+    env.db.add(VoiceCallAttempt(tenant_id=env.tenant, phone_number="+13055550999", direction="outbound",
+                                status="CONNECTED", agent_user_id=amy.id))
+    env.db.commit()
+    _, _, att = _call(env)
+    assert att.status == "MISSED" and env.transfers == []
