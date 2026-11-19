@@ -3,7 +3,7 @@ import { api } from "../lib/api";
 import { isAdmin } from "../lib/auth";
 import { formatPhone } from "../lib/phone";
 import { getSocket } from "../lib/socket";
-import { leadOfferedSound } from "../lib/sound";
+import { leadHungUpSound, leadOfferedSound } from "../lib/sound";
 import { closeLine, onLineState, openLine, setMuted, type LineState } from "../lib/voice";
 import { onSoundBlocked, playRemote } from "../lib/remoteSound";
 import { DetailGrid, type DetailField } from "./LeadDetails";
@@ -15,7 +15,11 @@ import { DetailGrid, type DetailField } from "./LeadDetails";
      regular pool lead, on break or after Leave, the line is closed — an open
      line is billed by Telnyx per minute.
    • Pops the lead card the moment a live customer is bridged onto that line
-     ("voice:connected"). No Accept/Pass — the agent is already talking.
+     ("voice:connected") and opens Lead Manager behind it. No Accept/Pass —
+     the agent is already talking; OK or a click anywhere closes it (owner,
+     2026-11-19: agents were confused by a button that looked like "accept").
+   • The client hanging up (call ended, agent didn't press Hang up) plays a
+     sound and shows a red "Lead disconnected" banner until clicked.
    • A small dock shows the line state, a call timer, Mute and Hang up.
 
    Driven by GET /voice/dialer/state (polled + nudged by socket events), so a
@@ -88,6 +92,25 @@ export default function AgentLine() {
   const [busy, setBusy] = useState(false);
   const [, tick] = useState(0);
   const retryAt = useRef(0);
+  // "Lead disconnected": calls seen live in this tab, calls already alerted,
+  // and the call the agent hung up themselves (no alert for that one).
+  const [gone, setGone] = useState<{ id: string; name: string } | null>(null);
+  const seenLive = useRef<Set<string>>(new Set());
+  const alerted = useRef<Set<string>>(new Set());
+  const agentHungUp = useRef<string | null>(null);
+  const dsRef = useRef<DialerState | null>(null);
+  dsRef.current = ds;
+
+  function leadHungUp(id: string | undefined) {
+    if (!id || !seenLive.current.has(id) || alerted.current.has(id)) return;
+    alerted.current.add(id);
+    if (agentHungUp.current === id) return;
+    const c = dsRef.current?.call;
+    const name = c && c.call?.id === id ? c.customer_name || formatPhone(c.phone_number) : "";
+    setPop(null);
+    setGone({ id, name });
+    leadHungUpSound();
+  }
 
   const refresh = useCallback(async () => {
     if (admin) return;
@@ -114,10 +137,12 @@ export default function AgentLine() {
       refresh();
     };
     const evts = ["voice:line", "voice:manual", "voice:ended", "sms:lead_accepted", "sms:lead_dispositioned", "sms:queue_updated"];
-    const onEnded = (d: { reason?: string }) => {
+    const onEnded = (d: { reason?: string; attempt_id?: string }) => {
       if (d?.reason === "voicemail") {
         setPop(null);
         setDropped("It was voicemail — the call was dropped. You're back on the line.");
+      } else {
+        leadHungUp(d?.attempt_id);
       }
     };
     s.on("voice:ended", onEnded);
@@ -157,6 +182,13 @@ export default function AgentLine() {
     }
     leadOfferedSound();
     setPop(card);
+    // Lead Manager opens behind the popup — closing it lands on the lead.
+    if (!location.hash.startsWith("#/queue")) location.hash = "#/queue";
+  }
+
+  function closePop() {
+    setPop(null);
+    if (!location.hash.startsWith("#/queue")) location.hash = "#/queue";
   }
 
   // Poll fallback for the drop: the popped call is no longer this agent's.
@@ -174,11 +206,25 @@ export default function AgentLine() {
     return () => clearTimeout(t);
   }, [dropped]);
 
-  // Poll fallback for the pop (socket down / missed event).
+  // Poll fallback for the pop (socket down / missed event), and for the
+  // hang-up: a call seen live here that is now COMPLETED while the agent still
+  // holds the lead = it ended (voicemail drops remove the call instead).
   useEffect(() => {
-    if (ds?.call && ds.call.call?.status === "CONNECTED") showPop(ds.call);
+    const c = ds?.call;
+    if (c && c.call?.status === "CONNECTED") {
+      seenLive.current.add(c.call.id);
+      showPop(c);
+    } else if (c && c.call?.status === "COMPLETED") {
+      leadHungUp(c.call.id);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ds?.call?.call?.id, ds?.call?.call?.status]);
+
+  // The banner goes once the lead is finished (result marked) or a new call starts.
+  useEffect(() => {
+    if (!gone || !ds) return;
+    if (!ds.call || ds.call.call?.id !== gone.id) setGone(null);
+  }, [ds, gone]);
 
   // Keep the line open exactly while the agent can take a call: Ready for
   // calls, not on a manual (Dial drawer) call, and free (or already on an
@@ -240,6 +286,7 @@ export default function AgentLine() {
   }, [live]);
 
   async function hangup() {
+    agentHungUp.current = live?.call?.id || null;
     setBusy(true);
     try {
       await api("/voice/dialer/hangup", { method: "POST" });
@@ -256,7 +303,7 @@ export default function AgentLine() {
   }
 
   if (admin || !ds || !ds.enabled || !ds.available) return null;
-  if (!wantLine && !live) return null;
+  if (!wantLine && !live && !gone) return null;
 
   const dot =
     live ? "bg-success" : line === "ready" ? "bg-success" : line === "connecting" ? "bg-pending" : "bg-danger";
@@ -310,9 +357,37 @@ export default function AgentLine() {
         </button>
       )}
 
-      {/* The screen pop — the agent is already talking to this person. */}
+      {/* The client hung up — loud, stays until clicked or the lead is finished. */}
+      {gone && (
+        <button
+          data-testid="lead-disconnected"
+          onClick={() => {
+            setGone(null);
+            if (!location.hash.startsWith("#/queue")) location.hash = "#/queue";
+          }}
+          className="fixed left-1/2 top-4 z-[9700] flex -translate-x-1/2 items-center gap-3 rounded-xl bg-danger px-5 py-3 text-left text-white shadow-2xl"
+          style={{ width: "min(520px, calc(100vw - 2rem))" }}
+        >
+          <span className="text-2xl" aria-hidden>📵</span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-base font-bold">Lead disconnected</span>
+            <span className="block text-sm opacity-90">
+              {gone.name ? `${gone.name} hung up.` : "The client hung up."} Mark the result for this call.
+            </span>
+          </span>
+          <span className="rounded-lg bg-white/20 px-3 py-1.5 text-sm font-semibold">OK</span>
+        </button>
+      )}
+
+      {/* The screen pop — the agent is already talking to this person.
+          OK or a click anywhere closes it; Hang up stays in the dock. */}
       {pop && (
-        <div className="fixed inset-0 z-[9500] flex items-center justify-center p-5" style={{ background: "rgba(10,14,22,.55)" }}>
+        <div
+          data-testid="call-pop"
+          onClick={closePop}
+          className="fixed inset-0 z-[9500] flex cursor-pointer items-center justify-center p-5"
+          style={{ background: "rgba(10,14,22,.55)" }}
+        >
           <div
             className="overflow-hidden"
             style={{ width: "min(460px, 94vw)", background: "#fff", color: "#1A1F2A", borderRadius: 16, boxShadow: "0 24px 60px rgba(0,0,0,.35)", maxHeight: "92vh", overflowY: "auto" }}
@@ -320,7 +395,7 @@ export default function AgentLine() {
             <div className="flex items-center gap-2.5" style={{ background: "#DCF0E3", padding: "14px 20px" }}>
               <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-success" />
               <h3 className="m-0 font-bold" style={{ fontSize: 15 }}>
-                {pop.call?.direction === "inbound" ? "Incoming call · connected" : "Live call · connected"}
+                {pop.call?.direction === "inbound" ? "Incoming call · you're connected" : "Live call · you're connected"}
               </h3>
               {pop.list_name && (
                 <span
@@ -377,28 +452,18 @@ export default function AgentLine() {
                 <DetailGrid fields={pop.details} limit={6} dense />
               </div>
             )}
-            <div className="flex" style={{ padding: "16px 20px 18px", gap: 8 }}>
+            <div style={{ padding: "16px 20px 18px" }}>
               <button
-                onClick={() => {
-                  setPop(null);
-                  if (!location.hash.startsWith("#/queue")) location.hash = "#/queue";
-                }}
-                className="flex-1"
+                data-testid="call-pop-ok"
+                onClick={closePop}
+                className="w-full"
                 style={{ background: "#16a34a", color: "#fff", border: 0, borderRadius: 10, padding: 13, fontSize: 15, fontWeight: 700, cursor: "pointer" }}
               >
-                Open lead
+                OK
               </button>
-              <button
-                onClick={() => {
-                  setPop(null);
-                  hangup();
-                }}
-                disabled={busy}
-                className="disabled:opacity-50"
-                style={{ background: "#fff", color: "#DC2626", border: "1px solid rgba(220,38,38,.5)", borderRadius: 10, padding: "11px 16px", fontSize: 14, fontWeight: 700, cursor: "pointer" }}
-              >
-                Hang up
-              </button>
+              <div className="mt-2 text-center text-[11px]" style={{ color: "#8A93A0" }}>
+                Click anywhere to close · Hang up is at the bottom right
+              </div>
             </div>
           </div>
         </div>

@@ -78,6 +78,13 @@ export function leadOfferedSound(): void {
   setTimeout(() => beep(1175, 350, 0.3), 180);
 }
 
+/** Falling three-tone alert: the client hung up on a live call. */
+export function leadHungUpSound(): void {
+  beep(784, 220, 0.35);
+  setTimeout(() => beep(587, 220, 0.35), 200);
+  setTimeout(() => beep(392, 420, 0.35), 400);
+}
+
 /** Soft tick for a new inbound customer message. */
 export function inboundTick(): void {
   beep(660, 120, 0.08);
